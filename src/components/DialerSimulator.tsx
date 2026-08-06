@@ -2,7 +2,6 @@ import React, { useState, useEffect, useRef } from 'react';
 import {
   PhoneCall,
   PhoneOff,
-  User,
   MessageSquare,
   Mic,
   Volume2,
@@ -20,7 +19,6 @@ import {
   Headphones,
   CheckCircle2,
   XCircle,
-  Sliders,
   Disc,
   Sparkles,
   HelpCircle,
@@ -36,6 +34,7 @@ import {
 } from 'lucide-react';
 import { Lead, CallLog, VirtualNumber } from '../types';
 import { apiFetch } from '../lib/api';
+import { callCostInr, formatInr } from '../lib/pricing';
 
 interface DialerSimulatorProps {
   leads: Lead[];
@@ -45,6 +44,9 @@ interface DialerSimulatorProps {
   setLeadsDatabase: React.Dispatch<React.SetStateAction<Lead[]>>;
   virtualNumbers?: VirtualNumber[];
   setVirtualNumbers?: React.Dispatch<React.SetStateAction<VirtualNumber[]>>;
+  tasks: DialTask[];
+  setTasks: React.Dispatch<React.SetStateAction<DialTask[]>>;
+  companyName: string;
 }
 
 interface DialTask {
@@ -63,6 +65,7 @@ interface DialTask {
       intent: 'Interested' | 'Not Interested' | 'Callback Scheduled' | 'Wrong Number' | 'Unknown';
       summary: string;
       answers: { [question: string]: string };
+      recordingUrl?: string;
     }
   };
 }
@@ -74,46 +77,20 @@ export default function DialerSimulator({
   leadsDatabase,
   setLeadsDatabase,
   virtualNumbers = [],
-  setVirtualNumbers
+  setVirtualNumbers,
+  tasks,
+  setTasks,
+  companyName
 }: DialerSimulatorProps) {
   // Inbound Call states
   const [dialerMode, setDialerMode] = useState<'outbound' | 'inbound'>('outbound');
-  
-  const activeVirtualNumbers = virtualNumbers;
-  const [selectedInboundNumber, setSelectedInboundNumber] = useState<string>(
-    activeVirtualNumbers[0]?.number || ''
-  );
 
-  // Potential Inbound Callers list
-  const [selectedInboundCallerId, setSelectedInboundCallerId] = useState<string>('new');
-  const [customInboundCallerName, setCustomInboundCallerName] = useState<string>('');
-  const [customInboundCallerPhone, setCustomInboundCallerPhone] = useState<string>('');
-  const [inboundStartingIntent, setInboundStartingIntent] = useState<'status' | 'apply' | 'rates' | 'payment'>('status');
-  const [inboundLoanAmount, setInboundLoanAmount] = useState<number>(35000);
-  
-  // Active inbound call process states
-  const [inboundCallState, setInboundCallState] = useState<'idle' | 'ringing' | 'connected' | 'completed'>('idle');
-  const [inboundCaller, setInboundCaller] = useState<{ id: string; name: string; phone: string; email: string; amountRequested: number } | null>(null);
-  const [inboundDuration, setInboundDuration] = useState<number>(0);
-  const [inboundTranscript, setInboundTranscript] = useState<{ speaker: 'AI' | 'Customer'; text: string; timestamp: string }[]>([]);
-  const [inboundCustomerUtterance, setInboundCustomerUtterance] = useState<string>('');
-  const [isInboundAiResponding, setIsInboundAiResponding] = useState<boolean>(false);
-  const [inboundSentiment, setInboundSentiment] = useState<'Positive' | 'Neutral' | 'Negative' | 'Unknown'>('Neutral');
-  const [inboundIntent, setInboundIntent] = useState<'Interested' | 'Not Interested' | 'Callback Scheduled' | 'Wrong Number' | 'Unknown'>('Unknown');
-  const [inboundTopic, setInboundTopic] = useState<string>('Loan Inquiry');
-  
-  // Historical inbound call logs
-  const [inboundCallLogs, setInboundCallLogs] = useState<any[]>(() => {
-    const saved = localStorage.getItem('chiefx_inbound_logs');
-    if (saved) {
-      try {
-        return JSON.parse(saved);
-      } catch (e) {
-        console.error('Failed to parse inbound call logs', e);
-      }
-    }
-    return [];
-  });
+  const activeVirtualNumbers = virtualNumbers;
+
+  // Real inbound call history — sourced from `callLogs` (populated from the
+  // backend's `call_logs` table, tagged `direction` by the Vobiz/Twilio
+  // webhooks themselves), not the fake simulator's `inboundCallLogs`.
+  const realInboundCallLogs = callLogs.filter((log) => log.direction === 'inbound');
 
   // AI Voice and Prompt Configuration states from screenshots
   const [voicePersona, setVoicePersona] = useState<string>(() => {
@@ -141,6 +118,11 @@ Real Tamil speakers do not say the "correct" written form of a word. They contra
   const [isConfigSaving, setIsConfigSaving] = useState(false);
   const [configSaveSuccess, setConfigSaveSuccess] = useState(false);
 
+  // The AI's spoken name for intro/greeting lines — derived from the
+  // configured voice persona (e.g. "Priya — Female (friendly & clear)")
+  // instead of a hardcoded name unrelated to what's actually configured.
+  const agentDisplayName = voicePersona.split('—')[0].trim() || 'the assistant';
+
   const handleSaveConfig = () => {
     setIsConfigSaving(true);
     localStorage.setItem('chiefx_voice_persona', voicePersona);
@@ -156,42 +138,7 @@ Real Tamil speakers do not say the "correct" written form of a word. They contra
     }, 600);
   };
 
-  // Sync inbound logs
-  useEffect(() => {
-    localStorage.setItem('chiefx_inbound_logs', JSON.stringify(inboundCallLogs));
-  }, [inboundCallLogs]);
-
-  // Inbound Call duration timer
-  const inboundTimerRef = useRef<NodeJS.Timeout | null>(null);
-  useEffect(() => {
-    if (inboundCallState === 'connected') {
-      inboundTimerRef.current = setInterval(() => {
-        setInboundDuration((prev) => prev + 1);
-      }, 1000);
-    } else {
-      if (inboundTimerRef.current) {
-        clearInterval(inboundTimerRef.current);
-        inboundTimerRef.current = null;
-      }
-    }
-    return () => {
-      if (inboundTimerRef.current) clearInterval(inboundTimerRef.current);
-    };
-  }, [inboundCallState]);
-
-  // Load tasks from LocalStorage or initialize with premium pre-loaded data
-  const [tasks, setTasks] = useState<DialTask[]>(() => {
-    const saved = localStorage.getItem('chiefx_dialer_tasks');
-    if (saved) {
-      try {
-        return JSON.parse(saved);
-      } catch (e) {
-        console.error('Failed to parse saved dialer tasks', e);
-      }
-    }
-
-    return [];
-  });
+  // Tasks — real, persisted via App.tsx (props), not localStorage.
 
   // Active Selected Task
   const [selectedTaskId, setSelectedTaskId] = useState<string>(() => {
@@ -203,11 +150,7 @@ Real Tamil speakers do not say the "correct" written form of a word. They contra
   // Task Creation Form States
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [newTaskName, setNewTaskName] = useState('');
-  const [newQuestions, setNewQuestions] = useState<string[]>([
-    'Are you interested in proceeding with your loan application?',
-    'What is your approximate monthly household income?',
-    'Will you be able to upload your paystubs online today?'
-  ]);
+  const [newQuestions, setNewQuestions] = useState<string[]>([]);
   const [tempQuestionInput, setTempQuestionInput] = useState('');
   const [selectedFormLeadIds, setSelectedFormLeadIds] = useState<string[]>([]);
   const [modalLeadSearch, setModalLeadSearch] = useState('');
@@ -224,9 +167,6 @@ Real Tamil speakers do not say the "correct" written form of a word. They contra
   const [currentSentiment, setCurrentSentiment] = useState<'Positive' | 'Neutral' | 'Negative' | 'Unknown'>('Neutral');
   const [currentIntent, setCurrentIntent] = useState<'Interested' | 'Not Interested' | 'Callback Scheduled' | 'Wrong Number' | 'Unknown'>('Unknown');
 
-  // Inbound Call indication popup & auto-attend states
-  const [autoAttendCountdown, setAutoAttendCountdown] = useState<number>(3);
-
   // Multi-question state
   const [activeQuestionIndex, setActiveQuestionIndex] = useState(0);
   const [extractedAnswers, setExtractedAnswers] = useState<{ [question: string]: string }>({});
@@ -237,15 +177,22 @@ Real Tamil speakers do not say the "correct" written form of a word. They contra
   const [isTapePlaying, setIsTapePlaying] = useState(false);
   const [tapeProgress, setTapeProgress] = useState(0);
   const [tapeSpeed, setTapeSpeed] = useState<number>(1);
-  const tapeIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const [tapeDuration, setTapeDuration] = useState<number>(0);
+  const audioElRef = useRef<HTMLAudioElement | null>(null);
 
   const timerRef = useRef<NodeJS.Timeout | null>(null);
   const chatBottomRef = useRef<HTMLDivElement | null>(null);
 
-  // Sync tasks to local storage
+  // Outbound numbers this org has actually provisioned (Settings > Numbers)
+  // that can really place a call — only Twilio/Vobiz.ai are wired to real
+  // dialing; other provider labels are display-only for inbound routing.
+  const dialableNumbers = virtualNumbers.filter((n) => /twilio|vobiz/i.test(n.provider || ''));
+  const [selectedOutboundNumber, setSelectedOutboundNumber] = useState<string>('');
   useEffect(() => {
-    localStorage.setItem('chiefx_dialer_tasks', JSON.stringify(tasks));
-  }, [tasks]);
+    if (!selectedOutboundNumber && dialableNumbers.length) {
+      setSelectedOutboundNumber(dialableNumbers[0].number);
+    }
+  }, [dialableNumbers, selectedOutboundNumber]);
 
   // Active call timer
   useEffect(() => {
@@ -271,29 +218,24 @@ Real Tamil speakers do not say the "correct" written form of a word. They contra
     }
   }, [transcript.length, isAiResponding]);
 
-  // Vintage Cassette tape simulation timer
+  // Real audio playback for the call recording <audio> element — mirrors
+  // isTapePlaying/tapeProgress/tapeSpeed off the actual element instead of
+  // a fake setInterval animation, so the player genuinely plays the
+  // uploaded recording rather than just simulating a moving progress bar.
   useEffect(() => {
+    const el = audioElRef.current;
+    if (!el) return;
     if (isTapePlaying) {
-      tapeIntervalRef.current = setInterval(() => {
-        setTapeProgress((prev) => {
-          if (prev >= 100) {
-            setIsTapePlaying(false);
-            if (tapeIntervalRef.current) clearInterval(tapeIntervalRef.current);
-            return 100;
-          }
-          return prev + (2 * tapeSpeed);
-        });
-      }, 300);
+      el.play().catch(() => setIsTapePlaying(false));
     } else {
-      if (tapeIntervalRef.current) {
-        clearInterval(tapeIntervalRef.current);
-        tapeIntervalRef.current = null;
-      }
+      el.pause();
     }
-    return () => {
-      if (tapeIntervalRef.current) clearInterval(tapeIntervalRef.current);
-    };
-  }, [isTapePlaying, tapeSpeed]);
+  }, [isTapePlaying, playingTapeId]);
+
+  useEffect(() => {
+    const el = audioElRef.current;
+    if (el) el.playbackRate = tapeSpeed;
+  }, [tapeSpeed]);
 
   const formatTime = (sec: number) => {
     const mins = Math.floor(sec / 60);
@@ -345,14 +287,17 @@ Real Tamil speakers do not say the "correct" written form of a word. They contra
     setSelectedTaskId(newTask.id);
     setShowCreateModal(false);
 
-    // Reset Form
+    // Reset Form — blank, not pre-filled from anywhere. The user wants to
+    // type this task's questions themselves every time, not start from
+    // any default (org's, industry's, or otherwise).
     setNewTaskName('');
-    setNewQuestions([
-      'Are you interested in proceeding with your loan application?',
-      'What is your approximate monthly household income?',
-      'Will you be able to upload your paystubs online today?'
-    ]);
+    setNewQuestions([]);
     setSelectedFormLeadIds([]);
+  };
+
+  const openCreateTaskModal = () => {
+    setNewQuestions([]);
+    setShowCreateModal(true);
   };
 
   const handleInitiateVobizCall = async (lead: Lead) => {
@@ -374,7 +319,8 @@ Real Tamil speakers do not say the "correct" written form of a word. They contra
         method: 'POST',
         body: JSON.stringify({
           phoneNumber: lead.phone,
-          questions: selectedTask ? selectedTask.questions : []
+          questions: selectedTask ? selectedTask.questions : [],
+          from: selectedOutboundNumber || undefined
         })
       });
       const data = await res.json();
@@ -421,7 +367,8 @@ Real Tamil speakers do not say the "correct" written form of a word. They contra
         method: 'POST',
         body: JSON.stringify({
           phoneNumber: lead.phone,
-          questions: selectedTask ? selectedTask.questions : []
+          questions: selectedTask ? selectedTask.questions : [],
+          from: selectedOutboundNumber || undefined
         })
       });
       const data = await res.json();
@@ -457,41 +404,6 @@ Real Tamil speakers do not say the "correct" written form of a word. They contra
     }
     setTwilioCallSid(null);
     handleHangupCall();
-  };
-
-  // Initiate call to a lead inside the selected task
-  const handleInitiateTaskCall = (lead: Lead) => {
-    if (callState === 'dialing' || callState === 'connected') return;
-
-    setActiveLead(lead);
-    setCallState('dialing');
-    setDuration(0);
-    setTranscript([]);
-    setCurrentSentiment('Neutral');
-    setCurrentIntent('Unknown');
-    setActiveQuestionIndex(0);
-    setExtractedAnswers({});
-
-    // Close tape player when starting a new call
-    setPlayingTapeId(null);
-    setIsTapePlaying(false);
-
-    // Simulate connection delay
-    setTimeout(() => {
-      setCallState('connected');
-
-      // AI introduces herself and asks the very first question from the questionnaire!
-      const firstQuestion = selectedTask.questions[0] || "Are you ready to proceed?";
-      const introMessage = `Hello, am I speaking with ${lead.name}? I'm Evelyn calling from ChiefXAI regarding your requested loan of $${lead.amountRequested.toLocaleString()}. Since we are looking to pre-approve you today, let me ask: ${firstQuestion}`;
-
-      setTranscript([
-        {
-          speaker: 'AI',
-          text: introMessage,
-          timestamp: new Date().toTimeString().split(' ')[0]
-        }
-      ]);
-    }, 1800);
   };
 
   // Hangup call and save detailed conversation history, questionnaire answers, and tape logs
@@ -640,30 +552,20 @@ Currently on question ${nextIndex} out of ${selectedTask.questions.length}. Next
           }, 4500);
         }
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
-      // Fallback offline simulator
-      setTimeout(() => {
-        let fallbackReply = '';
-        if (nextIndex < selectedTask.questions.length) {
-          fallbackReply = `Got it, noted that down. Next question: ${selectedTask.questions[nextIndex]}`;
-          setActiveQuestionIndex(nextIndex);
-        } else {
-          fallbackReply = `Perfect, that completes today's qualification checklist! I am saving the call recording now. Goodbye!`;
-          setActiveQuestionIndex(nextIndex);
+      // The AI reply genuinely failed to generate — say so instead of
+      // fabricating a plausible-sounding scripted response. Don't advance
+      // the question index or touch sentiment/intent, since nothing was
+      // actually answered by the AI.
+      setTranscript((prev) => [
+        ...prev,
+        {
+          speaker: 'AI',
+          text: `[AI response unavailable — ${err?.message || 'the call assistant failed to respond'}. Please retry or continue manually.]`,
+          timestamp: new Date().toTimeString().split(' ')[0]
         }
-
-        setTranscript((prev) => [
-          ...prev,
-          { speaker: 'AI', text: fallbackReply, timestamp: new Date().toTimeString().split(' ')[0] }
-        ]);
-
-        if (nextIndex >= selectedTask.questions.length) {
-          setTimeout(() => {
-            handleHangupCall();
-          }, 3000);
-        }
-      }, 1000);
+      ]);
     } finally {
       setIsAiResponding(false);
     }
@@ -697,289 +599,13 @@ Currently on question ${nextIndex} out of ${selectedTask.questions.length}. Next
     setPlayingTapeId(id);
     setPlayingTapeType(type);
     setTapeProgress(0);
+    setTapeDuration(0);
     setIsTapePlaying(true);
   };
 
-  // Inbound simulation handlers
-  const handleTriggerInboundCall = () => {
-    if (inboundCallState !== 'idle') return;
-
-    let callerObj: { id: string; name: string; phone: string; email: string; amountRequested: number };
-
-    if (selectedInboundCallerId !== 'new') {
-      const dbLead = leadsDatabase.find((l) => l.id === selectedInboundCallerId);
-      if (!dbLead) {
-        alert('Select a real lead from the list, or choose "New caller" and enter their details.');
-        return;
-      }
-      callerObj = {
-        id: dbLead.id,
-        name: dbLead.name,
-        phone: dbLead.phone,
-        email: dbLead.email,
-        amountRequested: dbLead.amountRequested,
-      };
-    } else {
-      const finalName = customInboundCallerName.trim();
-      const finalPhone = customInboundCallerPhone.trim();
-      if (!finalName || !finalPhone) {
-        alert('Enter the caller\'s name and phone number to simulate a new inbound caller.');
-        return;
-      }
-      callerObj = {
-        id: `INB-GEN-${Date.now()}`,
-        name: finalName,
-        phone: finalPhone,
-        email: `${finalName.toLowerCase().replace(/[^a-z]/g, '')}@example.com`,
-        amountRequested: inboundLoanAmount,
-      };
-    }
-
-    // Set topic based on intent
-    let topic = 'Loan Pre-Qualification';
-    if (inboundStartingIntent === 'status') topic = 'Paystub & Document Status';
-    else if (inboundStartingIntent === 'rates') topic = 'Interest Rates & APR Quote';
-    else if (inboundStartingIntent === 'payment') topic = 'EMI & Billing Support';
-
-    setInboundCaller(callerObj);
-    setInboundTopic(topic);
-    setInboundDuration(0);
-    setInboundTranscript([]);
-    setInboundCallState('ringing');
-    setInboundSentiment('Neutral');
-    setInboundIntent('Unknown');
-    setDialerMode('inbound');
-
-    // Close tape player
-    setPlayingTapeId(null);
-    setIsTapePlaying(false);
-  };
-
-  const handleAcceptInboundCall = () => {
-    if (!inboundCaller) return;
-    setInboundCallState('connected');
-
-    const greeting = `Thank you for calling ChiefXAI loan support department! My name is Evelyn, your AI lending assistant. I see I am speaking with ${inboundCaller.name} today. How can I assist you with your ${inboundTopic.toLowerCase()}?`;
-    setInboundTranscript([
-      {
-        speaker: 'AI',
-        text: greeting,
-        timestamp: new Date().toTimeString().split(' ')[0],
-      },
-    ]);
-  };
-
-  const handleDeclineInboundCall = () => {
-    setInboundCallState('idle');
-    setInboundCaller(null);
-  };
-
-  // Reset auto-attend countdown when call starts ringing
-  useEffect(() => {
-    if (inboundCallState === 'ringing') {
-      setAutoAttendCountdown(3);
-    }
-  }, [inboundCallState]);
-
-  // Handle countdown decrement and auto-answering
-  useEffect(() => {
-    let timer: NodeJS.Timeout | null = null;
-    if (inboundCallState === 'ringing') {
-      timer = setInterval(() => {
-        setAutoAttendCountdown((prev) => {
-          if (prev <= 1) {
-            if (timer) clearInterval(timer);
-            // AI automatically attends the call!
-            handleAcceptInboundCall();
-            return 0;
-          }
-          return prev - 1;
-        });
-      }, 1000);
-    }
-    return () => {
-      if (timer) clearInterval(timer);
-    };
-  }, [inboundCallState, inboundCaller]);
-
-  // Synthesized Telephone Ringing sound
-  useEffect(() => {
-    let interval: NodeJS.Timeout | null = null;
-    if (inboundCallState === 'ringing') {
-      const playRingSound = () => {
-        try {
-          const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
-          
-          const osc1 = audioCtx.createOscillator();
-          const osc2 = audioCtx.createOscillator();
-          const gainNode = audioCtx.createGain();
-          
-          osc1.type = 'sine';
-          osc1.frequency.setValueAtTime(440, audioCtx.currentTime); // Hz
-          osc2.type = 'sine';
-          osc2.frequency.setValueAtTime(480, audioCtx.currentTime); // Hz
-          
-          osc1.connect(gainNode);
-          osc2.connect(gainNode);
-          gainNode.connect(audioCtx.destination);
-          
-          gainNode.gain.setValueAtTime(0, audioCtx.currentTime);
-          // First ring beep
-          gainNode.gain.linearRampToValueAtTime(0.12, audioCtx.currentTime + 0.05);
-          gainNode.gain.setValueAtTime(0.12, audioCtx.currentTime + 0.45);
-          gainNode.gain.linearRampToValueAtTime(0, audioCtx.currentTime + 0.5);
-          
-          // Second ring beep
-          gainNode.gain.linearRampToValueAtTime(0.12, audioCtx.currentTime + 0.65);
-          gainNode.gain.setValueAtTime(0.12, audioCtx.currentTime + 1.05);
-          gainNode.gain.linearRampToValueAtTime(0, audioCtx.currentTime + 1.1);
-          
-          osc1.start(audioCtx.currentTime);
-          osc2.start(audioCtx.currentTime);
-          
-          osc1.stop(audioCtx.currentTime + 1.25);
-          osc2.stop(audioCtx.currentTime + 1.25);
-        } catch (e) {
-          console.warn("AudioContext ring failed", e);
-        }
-      };
-      
-      playRingSound();
-      interval = setInterval(playRingSound, 2500);
-    }
-    return () => {
-      if (interval) clearInterval(interval);
-    };
-  }, [inboundCallState]);
-
-  const handleHangupInboundCall = () => {
-    if (!inboundCaller) return;
-    setInboundCallState('completed');
-
-    // Format transcript answers if any
-    const globalSummary = `Inbound call from ${inboundCaller.name} on virtual line ${selectedInboundNumber}.\n\nPrimary Inquiry Topic: ${inboundTopic}.\nCaller Sentiment: ${inboundSentiment} • Intended Outcome: ${inboundIntent}.\n\nAI Virtual Assistant parsed documentation and responded to customer queries on our secure lines.`;
-
-    const newLog = {
-      id: `INBOUND-REC-${Date.now()}`,
-      callerName: inboundCaller.name,
-      callerPhone: inboundCaller.phone,
-      virtualNumber: selectedInboundNumber,
-      duration: inboundDuration,
-      status: 'Completed',
-      sentiment: inboundSentiment,
-      intent: inboundIntent,
-      topic: inboundTopic,
-      transcript: inboundTranscript,
-      summary: globalSummary,
-      createdAt: new Date().toISOString(),
-    };
-
-    setInboundCallLogs([newLog, ...inboundCallLogs]);
-
-    // Update lead notes in DB if caller was an existing CRM lead
-    if (selectedInboundCallerId !== 'new') {
-      const updatedDatabase = leadsDatabase.map((l) => {
-        if (l.id === selectedInboundCallerId) {
-          return {
-            ...l,
-            notes: `Inbound Call Log [${new Date().toLocaleDateString()}]:\n- Topic: ${inboundTopic}\n- Duration: ${inboundDuration}s\n- Summary: ${globalSummary}\n\n${l.notes}`,
-          };
-        }
-        return l;
-      });
-      setLeadsDatabase(updatedDatabase);
-    }
-  };
-
-  const handleSendInboundUtterance = async (utteranceText: string) => {
-    if (!utteranceText.trim() || isInboundAiResponding || !inboundCaller) return;
-
-    const timeStr = new Date().toTimeString().split(' ')[0];
-    const updatedTranscript = [
-      ...inboundTranscript,
-      { speaker: 'Customer' as const, text: utteranceText, timestamp: timeStr },
-    ];
-    setInboundTranscript(updatedTranscript);
-    setInboundCustomerUtterance('');
-    setIsInboundAiResponding(true);
-
-    try {
-      const res = await fetch('/api/simulate-call', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          leadName: inboundCaller.name,
-          loanAmount: inboundCaller.amountRequested,
-          prompt: `This is an INBOUND customer support call on our virtual line: ${selectedInboundNumber}. The customer wants to check or talk about: "${inboundTopic}".
-AI Voice Persona: ${voicePersona} (Emotion Intensity: ${emotionIntensity}%, Speed: ${speechSpeed}%, Friendliness: ${friendliness}%).
-System Instructions/Guidelines to strictly follow:
-${systemPrompt}
-
-Respond naturally, answer their questions clearly, and address them by name.`,
-          transcript: updatedTranscript,
-          customerUtterance: utteranceText,
-        }),
-      });
-
-      const data = await res.json();
-      if (data.success) {
-        setInboundSentiment(data.sentiment);
-        setInboundIntent(data.intent);
-
-        setInboundTranscript((prev) => [
-          ...prev,
-          {
-            speaker: 'AI',
-            text: data.reply,
-            timestamp: new Date().toTimeString().split(' ')[0],
-          },
-        ]);
-
-        if (data.isFinished) {
-          setTimeout(() => {
-            handleHangupInboundCall();
-          }, 4500);
-        }
-      }
-    } catch (err) {
-      console.error(err);
-      // Fallback local response
-      setTimeout(() => {
-        let fallbackReply = `Thank you for sharing that, ${inboundCaller.name}. I've successfully registered your inquiry regarding ${inboundTopic.toLowerCase()}. I will pass this directly to our human underwriters for instant review. Can I help you with anything else today?`;
-
-        // Customize slightly on keywords
-        const lowText = utteranceText.toLowerCase();
-        if (lowText.includes('rate') || lowText.includes('interest')) {
-          fallbackReply = `Our fixed rates start at 5.99% APR, ${inboundCaller.name}. We can run a soft-credit check in under 1 minute to calculate your exact quote. Should I initiate that now?`;
-        } else if (lowText.includes('status') || lowText.includes('approved')) {
-          fallbackReply = `I am happy to confirm your paystub was successfully OCR processed! Your $8,500 monthly wages look verified on our records. Our underwriters will send your final contract shortly!`;
-        } else if (lowText.includes('bye') || lowText.includes('thank') || lowText.includes('no')) {
-          fallbackReply = `It was my pleasure helping you today. Thank you for calling ChiefXAI lending! Have a marvelous day. Goodbye!`;
-        }
-
-        setInboundTranscript((prev) => [
-          ...prev,
-          {
-            speaker: 'AI',
-            text: fallbackReply,
-            timestamp: new Date().toTimeString().split(' ')[0],
-          },
-        ]);
-
-        if (lowText.includes('bye') || lowText.includes('thank') || lowText.includes('no')) {
-          setTimeout(() => {
-            handleHangupInboundCall();
-          }, 3500);
-        }
-      }, 1000);
-    } finally {
-      setIsInboundAiResponding(false);
-    }
-  };
-
   const activeTapeResult = playingTapeType === 'inbound'
-    ? inboundCallLogs.find((log) => log.id === playingTapeId)
-    : selectedTask.callResults[playingTapeId || ''];
+    ? realInboundCallLogs.find((log) => log.id === playingTapeId)
+    : selectedTask?.callResults[playingTapeId || ''];
 
   const activeTapeLead = playingTapeType === 'inbound'
     ? null
@@ -989,15 +615,15 @@ Respond naturally, answer their questions clearly, and address them by name.`,
     const isOutbound = playingTapeType === 'outbound';
     const displayTitle = isOutbound && activeTapeLead
       ? `${activeTapeLead.name} Call Analysis`
-      : `${activeTapeResult.callerName} Inbound Call Analysis`;
+      : `${activeTapeResult.leadName} Inbound Call Analysis`;
 
     const displaySubtitle = isOutbound
       ? `Campaign: ${selectedTask.name}`
-      : `Virtual Line Called: ${activeTapeResult.virtualNumber} • Topic: ${activeTapeResult.topic}`;
+      : `Caller: ${activeTapeResult.leadName} • Recorded ${new Date(activeTapeResult.createdAt).toLocaleString()}`;
 
     const filename = isOutbound && activeTapeLead
       ? `📼 ${activeTapeLead.name.toUpperCase()}_recording.wav`
-      : `📼 ${activeTapeResult.callerName.toUpperCase()}_inbound_recording.wav`;
+      : `📼 ${String(activeTapeResult.leadName).toUpperCase()}_inbound_recording.wav`;
 
     return (
       <div id="voice-agent-dialer" className="p-6 md:p-8 space-y-6 overflow-y-auto h-screen w-full font-sans bg-slate-50/50 text-slate-800 animate-fadeIn flex flex-col">
@@ -1029,13 +655,34 @@ Respond naturally, answer their questions clearly, and address them by name.`,
               </div>
             </div>
 
-            {/* MINIMAL HORIZONTAL RECORDING PLAYER */}
+            {/* MINIMAL HORIZONTAL RECORDING PLAYER — plays the real uploaded
+                recording via activeTapeResult.recordingUrl; no recording
+                means no playback, not a simulated animation. */}
             <div className="flex-1 max-w-2xl bg-slate-50 border border-slate-200 rounded-xl p-3 flex items-center gap-4">
+              {activeTapeResult.recordingUrl && (
+                <audio
+                  ref={audioElRef}
+                  src={activeTapeResult.recordingUrl}
+                  preload="metadata"
+                  onLoadedMetadata={(e) => setTapeDuration(e.currentTarget.duration || 0)}
+                  onTimeUpdate={(e) => {
+                    const el = e.currentTarget;
+                    if (el.duration) setTapeProgress((el.currentTime / el.duration) * 100);
+                  }}
+                  onEnded={() => {
+                    setIsTapePlaying(false);
+                    setTapeProgress(100);
+                  }}
+                  style={{ display: 'none' }}
+                />
+              )}
+
               {/* Play/Pause Button */}
               <button
                 onClick={() => setIsTapePlaying(!isTapePlaying)}
-                className="h-9 w-9 shrink-0 rounded-lg flex items-center justify-center bg-emerald-600 hover:bg-emerald-500 text-white transition-all cursor-pointer active:scale-95 shadow-md shadow-emerald-600/10"
-                title={isTapePlaying ? 'Pause Tape' : 'Play Tape'}
+                disabled={!activeTapeResult.recordingUrl}
+                className="h-9 w-9 shrink-0 rounded-lg flex items-center justify-center bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40 disabled:cursor-not-allowed text-white transition-all cursor-pointer active:scale-95 shadow-md shadow-emerald-600/10"
+                title={!activeTapeResult.recordingUrl ? 'No recording available' : isTapePlaying ? 'Pause Tape' : 'Play Tape'}
               >
                 {isTapePlaying ? (
                   <Pause className="h-4 w-4 fill-white text-white" />
@@ -1049,7 +696,9 @@ Respond naturally, answer their questions clearly, and address them by name.`,
                 <div className="flex justify-between items-center text-[10px] font-mono text-slate-500">
                   <span className="truncate font-semibold text-blue-600">{filename}</span>
                   <span className="shrink-0 text-slate-600 font-medium">
-                    {formatTime(Math.round((activeTapeResult.duration * tapeProgress) / 100))} / {formatTime(activeTapeResult.duration)}
+                    {activeTapeResult.recordingUrl
+                      ? `${formatTime(Math.round(((tapeDuration || activeTapeResult.duration) * tapeProgress) / 100))} / ${formatTime(Math.round(tapeDuration || activeTapeResult.duration))}`
+                      : 'No recording available'}
                   </span>
                 </div>
                 <div className="relative h-1.5 bg-slate-200 rounded-full overflow-hidden">
@@ -1091,6 +740,10 @@ Respond naturally, answer their questions clearly, and address them by name.`,
                 <span className="text-[8px] font-mono text-slate-400 uppercase tracking-wider block">Sentiment</span>
                 <span className="text-xs font-bold text-emerald-600">{activeTapeResult.sentiment}</span>
               </div>
+              <div className="bg-slate-50 border border-slate-200 px-3 py-1.5 rounded-xl text-center">
+                <span className="text-[8px] font-mono text-slate-400 uppercase tracking-wider block">Cost</span>
+                <span className="text-xs font-bold text-slate-700">{formatInr(callCostInr(activeTapeResult.duration))}</span>
+              </div>
             </div>
           </div>
         </div>
@@ -1113,8 +766,8 @@ Respond naturally, answer their questions clearly, and address them by name.`,
                 activeTapeResult.transcript.map((line: any, idx: number) => {
                   const isAI = line.speaker === 'AI';
                   const speakerLabel = isAI
-                    ? '🤖 ChiefX AI Evelyn'
-                    : `👤 ${isOutbound && activeTapeLead ? activeTapeLead.name : activeTapeResult.callerName}`;
+                    ? `🤖 AI ${agentDisplayName}`
+                    : `👤 ${isOutbound && activeTapeLead ? activeTapeLead.name : activeTapeResult.leadName}`;
                   return (
                     <div key={idx} className="flex flex-col" style={{ alignItems: isAI ? 'flex-start' : 'flex-end' }}>
                       <div className="flex items-center space-x-1.5 mb-1.5 text-[9px] text-slate-400 font-mono">
@@ -1186,20 +839,12 @@ Respond naturally, answer their questions clearly, and address them by name.`,
                 <span className="text-xs font-mono text-slate-700 uppercase tracking-widest font-bold block border-b border-slate-100 pb-2">Inbound Metadata</span>
                 <div className="space-y-3.5 text-xs">
                   <div>
-                    <span className="text-slate-400 font-medium block">Caller Name</span>
-                    <span className="font-bold text-slate-700 block mt-0.5">{activeTapeResult.callerName}</span>
+                    <span className="text-slate-400 font-medium block">Caller Number</span>
+                    <span className="font-mono font-bold text-slate-700 block mt-0.5">{activeTapeResult.leadName}</span>
                   </div>
                   <div>
-                    <span className="text-slate-400 font-medium block">Phone Number</span>
-                    <span className="font-mono text-slate-700 block mt-0.5">{activeTapeResult.callerPhone}</span>
-                  </div>
-                  <div>
-                    <span className="text-slate-400 font-medium block">Virtual Direct Line Called</span>
-                    <span className="font-mono text-slate-700 block mt-0.5">{activeTapeResult.virtualNumber}</span>
-                  </div>
-                  <div>
-                    <span className="text-slate-400 font-medium block">Primary Inquiry Topic</span>
-                    <span className="font-semibold text-blue-600 block mt-0.5">{activeTapeResult.topic}</span>
+                    <span className="text-slate-400 font-medium block">Status</span>
+                    <span className="font-semibold text-blue-600 block mt-0.5">{activeTapeResult.status}</span>
                   </div>
                   <div>
                     <span className="text-slate-400 font-medium block">Call Duration</span>
@@ -1220,6 +865,7 @@ Respond naturally, answer their questions clearly, and address them by name.`,
 
   // Auto-Dial Next Pending lead
   const handleAutoDialNext = () => {
+    if (!selectedTask) return;
     const nextPendingId = selectedTask.leadIds.find((lId) => {
       const res = selectedTask.callResults[lId];
       return !res || res.status === 'Pending';
@@ -1250,45 +896,13 @@ Respond naturally, answer their questions clearly, and address them by name.`,
     return ["Thank you, goodbye!", "When will you call me back?", "Yes, send me the links."];
   };
 
-  // Inbound Caller Suggestions based on selected intent
-  const getInboundSuggestions = () => {
-    if (inboundStartingIntent === 'status') {
-      return [
-        "Did you approve my paystub document?",
-        "What is the status of my loan verification?",
-        "When will underwriting complete the review?",
-        "Can I upload a bank statement instead of paystub?"
-      ];
-    }
-    if (inboundStartingIntent === 'rates') {
-      return [
-        "What interest rates do you currently offer?",
-        "Is the rate fixed or variable?",
-        "Will pre-qualification affect my credit score?",
-        "Do you have an automatic payment rate discount?"
-      ];
-    }
-    if (inboundStartingIntent === 'payment') {
-      return [
-        "How do I set up automated autopay?",
-        "Can I pay my monthly EMI via debit card?",
-        "Is there a penalty for paying off the loan early?",
-        "When is my first payment installment due?"
-      ];
-    }
-    return [
-      "I want to apply for a $35,000 personal loan.",
-      "What are the eligibility requirements to borrow?",
-      "Can I get a quick credit decision online?",
-      "Thank you, that is extremely helpful!"
-    ];
-  };
-
-  // Quick calculation for task metrics
-  const totalLeadsInTask = selectedTask.leadIds.length;
-  const completedLeadsInTask = Object.keys(selectedTask.callResults).map(k => selectedTask.callResults[k]).filter(r => r.status === 'Completed').length;
-  const skippedLeadsInTask = Object.keys(selectedTask.callResults).map(k => selectedTask.callResults[k]).filter(r => r.status === 'Skipped').length;
-  const conversionPercent = completedLeadsInTask > 0 
+  // Quick calculation for task metrics — selectedTask is undefined when the
+  // org has no dialing tasks yet (a real, valid state now that this is real
+  // backend data instead of always-seeded fake tasks).
+  const totalLeadsInTask = selectedTask?.leadIds.length || 0;
+  const completedLeadsInTask = selectedTask ? Object.keys(selectedTask.callResults).map(k => selectedTask.callResults[k]).filter(r => r.status === 'Completed').length : 0;
+  const skippedLeadsInTask = selectedTask ? Object.keys(selectedTask.callResults).map(k => selectedTask.callResults[k]).filter(r => r.status === 'Skipped').length : 0;
+  const conversionPercent = selectedTask && completedLeadsInTask > 0
     ? Math.round((Object.keys(selectedTask.callResults).map(k => selectedTask.callResults[k]).filter(r => r.intent === 'Interested').length / completedLeadsInTask) * 100)
     : 0;
 
@@ -1300,7 +914,7 @@ Respond naturally, answer their questions clearly, and address them by name.`,
           <h2 className="text-2xl font-bold tracking-tight text-slate-900 font-display">Simulated Calling Center</h2>
           <p className="text-xs text-slate-500 mt-1">Configure automated workflows, initiate sequential campaigns, or trigger dynamic incoming calls to your virtual phone lines.</p>
         </div>
-        
+
         {/* Modern Segmented Pill Control */}
         <div className="flex items-center gap-3">
           <div className="bg-slate-100 p-1 rounded-xl border border-slate-200/80 flex">
@@ -1334,7 +948,7 @@ Respond naturally, answer their questions clearly, and address them by name.`,
 
           {dialerMode === 'outbound' && (
             <button
-              onClick={() => setShowCreateModal(true)}
+              onClick={openCreateTaskModal}
               className="flex items-center px-4 py-2.5 bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold rounded-xl shadow-md shadow-blue-600/15 transition-all cursor-pointer"
             >
               <Plus className="h-4 w-4 mr-1.5" />
@@ -1423,6 +1037,22 @@ Respond naturally, answer their questions clearly, and address them by name.`,
 
         {/* Center Main Column: Selected Task Queue Workspace - Bento Card */}
         <div className="lg:col-span-8 bg-white p-6 rounded-2xl border border-slate-200 shadow-sm flex flex-col justify-between space-y-6">
+          {!selectedTask ? (
+            <div className="flex flex-col items-center justify-center h-full text-center py-16 space-y-3">
+              <FileSpreadsheet className="h-10 w-10 text-slate-300" />
+              <div>
+                <p className="text-sm font-bold text-slate-700">No dialing tasks yet</p>
+                <p className="text-xs text-slate-400 mt-1">Assign a daily dialing task to start calling real leads.</p>
+              </div>
+              <button
+                onClick={openCreateTaskModal}
+                className="flex items-center px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold rounded-xl shadow-md cursor-pointer"
+              >
+                <Plus className="h-4 w-4 mr-1.5" />
+                Assign Dialing Task
+              </button>
+            </div>
+          ) : (
           <div className="space-y-4">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-100 pb-4">
               <div>
@@ -1469,7 +1099,7 @@ Respond naturally, answer their questions clearly, and address them by name.`,
                 <thead>
                   <tr className="bg-slate-50 border-b border-slate-100 text-slate-400">
                     <th className="px-4 py-2.5 font-semibold">Lead Contact</th>
-                    <th className="px-4 py-2.5 font-semibold">Loan Req.</th>
+                    <th className="px-4 py-2.5 font-semibold">Value</th>
                     <th className="px-4 py-2.5 font-semibold">Survey Status</th>
                     <th className="px-4 py-2.5 font-semibold">AI Sentiment</th>
                     <th className="px-4 py-2.5 text-right font-semibold">Survey Outcome</th>
@@ -1492,7 +1122,7 @@ Respond naturally, answer their questions clearly, and address them by name.`,
                           </div>
                         </td>
                         <td className="px-4 py-3 font-medium text-slate-600">
-                          ${lead.amountRequested.toLocaleString()}
+                          {lead.amountRequested ? `$${lead.amountRequested.toLocaleString()}` : '—'}
                         </td>
                         <td className="px-4 py-3">
                           {isCallingActive ? (
@@ -1580,6 +1210,7 @@ Respond naturally, answer their questions clearly, and address them by name.`,
               </table>
             </div>
           </div>
+          )}
         </div>
       </div>
 
@@ -1609,7 +1240,7 @@ Respond naturally, answer their questions clearly, and address them by name.`,
                 <div>
                   <h5 className="text-xs text-slate-400 font-mono">CALLEE TARGET</h5>
                   <p className="text-sm font-bold text-slate-100 font-display mt-0.5">{activeLead.name}</p>
-                  <p className="text-[10px] text-blue-300 font-mono mt-0.5">{activeLead.phone} • requested ${activeLead.amountRequested.toLocaleString()}</p>
+                  <p className="text-[10px] text-blue-300 font-mono mt-0.5">{activeLead.phone}{activeLead.amountRequested ? ` • value $${activeLead.amountRequested.toLocaleString()}` : ''}</p>
                 </div>
                 <div className="text-right shrink-0">
                   <h5 className="text-xs text-slate-400 font-mono">DIAL TIMER</h5>
@@ -1657,26 +1288,33 @@ Respond naturally, answer their questions clearly, and address them by name.`,
                       <PhoneCall className="h-6 w-6" />
                     </div>
                     <p className="text-xs text-slate-400">Selected target ready for outbound dial. Initiate line now.</p>
-                    <div className="flex gap-3 justify-center flex-wrap">
-                      <button
-                        onClick={() => handleInitiateTaskCall(activeLead)}
-                        className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs rounded-xl shadow-md cursor-pointer"
-                      >
-                        Simulate Call
-                      </button>
-                      <button
-                        onClick={() => handleInitiateTwilioCall(activeLead)}
-                        className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs rounded-xl shadow-md cursor-pointer"
-                      >
-                        Dial via Twilio
-                      </button>
-                      <button
-                        onClick={() => handleInitiateVobizCall(activeLead)}
-                        className="px-4 py-2 bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs rounded-xl shadow-md cursor-pointer"
-                      >
-                        Dial via Vobiz.ai
-                      </button>
-                    </div>
+                    {dialableNumbers.length > 0 ? (
+                      <div className="flex flex-col items-center gap-2">
+                        <select
+                          value={selectedOutboundNumber}
+                          onChange={(e) => setSelectedOutboundNumber(e.target.value)}
+                          className="bg-slate-900 border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-slate-200 focus:outline-none"
+                        >
+                          {dialableNumbers.map((n) => (
+                            <option key={n.number} value={n.number}>
+                              {n.friendlyName ? `${n.friendlyName} — ` : ''}{n.number} ({n.provider})
+                            </option>
+                          ))}
+                        </select>
+                        <button
+                          onClick={() => {
+                            const num = dialableNumbers.find((n) => n.number === selectedOutboundNumber);
+                            if (/vobiz/i.test(num?.provider || '')) handleInitiateVobizCall(activeLead);
+                            else handleInitiateTwilioCall(activeLead);
+                          }}
+                          className="px-5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs rounded-xl shadow-md cursor-pointer"
+                        >
+                          Dial
+                        </button>
+                      </div>
+                    ) : (
+                      <p className="text-xs text-rose-400">No Twilio or Vobiz.ai number provisioned yet — add one in Settings &gt; Numbers before dialing.</p>
+                    )}
                   </div>
                 )}
 
@@ -1770,10 +1408,10 @@ Respond naturally, answer their questions clearly, and address them by name.`,
 
             {isAiResponding && (
               <div className="flex flex-col items-start">
-                <span className="text-[9px] text-slate-500 font-mono mb-1">AI Evelyn • Thinking</span>
+                <span className="text-[9px] text-slate-500 font-mono mb-1">AI {agentDisplayName} • Thinking</span>
                 <div className="bg-blue-950/50 border border-blue-900/40 text-blue-300 rounded-2xl rounded-tl-none px-4 py-2 flex items-center space-x-2 text-xs">
                   <RefreshCw className="h-3.5 w-3.5 animate-spin" />
-                  <span>AI Agent Evelyn is evaluating customer utterance...</span>
+                  <span>AI Agent {agentDisplayName} is evaluating customer utterance...</span>
                 </div>
               </div>
             )}
@@ -1827,11 +1465,10 @@ Respond naturally, answer their questions clearly, and address them by name.`,
       </div>
         </>
       ) : (
-        /* INBOUND CALL CENTER SIMULATOR & MONITOR SCREEN */
+        /* REAL INBOUND CALL HISTORY */
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-          {/* LEFT COLUMN: Inbound Virtual Configuration & Caller Generator Deck */}
+          {/* LEFT COLUMN: Active Inbound Virtual Numbers */}
           <div className="lg:col-span-4 space-y-6">
-            {/* 1. Active Virtual Lines bento card */}
             <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-4">
               <div className="flex items-center justify-between border-b border-slate-100 pb-3">
                 <h4 className="text-xs font-bold text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
@@ -1841,470 +1478,150 @@ Respond naturally, answer their questions clearly, and address them by name.`,
                   {activeVirtualNumbers.length} Online
                 </span>
               </div>
-              
+
               <div className="space-y-3.5">
-                {activeVirtualNumbers.map((vNum) => {
-                  const isSelected = selectedInboundNumber === vNum.number;
-                  return (
-                    <button
-                      key={vNum.id}
-                      onClick={() => {
-                        if (inboundCallState === 'idle') {
-                          setSelectedInboundNumber(vNum.number);
-                        }
-                      }}
-                      disabled={inboundCallState !== 'idle'}
-                      className={`w-full p-4 rounded-xl text-left border transition-all flex flex-col space-y-2 ${
-                        isSelected
-                          ? 'border-blue-600 bg-blue-50/20 shadow-sm'
-                          : 'border-slate-100 hover:bg-slate-50 disabled:opacity-50'
-                      }`}
-                    >
-                      <div className="flex justify-between items-start w-full gap-2">
-                        <span className="text-xs font-bold text-slate-800 font-mono">{vNum.number}</span>
-                        <span className="text-[8px] font-mono font-bold bg-emerald-50 text-emerald-700 px-1.5 py-0.5 rounded border border-emerald-200 flex items-center gap-1">
-                          <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
-                          {vNum.status}
-                        </span>
-                      </div>
-                      <div className="text-[11px] text-slate-500 font-medium truncate">{vNum.friendlyName}</div>
-                      <div className="flex justify-between text-[9px] font-mono text-slate-400 border-t border-slate-50 pt-1.5">
-                        <span>Inbound Logs: {vNum.incomingCallCount}</span>
-                        <span>Carrier: {vNum.provider}</span>
-                      </div>
-                    </button>
-                  );
-                })}
+                {activeVirtualNumbers.map((vNum) => (
+                  <div
+                    key={vNum.id}
+                    className="w-full p-4 rounded-xl text-left border border-slate-100 flex flex-col space-y-2"
+                  >
+                    <div className="flex justify-between items-start w-full gap-2">
+                      <span className="text-xs font-bold text-slate-800 font-mono">{vNum.number}</span>
+                      <span className="text-[8px] font-mono font-bold bg-emerald-50 text-emerald-700 px-1.5 py-0.5 rounded border border-emerald-200 flex items-center gap-1">
+                        <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                        {vNum.status}
+                      </span>
+                    </div>
+                    <div className="text-[11px] text-slate-500 font-medium truncate">{vNum.friendlyName}</div>
+                    <div className="flex justify-between text-[9px] font-mono text-slate-400 border-t border-slate-50 pt-1.5">
+                      <span>Inbound Logs: {vNum.incomingCallCount}</span>
+                      <span>Carrier: {vNum.provider}</span>
+                    </div>
+                  </div>
+                ))}
+                {activeVirtualNumbers.length === 0 && (
+                  <div className="text-center py-8 border border-dashed border-slate-200 rounded-xl bg-slate-50/50 space-y-2">
+                    <PhoneForwarded className="h-6 w-6 text-slate-300 mx-auto" />
+                    <p className="text-[11px] text-slate-400">No virtual numbers connected yet. Add one under Settings to start receiving real inbound calls.</p>
+                  </div>
+                )}
               </div>
             </div>
 
-            {/* 2. Inbound Caller Simulation Engine bento card */}
-            <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-5">
-              <div className="border-b border-slate-100 pb-3">
-                <h4 className="text-xs font-bold text-slate-800 uppercase tracking-widest flex items-center gap-1.5">
-                  <Sliders className="h-4.5 w-4.5 text-blue-600" /> Caller Simulation Engine
-                </h4>
-                <p className="text-[10px] text-slate-400 mt-1">Configure caller variables and prompt parameters, then click fire to simulate incoming connections on the virtual trunk lines.</p>
+            <div className="p-4 bg-slate-900 text-white rounded-2xl relative overflow-hidden shrink-0">
+              <div className="absolute right-0 bottom-0 w-32 h-32 bg-blue-500/10 rounded-full blur-2xl"></div>
+              <div className="relative z-10 flex items-center space-x-3 text-xs leading-normal">
+                <Sparkles className="h-5 w-5 text-emerald-400 shrink-0" />
+                <p className="text-[11px] text-slate-300">
+                  Real calls to any connected number above are answered live by <strong>{agentDisplayName}</strong>, transcribed, and logged here automatically — nothing on this tab is simulated.
+                </p>
               </div>
-
-              {/* Selector: Caller Identity */}
-              <div className="space-y-1.5">
-                <label className="text-xs font-bold text-slate-600 block">Simulated Caller Profile</label>
-                <select
-                  value={selectedInboundCallerId}
-                  onChange={(e) => setSelectedInboundCallerId(e.target.value)}
-                  disabled={inboundCallState !== 'idle'}
-                  className="w-full border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-700 focus:outline-none focus:border-blue-500 bg-white"
-                >
-                  <option value="new">🆕 Anonymous / New Lending Inquiry</option>
-                  {leadsDatabase.map((lead) => (
-                    <option key={lead.id} value={lead.id}>
-                      👤 CRM: {lead.name} ({lead.phone})
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              {/* Conditional Inputs: If custom anonymous caller */}
-              {selectedInboundCallerId === 'new' && (
-                <div className="grid grid-cols-2 gap-3 p-3 bg-slate-50 rounded-xl border border-slate-200/60 animate-fadeIn">
-                  <div className="space-y-1">
-                    <label className="text-[10px] font-bold text-slate-500">Caller Name</label>
-                    <input
-                      type="text"
-                      placeholder="e.g. Rebecca Sterling"
-                      value={customInboundCallerName}
-                      onChange={(e) => setCustomInboundCallerName(e.target.value)}
-                      disabled={inboundCallState !== 'idle'}
-                      className="w-full border border-slate-200 bg-white rounded-lg px-2 py-1 text-xs text-slate-700 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                    />
-                  </div>
-                  <div className="space-y-1">
-                    <label className="text-[10px] font-bold text-slate-500">Phone number</label>
-                    <input
-                      type="text"
-                      placeholder="e.g. +1 (555) 304-2090"
-                      value={customInboundCallerPhone}
-                      onChange={(e) => setCustomInboundCallerPhone(e.target.value)}
-                      disabled={inboundCallState !== 'idle'}
-                      className="w-full border border-slate-200 bg-white rounded-lg px-2 py-1 text-xs text-slate-700 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                    />
-                  </div>
-                </div>
-              )}
-
-              {/* Selector: Inquiry Intent */}
-              <div className="space-y-1.5">
-                <label className="text-xs font-bold text-slate-600 block">Lending Inquiry Topic</label>
-                <select
-                  value={inboundStartingIntent}
-                  onChange={(e: any) => setInboundStartingIntent(e.target.value)}
-                  disabled={inboundCallState !== 'idle'}
-                  className="w-full border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-700 focus:outline-none focus:border-blue-500 bg-white"
-                >
-                  <option value="status">📑 Verify paystub/document approval status</option>
-                  <option value="apply">💵 Apply for a digital personal loan</option>
-                  <option value="rates">📈 Request interest rates & credit APR quote</option>
-                  <option value="payment">💳 Monthly EMI payments and billing support</option>
-                </select>
-              </div>
-
-              {/* Slider: simulated requested loan amount */}
-              <div className="space-y-1.5">
-                <div className="flex justify-between items-center">
-                  <label className="text-xs font-bold text-slate-600">Simulated Amount Involved</label>
-                  <span className="text-xs font-bold text-blue-600">${inboundLoanAmount.toLocaleString()}</span>
-                </div>
-                <input
-                  type="range"
-                  min="5000"
-                  max="150000"
-                  step="5000"
-                  value={inboundLoanAmount}
-                  onChange={(e) => setInboundLoanAmount(Number(e.target.value))}
-                  disabled={inboundCallState !== 'idle'}
-                  className="w-full accent-blue-600 h-1.5 bg-slate-100 rounded-lg cursor-pointer"
-                />
-              </div>
-
-              {/* Pulse Caller Trigger Button */}
-              {inboundCallState === 'idle' ? (
-                <button
-                  onClick={handleTriggerInboundCall}
-                  className="w-full py-3 bg-slate-900 hover:bg-blue-600 hover:scale-[1.01] text-white rounded-xl text-xs font-bold shadow-md hover:shadow-blue-600/15 transition-all cursor-pointer flex items-center justify-center gap-2"
-                >
-                  <PhoneIncoming className="h-4 w-4 text-emerald-400 animate-pulse" />
-                  Trigger Simulated Inbound Call
-                </button>
-              ) : (
-                <div className="w-full py-3 bg-blue-50 border border-blue-200 text-blue-700 rounded-xl text-xs font-bold text-center animate-pulse">
-                  📞 Inbound line connection active
-                </div>
-              )}
             </div>
           </div>
 
-          {/* RIGHT COLUMN: Live Inbound Console OR Conversation History Logs */}
+          {/* RIGHT COLUMN: Real Inbound Call History */}
           <div className="lg:col-span-8 flex flex-col h-full space-y-6">
-            {inboundCallState !== 'idle' ? (
-              /* LIVE ACTIVE CALL MONITOR PANEL */
-              <div className="bg-slate-950 rounded-3xl border border-slate-900 shadow-2xl flex flex-col min-h-[580px] overflow-hidden text-white animate-fadeIn">
-                {/* 1. Live Caller Telephone Status HUD */}
-                <div className="p-6 border-b border-slate-900 bg-slate-900/45 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-                  <div className="flex items-center space-x-4">
-                    <div className="relative">
-                      <div className="h-12 w-12 rounded-full bg-blue-600/10 border border-blue-500/20 flex items-center justify-center text-blue-400">
-                        <User className="h-6 w-6" />
-                      </div>
-                      {inboundCallState === 'ringing' && (
-                        <span className="absolute top-0 right-0 flex h-3 w-3">
-                          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75"></span>
-                          <span className="relative inline-flex rounded-full h-3 w-3 bg-rose-500"></span>
-                        </span>
-                      )}
-                      {inboundCallState === 'connected' && (
-                        <span className="absolute top-0 right-0 flex h-3 w-3">
-                          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                          <span className="relative inline-flex rounded-full h-3 w-3 bg-emerald-500"></span>
-                        </span>
-                      )}
-                    </div>
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <h4 className="text-sm font-bold text-slate-100 font-display">{inboundCaller?.name}</h4>
-                        <span className={`text-[8px] font-mono font-bold uppercase tracking-widest px-2 py-0.5 rounded-full ${
-                          inboundCallState === 'ringing'
-                            ? 'bg-rose-500/10 text-rose-400 border border-rose-500/25 animate-pulse'
-                            : inboundCallState === 'connected'
-                            ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/25'
-                            : 'bg-slate-800 text-slate-400'
-                        }`}>
-                          {inboundCallState === 'ringing' ? 'Incoming Ringing...' : 'Connected • Recording'}
-                        </span>
-                      </div>
-                      <p className="text-[11px] text-slate-400 font-mono mt-0.5">
-                        Caller Number: <span className="text-slate-300 font-bold">{inboundCaller?.phone}</span> • Dialed: <span className="text-blue-400 font-bold">{selectedInboundNumber}</span>
-                      </p>
-                    </div>
+            <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm flex flex-col justify-between h-full min-h-[580px] space-y-6">
+              <div className="space-y-4">
+                {/* Stats banner */}
+                <div className="grid grid-cols-3 gap-4 border-b border-slate-100 pb-5">
+                  <div className="p-3 bg-slate-50 border border-slate-200/50 rounded-xl space-y-1 text-center">
+                    <span className="text-[8px] font-mono text-slate-400 uppercase tracking-widest block">Inbound Volume</span>
+                    <p className="text-xl font-bold text-slate-800">{realInboundCallLogs.length}</p>
                   </div>
-
-                  {/* Right HUD Metrics */}
-                  <div className="text-left sm:text-right shrink-0 bg-slate-900/30 px-4 py-2 border border-slate-900 rounded-2xl flex sm:flex-col items-center sm:items-end justify-between sm:justify-center gap-4 sm:gap-0.5 w-full sm:w-auto">
-                    <span className="text-[9px] font-mono text-slate-500 uppercase tracking-wider">LIVE CALL MONITOR</span>
-                    <div className="flex items-center gap-2.5 mt-0.5">
-                      {inboundCallState === 'connected' && (
-                        <span className="text-[9px] font-mono text-rose-500 font-bold animate-pulse flex items-center gap-1 bg-rose-500/10 px-2 py-0.5 rounded border border-rose-500/20">
-                          🔴 RECORDING
-                        </span>
-                      )}
-                      <span className="font-mono text-sm font-bold text-slate-100">{formatTime(inboundDuration)}</span>
-                    </div>
+                  <div className="p-3 bg-slate-50 border border-slate-200/50 rounded-xl space-y-1 text-center">
+                    <span className="text-[8px] font-mono text-slate-400 uppercase tracking-widest block">Average Duration</span>
+                    <p className="text-xl font-bold text-slate-800">
+                      {realInboundCallLogs.length > 0
+                        ? Math.round(realInboundCallLogs.reduce((acc, l) => acc + l.duration, 0) / realInboundCallLogs.length)
+                        : 0}s
+                    </p>
                   </div>
-                </div>
-
-                {/* 2. Topic Context Bar */}
-                <div className="px-6 py-2.5 bg-slate-900/20 border-b border-slate-900 text-xs flex justify-between items-center text-slate-400 gap-4">
-                  <div className="flex items-center gap-1.5 truncate">
-                    <span className="text-slate-500 uppercase font-mono font-bold tracking-wider text-[9px]">Topic:</span>
-                    <span className="font-semibold text-blue-400 truncate">{inboundTopic}</span>
-                  </div>
-                  <div className="flex items-center gap-3 shrink-0 font-mono text-[10px]">
-                    <span>Sentiment: <strong className="text-emerald-400">{inboundSentiment}</strong></span>
-                    <span>Intent: <strong className="text-blue-400">{inboundIntent}</strong></span>
-                  </div>
-                </div>
-
-                {/* 3. Live Dialogue transcripts scroll */}
-                <div className="flex-1 overflow-y-auto p-6 space-y-5 min-h-[250px] max-h-[350px]">
-                  {inboundTranscript.length > 0 ? (
-                    inboundTranscript.map((line, idx) => {
-                      const isAI = line.speaker === 'AI';
-                      return (
-                        <div key={idx} className={`flex flex-col ${isAI ? 'items-start' : 'items-end'} animate-fadeIn`}>
-                          <span className="text-[9px] text-slate-500 font-mono mb-1.5">
-                            {isAI ? '🤖 AI Evelyn' : `👤 ${inboundCaller?.name}`} • {line.timestamp}
-                          </span>
-                          <div
-                            className={`rounded-2xl px-5 py-3 text-[12.5px] font-sans leading-relaxed shadow-sm max-w-[85%] ${
-                              isAI
-                                ? 'bg-blue-900 text-blue-50 rounded-tl-none border-l-4 border-blue-500'
-                                : 'bg-slate-800 text-slate-200 rounded-tr-none border border-slate-700/50'
-                            }`}
-                          >
-                            {line.text}
-                          </div>
-                        </div>
-                      );
-                    })
-                  ) : (
-                    <div className="flex flex-col items-center justify-center h-full text-slate-500 space-y-3.5 py-12">
-                      <Volume2 className="h-10 w-10 text-slate-700 animate-bounce" />
-                      <div className="text-center">
-                        <p className="text-xs text-slate-300 font-bold">Simulated Phone Line Ringing</p>
-                        <p className="text-[11px] text-slate-500 mt-0.5">Click "Accept Call" in the console below to pick up and let AI Evelyn answer.</p>
-                      </div>
-                    </div>
-                  )}
-
-                  {isInboundAiResponding && (
-                    <div className="flex flex-col items-start animate-fadeIn">
-                      <span className="text-[9px] text-slate-500 font-mono mb-1.5">AI Evelyn • Processing Voice Stream</span>
-                      <div className="bg-blue-950/65 border border-blue-900/40 text-blue-300 rounded-2xl rounded-tl-none px-5 py-3 flex items-center space-x-2.5 text-xs">
-                        <RefreshCw className="h-4 w-4 animate-spin text-blue-400" />
-                        <span>Evelyn is evaluating caller speech waves...</span>
-                      </div>
-                    </div>
-                  )}
-                  <div ref={chatBottomRef}></div>
-                </div>
-
-                {/* 4. Interactive Caller simulator keypad & controls */}
-                <div className="p-5 border-t border-slate-900 bg-slate-900/35 space-y-4 shrink-0">
-                  {/* Phone controls depending on callState */}
-                  <div className="flex justify-center items-center gap-4 border-b border-slate-900/45 pb-3">
-                    {inboundCallState === 'ringing' && (
-                      <>
-                        <button
-                          onClick={handleAcceptInboundCall}
-                          className="px-6 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold shadow-md shadow-emerald-600/15 transition-all cursor-pointer flex items-center gap-2"
-                        >
-                          <Check className="h-4 w-4" />
-                          Accept Inbound Call
-                        </button>
-                        <button
-                          onClick={handleDeclineInboundCall}
-                          className="px-6 py-2.5 bg-rose-600 hover:bg-rose-500 text-white rounded-xl text-xs font-bold shadow-md shadow-rose-600/15 transition-all cursor-pointer flex items-center gap-2"
-                        >
-                          <PhoneOff className="h-4 w-4" />
-                          Decline / Route to Voicemail
-                        </button>
-                      </>
-                    )}
-
-                    {inboundCallState === 'connected' && (
-                      <button
-                        onClick={handleHangupInboundCall}
-                        className="px-8 py-2.5 bg-rose-600 hover:bg-rose-500 text-white rounded-xl text-xs font-bold shadow-md shadow-rose-600/15 transition-all cursor-pointer flex items-center gap-2 mx-auto"
-                      >
-                        <PhoneOff className="h-4 w-4" />
-                        Hang Up & File Recording
-                      </button>
-                    )}
-
-                    {inboundCallState === 'completed' && (
-                      <div className="text-center py-2 space-y-2">
-                        <p className="text-xs text-slate-400">Call successfully archived. Dialogue files stored securely.</p>
-                        <button
-                          onClick={() => {
-                            setInboundCallState('idle');
-                            setInboundCaller(null);
-                          }}
-                          className="px-6 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-bold cursor-pointer transition-all"
-                        >
-                          Clear Line & Return to Desk
-                        </button>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Caller speech input (Only visible when connected) */}
-                  {inboundCallState === 'connected' && (
-                    <div className="space-y-3">
-                      {/* Suggestion Chips context-specific to the intent selected */}
-                      <div className="flex flex-wrap gap-2">
-                        {getInboundSuggestions().map((suggestion, sIdx) => (
-                          <button
-                            key={sIdx}
-                            type="button"
-                            onClick={() => {
-                              setInboundCustomerUtterance(suggestion);
-                              handleSendInboundUtterance(suggestion);
-                            }}
-                            className="text-[10px] bg-slate-900 hover:bg-blue-900 hover:text-white text-slate-300 border border-slate-800 rounded px-3 py-1.5 transition-all cursor-pointer font-sans"
-                          >
-                            🎤 Say: "{suggestion}"
-                          </button>
-                        ))}
-                      </div>
-
-                      <form
-                        onSubmit={(e) => {
-                          e.preventDefault();
-                          handleSendInboundUtterance(inboundCustomerUtterance);
-                        }}
-                        className="flex items-center space-x-2.5"
-                      >
-                        <input
-                          type="text"
-                          value={inboundCustomerUtterance}
-                          onChange={(e) => setInboundCustomerUtterance(e.target.value)}
-                          placeholder={`Type simulated ${inboundCaller?.name || 'Customer'} voice reply here...`}
-                          className="flex-1 bg-slate-900 border border-slate-800 rounded-xl px-4 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-blue-500"
-                        />
-                        <button
-                          type="submit"
-                          disabled={!inboundCustomerUtterance.trim() || isInboundAiResponding}
-                          className="p-2.5 bg-blue-600 hover:bg-blue-500 disabled:opacity-40 text-white rounded-xl transition-all cursor-pointer shrink-0"
-                        >
-                          <Send className="h-4 w-4" />
-                        </button>
-                      </form>
-                    </div>
-                  )}
-                </div>
-              </div>
-            ) : (
-              /* INBOUND HISTORY LOGS DECK */
-              <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm flex flex-col justify-between h-full min-h-[580px] space-y-6">
-                <div className="space-y-4">
-                  {/* Stats banner */}
-                  <div className="grid grid-cols-3 gap-4 border-b border-slate-100 pb-5">
-                    <div className="p-3 bg-slate-50 border border-slate-200/50 rounded-xl space-y-1 text-center">
-                      <span className="text-[8px] font-mono text-slate-400 uppercase tracking-widest block">Inbound Volume</span>
-                      <p className="text-xl font-bold text-slate-800">{inboundCallLogs.length}</p>
-                    </div>
-                    <div className="p-3 bg-slate-50 border border-slate-200/50 rounded-xl space-y-1 text-center">
-                      <span className="text-[8px] font-mono text-slate-400 uppercase tracking-widest block">Average Duration</span>
-                      <p className="text-xl font-bold text-slate-800">
-                        {inboundCallLogs.length > 0
-                          ? Math.round(inboundCallLogs.reduce((acc, l) => acc + l.duration, 0) / inboundCallLogs.length)
-                          : 0}s
-                      </p>
-                    </div>
-                    <div className="p-3 bg-slate-50 border border-slate-200/50 rounded-xl space-y-1 text-center">
-                      <span className="text-[8px] font-mono text-slate-400 uppercase tracking-widest block">Positive Rate</span>
-                      <p className="text-xl font-bold text-slate-800">
-                        {inboundCallLogs.length > 0
-                          ? Math.round((inboundCallLogs.filter(l => l.sentiment === 'Positive').length / inboundCallLogs.length) * 100)
-                          : 0}%
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <h3 className="text-sm font-bold text-slate-900 uppercase tracking-widest flex items-center gap-1.5">
-                        <History className="h-4.5 w-4.5 text-blue-600" /> Inbound Dialogue History
-                      </h3>
-                      <p className="text-xs text-slate-400 mt-0.5">Audit audio recording tapes and view AI extracted summaries of incoming calls.</p>
-                    </div>
-                    <button
-                      onClick={() => {
-                        if (confirm('Clear all inbound logs and recordings?')) {
-                          setInboundCallLogs([]);
-                        }
-                      }}
-                      className="text-[10px] text-rose-500 font-bold hover:underline cursor-pointer"
-                    >
-                      Clear History
-                    </button>
-                  </div>
-
-                  {/* Logs list */}
-                  <div className="space-y-3 max-h-[380px] overflow-y-auto pr-1">
-                    {inboundCallLogs.map((log) => (
-                      <div
-                        key={log.id}
-                        className="p-4 border border-slate-100 rounded-xl bg-slate-50/50 hover:bg-slate-50 transition-all flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4"
-                      >
-                        <div className="space-y-1.5 max-w-lg">
-                          <div className="flex flex-wrap items-center gap-2">
-                            <span className="text-xs font-bold text-slate-800">{log.callerName}</span>
-                            <span className="text-[9px] font-mono text-slate-500">{log.callerPhone}</span>
-                            <span className="text-[9px] font-mono text-slate-400">•</span>
-                            <span className="text-[9px] font-mono text-slate-400">{new Date(log.createdAt).toLocaleDateString()}</span>
-                          </div>
-                          
-                          <p className="text-[11px] text-slate-600 italic font-medium leading-relaxed font-sans line-clamp-2">
-                            "{log.summary}"
-                          </p>
-
-                          <div className="flex flex-wrap items-center gap-2 pt-1">
-                            <span className="text-[9px] font-mono text-blue-600 bg-blue-50 border border-blue-200 px-1.5 py-0.5 rounded-full">
-                              Line: {log.virtualNumber}
-                            </span>
-                            <span className="text-[9px] font-mono text-emerald-600 bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded-full">
-                              Topic: {log.topic}
-                            </span>
-                            <span className="text-[9px] font-mono text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded-full">
-                              Duration: {log.duration}s
-                            </span>
-                          </div>
-                        </div>
-
-                        {/* Tape playback button */}
-                        <button
-                          onClick={() => handleOpenTapePlayer(log.id, 'inbound')}
-                          className="px-3.5 py-2 bg-white hover:bg-blue-600 hover:text-white text-slate-700 border border-slate-200 hover:border-blue-600 rounded-xl text-xs font-bold shadow-sm cursor-pointer transition-all flex items-center gap-1 shrink-0"
-                        >
-                          <Play className="h-3.5 w-3.5 fill-current" />
-                          Play Tape
-                        </button>
-                      </div>
-                    ))}
-
-                    {inboundCallLogs.length === 0 && (
-                      <div className="text-center py-12 border border-dashed border-slate-200 rounded-xl bg-slate-50/50 space-y-2">
-                        <Inbox className="h-8 w-8 text-slate-400 mx-auto animate-bounce" />
-                        <p className="text-xs text-slate-400 font-medium">No inbound voice tapes logged today.</p>
-                        <p className="text-[10px] text-slate-400">Trigger an incoming simulation on the left to start recording.</p>
-                      </div>
-                    )}
-                  </div>
-                </div>
-                
-                {/* Information badge footer */}
-                <div className="p-4 bg-slate-900 text-white rounded-2xl relative overflow-hidden shrink-0 mt-4">
-                  <div className="absolute right-0 bottom-0 w-32 h-32 bg-blue-500/10 rounded-full blur-2xl"></div>
-                  <div className="relative z-10 flex items-center space-x-3 text-xs leading-normal">
-                    <Sparkles className="h-5 w-5 text-emerald-400 shrink-0" />
-                    <p className="text-[11px] text-slate-300">
-                      Our virtual number routing maps inbound SIP audio streaming directly to the <strong>Evelyn CRM Intelligence engine</strong>, recording and parsing customer responses under 150ms.
+                  <div className="p-3 bg-slate-50 border border-slate-200/50 rounded-xl space-y-1 text-center">
+                    <span className="text-[8px] font-mono text-slate-400 uppercase tracking-widest block">Positive Rate</span>
+                    <p className="text-xl font-bold text-slate-800">
+                      {realInboundCallLogs.length > 0
+                        ? Math.round((realInboundCallLogs.filter(l => l.sentiment === 'Positive').length / realInboundCallLogs.length) * 100)
+                        : 0}%
                     </p>
                   </div>
                 </div>
+
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h3 className="text-sm font-bold text-slate-900 uppercase tracking-widest flex items-center gap-1.5">
+                      <History className="h-4.5 w-4.5 text-blue-600" /> Inbound Dialogue History
+                    </h3>
+                    <p className="text-xs text-slate-400 mt-0.5">Real recorded calls answered on your virtual numbers, with AI-extracted summaries and full transcripts.</p>
+                  </div>
+                </div>
+
+                {/* Logs list */}
+                <div className="space-y-3 max-h-[380px] overflow-y-auto pr-1">
+                  {realInboundCallLogs.map((log) => (
+                    <div
+                      key={log.id}
+                      className="p-4 border border-slate-100 rounded-xl bg-slate-50/50 hover:bg-slate-50 transition-all flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4"
+                    >
+                      <div className="space-y-1.5 max-w-lg">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="text-xs font-bold text-slate-800 font-mono">{log.leadName}</span>
+                          <span className="text-[9px] font-mono text-slate-400">•</span>
+                          <span className="text-[9px] font-mono text-slate-400">{new Date(log.createdAt).toLocaleString()}</span>
+                        </div>
+
+                        <p className="text-[11px] text-slate-600 italic font-medium leading-relaxed font-sans line-clamp-2">
+                          "{log.summary}"
+                        </p>
+
+                        <div className="flex flex-wrap items-center gap-2 pt-1">
+                          <span className="text-[9px] font-mono text-emerald-600 bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded-full">
+                            {log.sentiment}
+                          </span>
+                          <span className="text-[9px] font-mono text-blue-600 bg-blue-50 border border-blue-200 px-1.5 py-0.5 rounded-full">
+                            {log.status}
+                          </span>
+                          <span className="text-[9px] font-mono text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded-full">
+                            Duration: {log.duration}s
+                          </span>
+                          <span className="text-[9px] font-mono text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded-full">
+                            {formatInr(callCostInr(log.duration))}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Tape playback button */}
+                      <button
+                        onClick={() => handleOpenTapePlayer(log.id, 'inbound')}
+                        className="px-3.5 py-2 bg-white hover:bg-blue-600 hover:text-white text-slate-700 border border-slate-200 hover:border-blue-600 rounded-xl text-xs font-bold shadow-sm cursor-pointer transition-all flex items-center gap-1 shrink-0"
+                      >
+                        <Play className="h-3.5 w-3.5 fill-current" />
+                        Play Tape
+                      </button>
+                    </div>
+                  ))}
+
+                  {realInboundCallLogs.length === 0 && (
+                    <div className="text-center py-12 border border-dashed border-slate-200 rounded-xl bg-slate-50/50 space-y-2">
+                      <Inbox className="h-8 w-8 text-slate-400 mx-auto" />
+                      <p className="text-xs text-slate-400 font-medium">No inbound calls logged yet.</p>
+                      <p className="text-[10px] text-slate-400">Real calls to a connected virtual number will appear here automatically as they happen.</p>
+                    </div>
+                  )}
+                </div>
               </div>
-            )}
+
+              {/* Information badge footer */}
+              <div className="p-4 bg-slate-900 text-white rounded-2xl relative overflow-hidden shrink-0 mt-4">
+                <div className="absolute right-0 bottom-0 w-32 h-32 bg-blue-500/10 rounded-full blur-2xl"></div>
+                <div className="relative z-10 flex items-center space-x-3 text-xs leading-normal">
+                  <Sparkles className="h-5 w-5 text-emerald-400 shrink-0" />
+                  <p className="text-[11px] text-slate-300">
+                    Our virtual number routing maps inbound SIP audio streaming directly to the <strong>{agentDisplayName} CRM Intelligence engine</strong>, recording and parsing customer responses in real time.
+                  </p>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       )}
@@ -2343,8 +1660,24 @@ Respond naturally, answer their questions clearly, and address them by name.`,
               <div className="space-y-2">
                 <label className="text-xs font-bold text-slate-600 block">Questions Questionnaire (Sequential Flow)</label>
                 <p className="text-[11px] text-slate-400 leading-normal">
-                  Our virtual voice assistant Evelyn will ask these questions one by one. She automatically processes the caller speech, records the timeline, and advances to the next question.
+                  Our virtual voice assistant, {agentDisplayName}, will ask these questions one by one. It automatically processes the caller speech, records the timeline, and advances to the next question.
                 </p>
+
+                {tasks.length > 0 && (
+                  <select
+                    value=""
+                    onChange={(e) => {
+                      const sourceTask = tasks.find((t) => t.id === e.target.value);
+                      if (sourceTask) setNewQuestions([...sourceTask.questions]);
+                    }}
+                    className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-xs text-slate-600 focus:outline-none focus:border-blue-500"
+                  >
+                    <option value="">Copy questions from an existing task…</option>
+                    {tasks.map((t) => (
+                      <option key={t.id} value={t.id}>{t.name} ({t.questions.length} question{t.questions.length === 1 ? '' : 's'})</option>
+                    ))}
+                  </select>
+                )}
 
                 {/* Question List */}
                 <div className="space-y-2 max-h-32 overflow-y-auto bg-slate-50 p-3 rounded-xl border border-slate-200">
@@ -2484,102 +1817,6 @@ Respond naturally, answer their questions clearly, and address them by name.`,
         </div>
       )}
 
-      {/* INBOUND CALL INDICATION POPUP */}
-      {inboundCallState === 'ringing' && inboundCaller && (
-        <div className="fixed inset-0 bg-slate-950/85 backdrop-blur-md flex items-center justify-center p-4 z-50 animate-fade-in font-sans">
-          <div className="bg-slate-900 border border-slate-800 rounded-3xl max-w-md w-full p-8 shadow-2xl text-white space-y-6 relative overflow-hidden border-t-4 border-t-indigo-500">
-            {/* Ambient glowing background */}
-            <div className="absolute top-0 right-0 w-48 h-48 bg-indigo-500/10 rounded-full blur-3xl -z-10"></div>
-            <div className="absolute bottom-0 left-0 w-48 h-48 bg-emerald-500/10 rounded-full blur-3xl -z-10"></div>
-            
-            {/* Pulsing Flashing Ringing Indicator Header */}
-            <div className="flex flex-col items-center text-center space-y-4">
-              <div className="relative">
-                {/* Concentric rings pulsing */}
-                <span className="absolute -inset-4 rounded-full bg-indigo-500/15 animate-ping opacity-75"></span>
-                <span className="absolute -inset-8 rounded-full bg-indigo-500/5 animate-pulse"></span>
-                <div className="h-16 w-16 rounded-full bg-indigo-600 flex items-center justify-center shadow-lg shadow-indigo-600/30 animate-bounce">
-                  <PhoneIncoming className="h-8 w-8 text-white" />
-                </div>
-              </div>
-              
-              <div className="space-y-1">
-                <span className="text-[10px] uppercase tracking-widest font-bold text-indigo-400 bg-indigo-950/50 border border-indigo-900 px-3 py-1 rounded-full">
-                  Incoming Virtual Call
-                </span>
-                <h3 className="text-xl font-bold tracking-tight text-white mt-2">Incoming Simulated Inbound Call</h3>
-                <p className="text-xs text-slate-400 font-medium">Virtual Direct Line: {selectedInboundNumber}</p>
-              </div>
-            </div>
-
-            {/* Caller Details Card */}
-            <div className="bg-slate-950/60 border border-slate-800/80 rounded-2xl p-4 space-y-3.5">
-              <div className="flex items-center space-x-3">
-                <div className="h-10 w-10 rounded-full bg-slate-800 border border-slate-700 flex items-center justify-center text-slate-300">
-                  <User className="h-5 w-5" />
-                </div>
-                <div>
-                  <h4 className="text-sm font-bold text-slate-100">{inboundCaller.name}</h4>
-                  <p className="text-xs text-slate-400 font-mono">{inboundCaller.phone}</p>
-                </div>
-              </div>
-
-              <div className="h-px bg-slate-800/60"></div>
-
-              <div className="grid grid-cols-2 gap-4 text-xs">
-                <div>
-                  <span className="text-slate-500 block text-[10px] uppercase tracking-wider font-semibold">Estimated Topic</span>
-                  <span className="text-slate-200 font-medium">{inboundTopic}</span>
-                </div>
-                <div>
-                  <span className="text-slate-500 block text-[10px] uppercase tracking-wider font-semibold">Loan Request</span>
-                  <span className="text-slate-200 font-mono font-medium">${inboundCaller.amountRequested?.toLocaleString()}</span>
-                </div>
-              </div>
-            </div>
-
-            {/* Auto Attend Status & Countdown Control */}
-            <div className="bg-slate-950/40 border border-slate-800/50 rounded-2xl p-4 space-y-3">
-              <div className="flex items-center space-x-2">
-                <Sparkles className="h-4 w-4 text-emerald-400" />
-                <span className="text-xs font-bold text-slate-200">AI Automatic Routing</span>
-              </div>
-
-              <div className="space-y-2">
-                <div className="flex justify-between text-[11px] text-slate-300">
-                  <span>AI Agent is automatically answering...</span>
-                  <span className="font-bold font-mono text-emerald-400">0:0{autoAttendCountdown}</span>
-                </div>
-                {/* Progress Bar */}
-                <div className="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden">
-                  <div 
-                    className="h-full bg-gradient-to-r from-indigo-500 to-emerald-500 transition-all duration-1000 ease-linear"
-                    style={{ width: `${(autoAttendCountdown / 3) * 100}%` }}
-                  ></div>
-                </div>
-              </div>
-            </div>
-
-            {/* Action Buttons */}
-            <div className="grid grid-cols-2 gap-4">
-              <button
-                onClick={handleDeclineInboundCall}
-                className="w-full py-3 bg-slate-800 hover:bg-slate-700 active:bg-slate-750 text-slate-300 border border-slate-700/60 rounded-xl text-xs font-bold cursor-pointer transition-all flex items-center justify-center gap-2"
-              >
-                <PhoneOff className="h-4 w-4 text-rose-500" />
-                Decline
-              </button>
-              <button
-                onClick={handleAcceptInboundCall}
-                className="w-full py-3 bg-indigo-600 hover:bg-indigo-500 active:bg-indigo-700 text-white rounded-xl text-xs font-bold shadow-md shadow-indigo-600/20 cursor-pointer transition-all flex items-center justify-center gap-2"
-              >
-                <Check className="h-4 w-4 text-emerald-400" />
-                Attend Instantly
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

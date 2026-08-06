@@ -23,6 +23,7 @@ import {
 } from 'recharts';
 import { apiFetch } from '../lib/api';
 import { Lead, Loan, Campaign, CallLog, OrganizationSettings } from '../types';
+import { COST_PER_MINUTE_INR, formatInr } from '../lib/pricing';
 
 interface DashboardViewProps {
   leads: Lead[];
@@ -195,7 +196,7 @@ export default function DashboardView({
           </div>
         </div>
 
-        {/* AI Usage Limit Card - Bento Stat 4 */}
+        {/* AI Usage Card - Bento Stat 4 */}
         <div className="lg:col-span-3 md:col-span-6 col-span-12 bg-white p-6 rounded-2xl border border-slate-200 shadow-sm flex flex-col justify-between hover:shadow-md transition-all">
           <div className="flex justify-between items-start">
             <div className="bg-slate-50 p-2 rounded-lg text-slate-600">
@@ -206,17 +207,11 @@ export default function DashboardView({
             </span>
           </div>
           <div className="mt-4 w-full">
-            <p className="text-slate-500 text-sm font-medium">AI Voice Budget</p>
+            <p className="text-slate-500 text-sm font-medium">AI Voice Minutes This Period</p>
             <h3 className="text-2xl font-bold text-slate-800 mt-1">
-              {orgSettings.aiMinutesUsed} <span className="text-xs font-normal text-slate-400">/ {orgSettings.aiMinutesLimit} min</span>
+              {orgSettings.aiMinutesUsed} <span className="text-xs font-normal text-slate-400">min</span>
             </h3>
-            {/* Progress Bar */}
-            <div className="w-full bg-slate-100 rounded-full h-1.5 mt-2">
-              <div
-                className="bg-blue-600 h-1.5 rounded-full"
-                style={{ width: `${(orgSettings.aiMinutesUsed / orgSettings.aiMinutesLimit) * 100}%` }}
-              ></div>
-            </div>
+            <p className="text-xs text-slate-400 mt-1">{formatInr(orgSettings.aiMinutesUsed * COST_PER_MINUTE_INR)} at ₹{COST_PER_MINUTE_INR}/min</p>
           </div>
         </div>
 

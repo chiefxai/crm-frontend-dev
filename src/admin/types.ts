@@ -18,7 +18,7 @@ export interface OrgRow {
   industry: string;
   subscriptionPlan: string;
   aiMinutesUsed: number;
-  aiMinutesLimit: number;
+  totalCostInr: number;
   billingPeriodEnd?: string;
   memberCount: number;
   leadCount: number;
@@ -32,7 +32,7 @@ export interface OrgDetail {
   industry: string;
   subscriptionPlan: string;
   aiMinutesUsed: number;
-  aiMinutesLimit: number;
+  totalCostInr: number;
   billingPeriodEnd: string | null;
   createdAt: string;
   settings: Record<string, unknown>;

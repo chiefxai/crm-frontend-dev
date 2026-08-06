@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { X, Loader2, Building2, Users, PhoneCall, ScrollText } from 'lucide-react';
 import { apiFetch } from '../lib/api';
 import { OrgDetail } from './types';
+import { callCostInr, formatInr } from '../lib/pricing';
 
 export default function OrgDetailPanel({ orgId, onClose }: { orgId: string; onClose: () => void }) {
   const [detail, setDetail] = useState<OrgDetail | null>(null);
@@ -57,7 +58,11 @@ export default function OrgDetailPanel({ orgId, onClose }: { orgId: string; onCl
                 </div>
                 <div className="flex items-center justify-between text-sm mb-2">
                   <span className="text-slate-500">AI minutes</span>
-                  <span className="font-semibold text-slate-800">{detail.aiMinutesUsed} / {detail.aiMinutesLimit}</span>
+                  <span className="font-semibold text-slate-800">{detail.aiMinutesUsed}</span>
+                </div>
+                <div className="flex items-center justify-between text-sm mb-2">
+                  <span className="text-slate-500">AI voice cost</span>
+                  <span className="font-semibold text-slate-800">{formatInr(detail.totalCostInr)}</span>
                 </div>
                 <div className="flex items-center justify-between text-sm">
                   <span className="text-slate-500">Signed up</span>
@@ -90,7 +95,7 @@ export default function OrgDetailPanel({ orgId, onClose }: { orgId: string; onCl
                   {detail.recentCalls.map((c) => (
                     <div key={c.id} className="flex items-center justify-between text-xs">
                       <span className="text-slate-600">{c.callerNumber || 'Unknown'} · {c.agentName}</span>
-                      <span className="text-slate-400">{c.durationSeconds}s · {new Date(c.createdAt).toLocaleDateString()}</span>
+                      <span className="text-slate-400">{c.durationSeconds}s · {formatInr(callCostInr(c.durationSeconds))} · {new Date(c.createdAt).toLocaleDateString()}</span>
                     </div>
                   ))}
                   {detail.recentCalls.length === 0 && <p className="text-xs text-slate-400">No calls yet.</p>}

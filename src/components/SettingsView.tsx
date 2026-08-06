@@ -5,7 +5,6 @@ import {
   Users,
   CreditCard,
   Key,
-  Plus,
   Trash2,
   CheckCircle,
   FileText,
@@ -24,6 +23,7 @@ import {
 } from 'lucide-react';
 import { apiFetch } from '../lib/api';
 import { VirtualNumber, TeamMember, OrganizationSettings, UserRole } from '../types';
+import { COST_PER_MINUTE_INR, formatInr } from '../lib/pricing';
 
 interface SettingsViewProps {
   virtualNumbers: VirtualNumber[];
@@ -104,36 +104,94 @@ Real Tamil speakers do not say the "correct" written form of a word. They contra
     }, 600);
   };
 
-  // Virtual number states
-  const [newNumVal, setNewNumVal] = useState('');
-  const [newNumName, setNewNumName] = useState('');
-  const [newNumProv, setNewNumProv] = useState<'Twilio' | 'Telnyx' | 'SIP Trunk'>('Twilio');
+  // Per-org telephony credentials — lets this org use its own Twilio/Vobiz
+  // account for real outbound calls instead of the single shared account
+  // configured in the server's .env. See services/channelsRoutes.js
+  // (POST /api/channels/twilio, /api/channels/vobiz) and how server.js's
+  // /api/twilio/call and /api/vobiz/call prefer these when connected.
+  // Connecting an account and registering its number as a dialable virtual
+  // line used to be two separate steps (connect credentials, then "Provision
+  // Virtual Call-center Line" for the same number) — combined into one
+  // action here since the common case is exactly one number per account.
+  const [connectProvider, setConnectProvider] = useState<'twilio' | 'vobiz'>('twilio');
+  const [connectedChannels, setConnectedChannels] = useState<{ type: string; externalId: string; config: any }[]>([]);
+  const loadChannels = () => {
+    apiFetch('/api/channels').then((r) => r.json()).then((list) => setConnectedChannels(Array.isArray(list) ? list : [])).catch(() => {});
+  };
+  useEffect(() => {
+    if (subTab === 'numbers') loadChannels();
+  }, [subTab]);
+
+  // Adds/updates the virtual-number entry for a just-connected number so it
+  // shows up in the numbers list and the Voice Simulator's dial dropdown
+  // without a separate "provision" step.
+  const upsertVirtualNumber = (number: string, friendlyName: string, provider: 'Twilio' | 'Vobiz.ai') => {
+    const existing = virtualNumbers.find((n) => n.number === number);
+    if (existing) {
+      setVirtualNumbers(virtualNumbers.map((n) => n.number === number ? { ...n, friendlyName, provider, status: 'Active' } : n));
+    } else {
+      setVirtualNumbers([...virtualNumbers, {
+        id: `VN-${400 + virtualNumbers.length + 1}`,
+        number, provider, status: 'Active', friendlyName,
+        routingUrl: 'https://api.chiefxai.com/voice/webhook-dynamic',
+        incomingCallCount: 0, outgoingCallCount: 0
+      }]);
+    }
+  };
+
+  const [twilioSid, setTwilioSid] = useState('');
+  const [twilioToken, setTwilioToken] = useState('');
+  const [twilioPhone, setTwilioPhone] = useState('');
+  const [twilioLabel, setTwilioLabel] = useState('');
+  const [savingTwilio, setSavingTwilio] = useState(false);
+  const handleConnectTwilio = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!twilioSid.trim() || !twilioToken.trim() || !twilioPhone.trim()) return;
+    setSavingTwilio(true);
+    const res = await apiFetch('/api/channels/twilio', {
+      method: 'POST',
+      body: JSON.stringify({ accountSid: twilioSid.trim(), authToken: twilioToken.trim(), phoneNumber: twilioPhone.trim() })
+    });
+    setSavingTwilio(false);
+    if (res.ok) {
+      upsertVirtualNumber(twilioPhone.trim(), twilioLabel.trim() || 'Twilio Line', 'Twilio');
+      setTwilioSid(''); setTwilioToken(''); setTwilioPhone(''); setTwilioLabel('');
+      loadChannels();
+    } else {
+      alert((await res.json()).error || 'Failed to connect Twilio account');
+    }
+  };
+
+  const [vobizAuthId, setVobizAuthId] = useState('');
+  const [vobizToken, setVobizToken] = useState('');
+  const [vobizPhone, setVobizPhone] = useState('');
+  const [vobizLabel, setVobizLabel] = useState('');
+  const [savingVobiz, setSavingVobiz] = useState(false);
+  const handleConnectVobiz = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!vobizAuthId.trim() || !vobizToken.trim() || !vobizPhone.trim()) return;
+    setSavingVobiz(true);
+    const res = await apiFetch('/api/channels/vobiz', {
+      method: 'POST',
+      body: JSON.stringify({ authId: vobizAuthId.trim(), authToken: vobizToken.trim(), phoneNumber: vobizPhone.trim() })
+    });
+    setSavingVobiz(false);
+    if (res.ok) {
+      upsertVirtualNumber(vobizPhone.trim(), vobizLabel.trim() || 'Vobiz.ai Line', 'Vobiz.ai');
+      setVobizAuthId(''); setVobizToken(''); setVobizPhone(''); setVobizLabel('');
+      loadChannels();
+    } else {
+      alert((await res.json()).error || 'Failed to connect Vobiz.ai account');
+    }
+  };
+
+  const twilioChannel = connectedChannels.find((c) => c.type === 'twilio');
+  const vobizChannel = connectedChannels.find((c) => c.type === 'vobiz');
 
   // Team Member states
   const [newStaffName, setNewStaffName] = useState('');
   const [newStaffEmail, setNewStaffEmail] = useState('');
   const [newStaffRole, setNewStaffRole] = useState<UserRole>('Loan Agent');
-
-  // Purchase Number Simulator
-  const handlePurchaseNumber = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newNumVal || !newNumName) return;
-
-    const added: VirtualNumber = {
-      id: `VN-${400 + virtualNumbers.length + 1}`,
-      number: newNumVal,
-      provider: newNumProv,
-      status: 'Active',
-      friendlyName: newNumName,
-      routingUrl: 'https://api.chiefxai.com/voice/webhook-dynamic',
-      incomingCallCount: 0,
-      outgoingCallCount: 0
-    };
-
-    setVirtualNumbers([...virtualNumbers, added]);
-    setNewNumVal('');
-    setNewNumName('');
-  };
 
   // Delete virtual line
   const handleDeleteNumber = (numId: string) => {
@@ -172,17 +230,6 @@ Real Tamil speakers do not say the "correct" written form of a word. They contra
       return m;
     });
     setTeamMembers(updated);
-  };
-
-  // Plan Selection Upgrader
-  const handleUpgradePlan = (plan: 'Starter' | 'Growth' | 'Enterprise') => {
-    const limit = plan === 'Starter' ? 2000 : plan === 'Growth' ? 10000 : 50000;
-    setOrgSettings({
-      ...orgSettings,
-      subscriptionPlan: plan,
-      aiMinutesLimit: limit
-    });
-    alert(`Workspace plan updated to ${plan}. Voice calling minutes quota adjusted to ${limit.toLocaleString()} mins.`);
   };
 
   return (
@@ -244,45 +291,53 @@ Real Tamil speakers do not say the "correct" written form of a word. They contra
           {/* Subtab: Virtual numbers */}
           {subTab === 'numbers' && (
             <div className="space-y-6">
-              {/* Buy form */}
+              {/* Own telephony account connection — one provider at a time */}
               <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm">
-                <div className="mb-4">
-                  <h4 className="text-sm font-bold text-slate-800 font-display">Provision Virtual Call-center Line</h4>
-                  <p className="text-xs text-slate-400 mt-1">Register dedicated SIP trunks or Twilio endpoints to bridge live outbound campaigns.</p>
+                <div className="mb-3 flex items-center justify-between">
+                  <h4 className="text-sm font-bold text-slate-800 font-display">Your Calling Provider Account</h4>
+                  {(connectProvider === 'twilio' ? twilioChannel : vobizChannel) && (
+                    <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full">Connected</span>
+                  )}
                 </div>
-                <form onSubmit={handlePurchaseNumber} className="grid grid-cols-1 md:grid-cols-4 gap-3">
-                  <input
-                    type="text"
-                    required
-                    value={newNumVal}
-                    onChange={(e) => setNewNumVal(e.target.value)}
-                    placeholder="+1 (800) 000-0000"
-                    className="md:col-span-1.5 bg-slate-50 border border-slate-100 rounded-lg px-3 py-2 text-xs focus:outline-none"
-                  />
-                  <input
-                    type="text"
-                    required
-                    value={newNumName}
-                    onChange={(e) => setNewNumName(e.target.value)}
-                    placeholder="e.g. Inbound Main Helpdesk"
-                    className="md:col-span-1.5 bg-slate-50 border border-slate-100 rounded-lg px-3 py-2 text-xs focus:outline-none"
-                  />
-                  <select
-                    value={newNumProv}
-                    onChange={(e: any) => setNewNumProv(e.target.value)}
-                    className="bg-slate-50 border border-slate-100 rounded-lg px-3 py-2 text-xs focus:outline-none"
-                  >
-                    <option value="Twilio">Twilio</option>
-                    <option value="Telnyx">Telnyx</option>
-                    <option value="SIP Trunk">SIP Trunk</option>
-                  </select>
-                  <button
-                    type="submit"
-                    className="bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold rounded-lg px-4 py-2 transition-all cursor-pointer flex items-center justify-center"
-                  >
-                    <Plus className="h-4 w-4 mr-1" /> Provision
-                  </button>
-                </form>
+                <p className="text-xs text-slate-400 mb-3">Connect your own account so calls use your credentials, not a shared default.</p>
+
+                <select
+                  value={connectProvider}
+                  onChange={(e) => setConnectProvider(e.target.value as 'twilio' | 'vobiz')}
+                  className="w-full bg-slate-50 border border-slate-100 rounded-lg px-3 py-2 text-xs focus:outline-none mb-3"
+                >
+                  <option value="twilio">Twilio</option>
+                  <option value="vobiz">Vobiz.ai</option>
+                </select>
+
+                {connectProvider === 'twilio' ? (
+                  <form onSubmit={handleConnectTwilio} className="space-y-2">
+                    {twilioChannel && (
+                      <p className="text-[11px] text-emerald-600 mb-1">Connected: {twilioChannel.externalId}</p>
+                    )}
+                    <input type="text" value={twilioSid} onChange={(e) => setTwilioSid(e.target.value)} placeholder="Account SID" className="w-full bg-slate-50 border border-slate-100 rounded-lg px-3 py-2 text-xs focus:outline-none" />
+                    <input type="password" value={twilioToken} onChange={(e) => setTwilioToken(e.target.value)} placeholder="Auth Token" className="w-full bg-slate-50 border border-slate-100 rounded-lg px-3 py-2 text-xs focus:outline-none" />
+                    <input type="text" value={twilioPhone} onChange={(e) => setTwilioPhone(e.target.value)} placeholder="+1 (800) 000-0000" className="w-full bg-slate-50 border border-slate-100 rounded-lg px-3 py-2 text-xs focus:outline-none" />
+                    <input type="text" value={twilioLabel} onChange={(e) => setTwilioLabel(e.target.value)} placeholder="Friendly name (e.g. Sales Line)" className="w-full bg-slate-50 border border-slate-100 rounded-lg px-3 py-2 text-xs focus:outline-none" />
+                    <button type="submit" disabled={savingTwilio} className="w-full bg-emerald-600 hover:bg-emerald-500 disabled:opacity-60 text-white text-xs font-semibold rounded-lg px-4 py-2 transition-all cursor-pointer">
+                      {savingTwilio ? 'Connecting…' : twilioChannel ? 'Update Twilio Account' : 'Connect Twilio Account'}
+                    </button>
+                  </form>
+                ) : (
+                  <form onSubmit={handleConnectVobiz} className="space-y-2">
+                    {vobizChannel && (
+                      <p className="text-[11px] text-emerald-600 mb-1">Connected: {vobizChannel.externalId}</p>
+                    )}
+                    <input type="text" value={vobizAuthId} onChange={(e) => setVobizAuthId(e.target.value)} placeholder="Auth ID" className="w-full bg-slate-50 border border-slate-100 rounded-lg px-3 py-2 text-xs focus:outline-none" />
+                    <input type="password" value={vobizToken} onChange={(e) => setVobizToken(e.target.value)} placeholder="Auth Token" className="w-full bg-slate-50 border border-slate-100 rounded-lg px-3 py-2 text-xs focus:outline-none" />
+                    <input type="text" value={vobizPhone} onChange={(e) => setVobizPhone(e.target.value)} placeholder="+1 (800) 000-0000" className="w-full bg-slate-50 border border-slate-100 rounded-lg px-3 py-2 text-xs focus:outline-none" />
+                    <input type="text" value={vobizLabel} onChange={(e) => setVobizLabel(e.target.value)} placeholder="Friendly name (e.g. Sales Line)" className="w-full bg-slate-50 border border-slate-100 rounded-lg px-3 py-2 text-xs focus:outline-none" />
+                    <button type="submit" disabled={savingVobiz} className="w-full bg-purple-600 hover:bg-purple-500 disabled:opacity-60 text-white text-xs font-semibold rounded-lg px-4 py-2 transition-all cursor-pointer">
+                      {savingVobiz ? 'Connecting…' : vobizChannel ? 'Update Vobiz.ai Account' : 'Connect Vobiz.ai Account'}
+                    </button>
+                  </form>
+                )}
+                <p className="text-[10px] text-slate-400 mt-3">Have more than one number on this account? Submit this form again with the additional number — it'll be added alongside the first, without needing a separate "provision" step.</p>
               </div>
 
               {/* Numbers list */}
@@ -424,83 +479,23 @@ Real Tamil speakers do not say the "correct" written form of a word. They contra
           {/* Subtab: Billing info */}
           {subTab === 'billing' && (
             <div className="space-y-6">
-              {/* Usage bar */}
+              {/* Usage */}
               <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm space-y-4">
-                <h4 className="text-sm font-bold text-slate-800 font-display">Active Voice Budget Quota</h4>
-                <div className="flex items-center justify-between text-xs text-slate-400">
-                  <span>Usage Cycle: June 15 - July 15</span>
-                  <span>{Math.round((orgSettings.aiMinutesUsed / orgSettings.aiMinutesLimit) * 100)}% Consumed</span>
-                </div>
-                {/* Progress bar */}
-                <div className="w-full bg-slate-100 rounded-full h-2">
-                  <div
-                    className="bg-indigo-600 h-2 rounded-full"
-                    style={{ width: `${(orgSettings.aiMinutesUsed / orgSettings.aiMinutesLimit) * 100}%` }}
-                  ></div>
-                </div>
+                <h4 className="text-sm font-bold text-slate-800 font-display">AI Voice Usage This Period</h4>
                 <div className="grid grid-cols-3 gap-4 pt-2">
                   <div className="bg-slate-50 p-4 rounded-xl text-center">
                     <span className="text-[10px] text-slate-400 uppercase tracking-wider block">Minutes Consumed</span>
                     <strong className="text-md text-slate-800 font-mono">{orgSettings.aiMinutesUsed}</strong>
                   </div>
                   <div className="bg-slate-50 p-4 rounded-xl text-center">
-                    <span className="text-[10px] text-slate-400 uppercase tracking-wider block">Available Minutes</span>
-                    <strong className="text-md text-slate-800 font-mono">{orgSettings.aiMinutesLimit - orgSettings.aiMinutesUsed}</strong>
+                    <span className="text-[10px] text-slate-400 uppercase tracking-wider block">AI Voice Cost (₹{COST_PER_MINUTE_INR}/min)</span>
+                    <strong className="text-md text-slate-800 font-mono">{formatInr(orgSettings.aiMinutesUsed * COST_PER_MINUTE_INR)}</strong>
                   </div>
                   <div className="bg-slate-50 p-4 rounded-xl text-center">
                     <span className="text-[10px] text-slate-400 uppercase tracking-wider block">Phone Charges</span>
                     <strong className="text-md text-slate-800 font-mono">${orgSettings.phoneCharges.toFixed(2)}</strong>
                   </div>
                 </div>
-              </div>
-
-              {/* Subscriptions upgrade matrix */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                {(['Starter', 'Growth', 'Enterprise'] as const).map((plan) => {
-                  const isCurrent = orgSettings.subscriptionPlan === plan;
-                  return (
-                    <div
-                      key={plan}
-                      className={`p-6 rounded-2xl border bg-white flex flex-col justify-between space-y-4 relative overflow-hidden ${
-                        isCurrent ? 'border-indigo-600 ring-2 ring-indigo-500/20' : 'border-slate-100'
-                      }`}
-                    >
-                      {isCurrent && (
-                        <span className="absolute -right-8 -top-2 bg-indigo-600 text-white font-semibold text-[8px] tracking-widest px-8 py-2 rotate-45 uppercase font-mono">
-                          Active
-                        </span>
-                      )}
-                      <div className="space-y-1">
-                        <h5 className="text-sm font-bold text-slate-800 font-display">{plan} Subscription</h5>
-                        <p className="text-[10px] text-slate-400">
-                          {plan === 'Starter'
-                            ? 'Best for emerging lenders'
-                            : plan === 'Growth'
-                            ? 'Scales AI campaign operations'
-                            : 'Bespoke high-volume underwriting'}
-                        </p>
-                      </div>
-
-                      <div className="text-slate-800 border-t border-slate-100 pt-3 flex items-baseline justify-between">
-                        <span className="text-xs text-slate-400">Monthly</span>
-                        <strong className="text-xl font-bold font-display">
-                          {plan === 'Starter' ? '$149' : plan === 'Growth' ? '$499' : 'Custom'}
-                        </strong>
-                      </div>
-
-                      <button
-                        onClick={() => handleUpgradePlan(plan)}
-                        className={`w-full text-xs font-semibold py-2 rounded-xl border transition-all cursor-pointer ${
-                          isCurrent
-                            ? 'bg-indigo-50 text-indigo-700 border-indigo-200'
-                            : 'bg-white hover:bg-slate-50 text-slate-600 border-slate-200'
-                        }`}
-                      >
-                        {isCurrent ? 'Current Plan' : `Enlist ${plan}`}
-                      </button>
-                    </div>
-                  );
-                })}
               </div>
             </div>
           )}

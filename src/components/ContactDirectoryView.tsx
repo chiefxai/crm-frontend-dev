@@ -25,12 +25,22 @@ import { Lead } from '../types';
 interface ContactDirectoryViewProps {
   leads: Lead[];
   setLeads: React.Dispatch<React.SetStateAction<Lead[]>>;
+  industry?: string;
 }
 
 export default function ContactDirectoryView({
   leads,
-  setLeads
+  setLeads,
+  industry
 }: ContactDirectoryViewProps) {
+  // Loan-specific fields (employer/income/credit score/DTI) only make
+  // sense for lending — every other industry's contacts are real Industry
+  // Objects records bridged into this same Lead shape (see
+  // src/lib/objectContacts.ts), so those fields are hidden rather than
+  // asking e.g. an automotive org to fill in a "credit score" for a test
+  // drive contact. financialInfo still gets a harmless default under the
+  // hood so existing lending-only code paths keep working unchanged.
+  const isLending = !industry || industry === 'lending';
   // Navigation & filtering state
   const [searchTerm, setSearchTerm] = useState('');
   const [sourceFilter, setSourceFilter] = useState('All');
@@ -368,25 +378,29 @@ Larry Page,+1 (555) 444-1111,larry@google.com,40000,Google LLC,32000,760,0.20`;
           </div>
         </div>
 
-        <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs flex items-center space-x-4">
-          <div className="p-3 rounded-xl bg-indigo-50 text-indigo-600 shrink-0">
-            <DollarSign className="h-5 w-5" />
-          </div>
-          <div>
-            <span className="text-[10px] text-slate-400 uppercase tracking-widest font-bold">Avg Loan Req.</span>
-            <p className="text-xl font-bold font-mono text-slate-800 mt-0.5">${avgAmountRequested.toLocaleString()}</p>
-          </div>
-        </div>
+        {isLending && (
+          <>
+            <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs flex items-center space-x-4">
+              <div className="p-3 rounded-xl bg-indigo-50 text-indigo-600 shrink-0">
+                <DollarSign className="h-5 w-5" />
+              </div>
+              <div>
+                <span className="text-[10px] text-slate-400 uppercase tracking-widest font-bold">Avg Loan Req.</span>
+                <p className="text-xl font-bold font-mono text-slate-800 mt-0.5">${avgAmountRequested.toLocaleString()}</p>
+              </div>
+            </div>
 
-        <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs flex items-center space-x-4">
-          <div className="p-3 rounded-xl bg-purple-50 text-purple-600 shrink-0">
-            <Sparkles className="h-5 w-5" />
-          </div>
-          <div>
-            <span className="text-[10px] text-slate-400 uppercase tracking-widest font-bold">Prime Credit (700+)</span>
-            <p className="text-xl font-bold font-mono text-slate-800 mt-0.5">{highCreditCount}</p>
-          </div>
-        </div>
+            <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs flex items-center space-x-4">
+              <div className="p-3 rounded-xl bg-purple-50 text-purple-600 shrink-0">
+                <Sparkles className="h-5 w-5" />
+              </div>
+              <div>
+                <span className="text-[10px] text-slate-400 uppercase tracking-widest font-bold">Prime Credit (700+)</span>
+                <p className="text-xl font-bold font-mono text-slate-800 mt-0.5">{highCreditCount}</p>
+              </div>
+            </div>
+          </>
+        )}
       </div>
 
       {/* Searching & Filters Grid */}
@@ -439,9 +453,9 @@ Larry Page,+1 (555) 444-1111,larry@google.com,40000,Google LLC,32000,760,0.20`;
                 <th className="py-4 px-6">Name / Details</th>
                 <th className="py-4 px-6">Phone Number</th>
                 <th className="py-4 px-6">Email Address</th>
-                <th className="py-4 px-6">Loan Amt Requested</th>
-                <th className="py-4 px-6">Employment & Wages</th>
-                <th className="py-4 px-6">Credit / DTI</th>
+                {isLending && <th className="py-4 px-6">Loan Amt Requested</th>}
+                {isLending && <th className="py-4 px-6">Employment & Wages</th>}
+                {isLending && <th className="py-4 px-6">Credit / DTI</th>}
                 <th className="py-4 px-6">Source</th>
                 <th className="py-4 px-6 text-right">Actions</th>
               </tr>
@@ -466,24 +480,30 @@ Larry Page,+1 (555) 444-1111,larry@google.com,40000,Google LLC,32000,760,0.20`;
                   <td className="py-4 px-6 text-slate-500">
                     {lead.email}
                   </td>
-                  <td className="py-4 px-6 font-semibold text-slate-800">
-                    ${lead.amountRequested.toLocaleString()}
-                  </td>
-                  <td className="py-4 px-6">
-                    <div className="space-y-0.5">
-                      <p className="font-medium text-slate-700 flex items-center">
-                        <Building className="h-3 w-3 mr-1 text-slate-400" />
-                        {lead.financialInfo?.employer || 'Unspecified'}
-                      </p>
-                      <p className="text-slate-400 text-[10px]">Wages: ${lead.financialInfo?.monthlyIncome.toLocaleString()}/mo</p>
-                    </div>
-                  </td>
-                  <td className="py-4 px-6 font-mono">
-                    <div className="space-y-0.5">
-                      <p className="font-semibold text-slate-700">CS: {lead.financialInfo?.creditScore || 'N/A'}</p>
-                      <p className="text-[10px] text-slate-400">DTI: {((lead.financialInfo?.debtToIncome || 0) * 100).toFixed(0)}%</p>
-                    </div>
-                  </td>
+                  {isLending && (
+                    <td className="py-4 px-6 font-semibold text-slate-800">
+                      ${lead.amountRequested.toLocaleString()}
+                    </td>
+                  )}
+                  {isLending && (
+                    <td className="py-4 px-6">
+                      <div className="space-y-0.5">
+                        <p className="font-medium text-slate-700 flex items-center">
+                          <Building className="h-3 w-3 mr-1 text-slate-400" />
+                          {lead.financialInfo?.employer || 'Unspecified'}
+                        </p>
+                        <p className="text-slate-400 text-[10px]">Wages: ${lead.financialInfo?.monthlyIncome.toLocaleString()}/mo</p>
+                      </div>
+                    </td>
+                  )}
+                  {isLending && (
+                    <td className="py-4 px-6 font-mono">
+                      <div className="space-y-0.5">
+                        <p className="font-semibold text-slate-700">CS: {lead.financialInfo?.creditScore || 'N/A'}</p>
+                        <p className="text-[10px] text-slate-400">DTI: {((lead.financialInfo?.debtToIncome || 0) * 100).toFixed(0)}%</p>
+                      </div>
+                    </td>
+                  )}
                   <td className="py-4 px-6">
                     <span className="px-2 py-0.5 text-[9px] bg-slate-100 border border-slate-200 rounded text-slate-500 font-medium">
                       {lead.source}
@@ -575,7 +595,7 @@ Larry Page,+1 (555) 444-1111,larry@google.com,40000,Google LLC,32000,760,0.20`;
                   />
                 </div>
                 <div>
-                  <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Amount Requested ($)</label>
+                  <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">{isLending ? 'Amount Requested ($)' : 'Value ($)'}</label>
                   <input
                     type="number"
                     value={formAmount}
@@ -585,6 +605,7 @@ Larry Page,+1 (555) 444-1111,larry@google.com,40000,Google LLC,32000,760,0.20`;
                 </div>
               </div>
 
+              {isLending && (
               <div className="border-t border-slate-100 pt-3">
                 <h4 className="text-[11px] font-bold text-slate-400 uppercase tracking-widest mb-3">Underwriting Information</h4>
                 <div className="grid grid-cols-2 gap-4">
@@ -609,7 +630,9 @@ Larry Page,+1 (555) 444-1111,larry@google.com,40000,Google LLC,32000,760,0.20`;
                   </div>
                 </div>
               </div>
+              )}
 
+              {isLending && (
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Credit Score (300-850)</label>
@@ -633,6 +656,7 @@ Larry Page,+1 (555) 444-1111,larry@google.com,40000,Google LLC,32000,760,0.20`;
                   />
                 </div>
               </div>
+              )}
 
               <div className="grid grid-cols-2 gap-4">
                 <div>

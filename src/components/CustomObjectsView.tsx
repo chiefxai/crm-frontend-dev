@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Plus, X, ChevronRight, Trash2, Boxes, Loader2 } from 'lucide-react';
+import { Plus, X, ChevronRight, Trash2, Boxes, Loader2, Search, Upload, Pencil, LayoutGrid, List } from 'lucide-react';
 import { apiFetch } from '../lib/api';
 import PageHeader from './PageHeader';
 
@@ -73,10 +73,11 @@ function FieldInput({ field, value, onChange }: { field: ObjectField; value: unk
   );
 }
 
-function RecordCard({ object, record, onAdvance, onDelete }: {
+function RecordCard({ object, record, onAdvance, onEdit, onDelete }: {
   object: CustomObject;
   record: ObjectRecord;
   onAdvance: (() => void) | null;
+  onEdit: () => void;
   onDelete: () => void;
 }) {
   const primaryFields = object.fields.slice(0, 3);
@@ -94,9 +95,10 @@ function RecordCard({ object, record, onAdvance, onDelete }: {
             </div>
           ))}
         </div>
-        <button onClick={onDelete} className="opacity-0 group-hover:opacity-100 text-slate-300 hover:text-rose-500 transition-opacity shrink-0 ml-2">
-          <Trash2 className="h-3.5 w-3.5" />
-        </button>
+        <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity shrink-0 ml-2">
+          <button onClick={onEdit} className="text-slate-300 hover:text-blue-500"><Pencil className="h-3.5 w-3.5" /></button>
+          <button onClick={onDelete} className="text-slate-300 hover:text-rose-500"><Trash2 className="h-3.5 w-3.5" /></button>
+        </div>
       </div>
       {onAdvance && (
         <button
@@ -110,6 +112,37 @@ function RecordCard({ object, record, onAdvance, onDelete }: {
   );
 }
 
+// Simple comma-split CSV parsing — header row's column names are matched
+// against the object's real field keys/labels (case-insensitive), so bulk
+// upload works for any industry's fields without per-industry code.
+function parseCsv(text: string, fields: ObjectField[]): { rows: Record<string, string>[]; error: string | null } {
+  const trimmed = text.trim();
+  if (!trimmed) return { rows: [], error: null };
+  const lines = trimmed.split(/\r?\n/);
+  if (lines.length < 2) return { rows: [], error: 'Paste a header row plus at least one data row.' };
+
+  const headerCells = lines[0].split(',').map((h) => h.trim().toLowerCase());
+  const keyByHeader = headerCells.map((h) => {
+    const match = fields.find((f) => f.key.toLowerCase() === h || f.label.toLowerCase() === h);
+    return match ? match.key : null;
+  });
+  if (keyByHeader.every((k) => !k)) {
+    return { rows: [], error: `None of the header columns matched a real field. Expected some of: ${fields.map((f) => f.key).join(', ')}` };
+  }
+
+  const rows: Record<string, string>[] = [];
+  for (let i = 1; i < lines.length; i++) {
+    if (!lines[i].trim()) continue;
+    const cols = lines[i].split(',').map((c) => c.trim());
+    const row: Record<string, string> = {};
+    keyByHeader.forEach((key, idx) => {
+      if (key && cols[idx] !== undefined) row[key] = cols[idx];
+    });
+    rows.push(row);
+  }
+  return { rows, error: null };
+}
+
 export default function CustomObjectsView() {
   const [objects, setObjects] = useState<CustomObject[]>([]);
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
@@ -118,6 +151,14 @@ export default function CustomObjectsView() {
   const [recordsLoading, setRecordsLoading] = useState(false);
   const [showForm, setShowForm] = useState(false);
   const [formData, setFormData] = useState<Record<string, unknown>>({});
+  const [editingRecord, setEditingRecord] = useState<ObjectRecord | null>(null);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [viewMode, setViewMode] = useState<'board' | 'list'>('board');
+
+  const [showBulkModal, setShowBulkModal] = useState(false);
+  const [bulkText, setBulkText] = useState('');
+  const [bulkUploading, setBulkUploading] = useState(false);
+  const [bulkResult, setBulkResult] = useState<{ success: number; failed: number } | null>(null);
 
   useEffect(() => {
     apiFetch('/api/objects')
@@ -142,21 +183,56 @@ export default function CustomObjectsView() {
       .finally(() => setRecordsLoading(false));
   }, [selectedKey]);
 
-  const handleCreateRecord = async (e: React.FormEvent) => {
+  const visibleRecords = records.filter((r) => {
+    if (!searchTerm.trim()) return true;
+    const term = searchTerm.toLowerCase();
+    return Object.values(r).some((v) => String(v ?? '').toLowerCase().includes(term));
+  });
+
+  const openCreateModal = () => {
+    setEditingRecord(null);
+    setFormData({});
+    setShowForm(true);
+  };
+
+  const openEditModal = (record: ObjectRecord) => {
+    setEditingRecord(record);
+    setFormData({ ...record });
+    setShowForm(true);
+  };
+
+  const handleSaveRecord = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedObject) return;
-    const res = await apiFetch(`/api/objects/${selectedObject.key}/records`, {
-      method: 'POST',
-      body: JSON.stringify(formData)
-    });
-    if (res.ok) {
-      const created = await res.json();
-      setRecords((prev) => [created, ...prev]);
-      setShowForm(false);
-      setFormData({});
+    if (editingRecord) {
+      const res = await apiFetch(`/api/objects/${selectedObject.key}/records/${editingRecord.id}`, {
+        method: 'PATCH',
+        body: JSON.stringify(formData)
+      });
+      if (res.ok) {
+        const updated = await res.json();
+        setRecords((prev) => prev.map((r) => (r.id === updated.id ? updated : r)));
+        setShowForm(false);
+        setEditingRecord(null);
+        setFormData({});
+      } else {
+        const err = await res.json();
+        alert(err.error || 'Failed to update record');
+      }
     } else {
-      const err = await res.json();
-      alert(err.error || 'Failed to create record');
+      const res = await apiFetch(`/api/objects/${selectedObject.key}/records`, {
+        method: 'POST',
+        body: JSON.stringify(formData)
+      });
+      if (res.ok) {
+        const created = await res.json();
+        setRecords((prev) => [created, ...prev]);
+        setShowForm(false);
+        setFormData({});
+      } else {
+        const err = await res.json();
+        alert(err.error || 'Failed to create record');
+      }
     }
   };
 
@@ -182,6 +258,31 @@ export default function CustomObjectsView() {
     if (res.ok) setRecords((prev) => prev.filter((r) => r.id !== record.id));
   };
 
+  const bulkPreview = selectedObject ? parseCsv(bulkText, selectedObject.fields) : { rows: [], error: null };
+
+  const handleBulkUpload = async () => {
+    if (!selectedObject || !bulkPreview.rows.length) return;
+    setBulkUploading(true);
+    let success = 0, failed = 0;
+    const created: ObjectRecord[] = [];
+    for (const row of bulkPreview.rows) {
+      try {
+        const res = await apiFetch(`/api/objects/${selectedObject.key}/records`, { method: 'POST', body: JSON.stringify(row) });
+        if (res.ok) { created.push(await res.json()); success++; }
+        else failed++;
+      } catch {
+        failed++;
+      }
+    }
+    setRecords((prev) => [...created, ...prev]);
+    setBulkUploading(false);
+    setBulkResult({ success, failed });
+    if (failed === 0) {
+      setBulkText('');
+      setTimeout(() => { setShowBulkModal(false); setBulkResult(null); }, 1200);
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-full text-slate-400">
@@ -193,7 +294,7 @@ export default function CustomObjectsView() {
   if (objects.length === 0) {
     return (
       <div className="p-8 font-sans">
-        <PageHeader title="Industry Objects" subtitle="Custom pipelines for your business, beyond lending." />
+        <PageHeader title="Contacts" subtitle="Custom pipelines for your business, beyond lending." />
         <div className="px-8 flex flex-col items-center justify-center py-20 text-center bg-white border border-slate-200 rounded-2xl mx-8">
           <Boxes className="h-10 w-10 text-slate-300 mb-3" />
           <p className="text-sm text-slate-500 max-w-sm">
@@ -207,15 +308,23 @@ export default function CustomObjectsView() {
   return (
     <div className="font-sans h-full flex flex-col">
       <PageHeader
-        title={selectedObject?.label || 'Industry Objects'}
+        title={selectedObject?.label || 'Contacts'}
         subtitle={selectedObject?.description || undefined}
         action={
-          <button
-            onClick={() => { setFormData({}); setShowForm(true); }}
-            className="flex items-center gap-1.5 bg-blue-600 hover:bg-blue-500 text-white text-sm font-medium px-4 py-2 rounded-xl transition-colors"
-          >
-            <Plus className="h-4 w-4" /> New {selectedObject?.label.replace(/s$/, '')}
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => { setBulkText(''); setBulkResult(null); setShowBulkModal(true); }}
+              className="flex items-center gap-1.5 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 text-sm font-medium px-4 py-2 rounded-xl transition-colors"
+            >
+              <Upload className="h-4 w-4" /> Bulk Upload
+            </button>
+            <button
+              onClick={openCreateModal}
+              className="flex items-center gap-1.5 bg-blue-600 hover:bg-blue-500 text-white text-sm font-medium px-4 py-2 rounded-xl transition-colors"
+            >
+              <Plus className="h-4 w-4" /> New {selectedObject?.label.replace(/s$/, '')}
+            </button>
+          </div>
         }
       />
 
@@ -235,13 +344,31 @@ export default function CustomObjectsView() {
         </div>
       )}
 
+      <div className="px-8 mb-4 flex items-center gap-3">
+        <div className="relative flex-1 max-w-sm">
+          <Search className="h-3.5 w-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+          <input
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            placeholder="Search…"
+            className="w-full bg-white border border-slate-200 rounded-lg pl-8 pr-3 py-1.5 text-xs focus:outline-none focus:border-blue-500"
+          />
+        </div>
+        {selectedObject?.hasPipeline && (
+          <div className="flex items-center gap-1 bg-slate-100 rounded-lg p-0.5">
+            <button onClick={() => setViewMode('board')} className={`p-1.5 rounded-md ${viewMode === 'board' ? 'bg-white shadow-sm' : ''}`}><LayoutGrid className="h-3.5 w-3.5 text-slate-600" /></button>
+            <button onClick={() => setViewMode('list')} className={`p-1.5 rounded-md ${viewMode === 'list' ? 'bg-white shadow-sm' : ''}`}><List className="h-3.5 w-3.5 text-slate-600" /></button>
+          </div>
+        )}
+      </div>
+
       <div className="flex-1 overflow-x-auto px-8 pb-8">
         {recordsLoading ? (
           <div className="flex items-center text-slate-400 text-sm"><Loader2 className="h-4 w-4 animate-spin mr-2" /> Loading records…</div>
-        ) : selectedObject?.hasPipeline ? (
+        ) : selectedObject?.hasPipeline && viewMode === 'board' ? (
           <div className="flex gap-4 min-w-max">
             {selectedObject.stages.map((stage) => {
-              const stageRecords = records.filter((r) => r.stageId === stage.id);
+              const stageRecords = visibleRecords.filter((r) => r.stageId === stage.id);
               return (
                 <div key={stage.id} className="w-64 shrink-0">
                   <div className="flex items-center gap-2 mb-2 px-1">
@@ -256,6 +383,7 @@ export default function CustomObjectsView() {
                         object={selectedObject}
                         record={r}
                         onAdvance={selectedObject.stages.findIndex((s) => s.id === r.stageId) < selectedObject.stages.length - 1 ? () => handleAdvanceStage(r) : null}
+                        onEdit={() => openEditModal(r)}
                         onDelete={() => handleDeleteRecord(r)}
                       />
                     ))}
@@ -265,10 +393,35 @@ export default function CustomObjectsView() {
             })}
           </div>
         ) : (
-          <div className="space-y-2">
-            {records.map((r) => selectedObject && (
-              <RecordCard key={r.id} object={selectedObject} record={r} onAdvance={null} onDelete={() => handleDeleteRecord(r)} />
-            ))}
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+            <table className="w-full text-left text-xs">
+              <thead>
+                <tr className="bg-slate-50/75 border-b border-slate-100 text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                  {selectedObject?.fields.slice(0, 5).map((f) => <th key={f.key} className="p-3 px-4">{f.label}</th>)}
+                  {selectedObject?.hasPipeline && <th className="p-3 px-4">Stage</th>}
+                  <th className="p-3 px-4 text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100 text-slate-700">
+                {visibleRecords.map((r) => (
+                  <tr key={r.id} className="hover:bg-slate-50/50">
+                    {selectedObject?.fields.slice(0, 5).map((f) => (
+                      <td key={f.key} className="p-3 px-4">{String(r[f.key] ?? '—')}</td>
+                    ))}
+                    {selectedObject?.hasPipeline && (
+                      <td className="p-3 px-4">{selectedObject.stages.find((s) => s.id === r.stageId)?.label || '—'}</td>
+                    )}
+                    <td className="p-3 px-4 text-right">
+                      <button onClick={() => openEditModal(r)} className="text-slate-400 hover:text-blue-500 mr-2"><Pencil className="h-3.5 w-3.5 inline" /></button>
+                      <button onClick={() => handleDeleteRecord(r)} className="text-slate-400 hover:text-rose-500"><Trash2 className="h-3.5 w-3.5 inline" /></button>
+                    </td>
+                  </tr>
+                ))}
+                {visibleRecords.length === 0 && (
+                  <tr><td colSpan={10} className="p-6 text-center text-slate-400">No records{searchTerm ? ' match your search' : ' yet'}.</td></tr>
+                )}
+              </tbody>
+            </table>
           </div>
         )}
       </div>
@@ -277,10 +430,10 @@ export default function CustomObjectsView() {
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md max-h-[85vh] overflow-y-auto">
             <div className="flex items-center justify-between p-5 border-b border-slate-100">
-              <h3 className="font-semibold text-slate-800">New {selectedObject.label.replace(/s$/, '')}</h3>
-              <button onClick={() => setShowForm(false)}><X className="h-4 w-4 text-slate-400" /></button>
+              <h3 className="font-semibold text-slate-800">{editingRecord ? 'Edit' : 'New'} {selectedObject.label.replace(/s$/, '')}</h3>
+              <button onClick={() => { setShowForm(false); setEditingRecord(null); }}><X className="h-4 w-4 text-slate-400" /></button>
             </div>
-            <form onSubmit={handleCreateRecord} className="p-5 space-y-4">
+            <form onSubmit={handleSaveRecord} className="p-5 space-y-4">
               {selectedObject.fields.map((field) => (
                 <div key={field.key}>
                   <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5">
@@ -294,9 +447,64 @@ export default function CustomObjectsView() {
                 </div>
               ))}
               <button type="submit" className="w-full bg-blue-600 hover:bg-blue-500 text-white text-sm font-medium py-2.5 rounded-xl transition-colors">
-                Create
+                {editingRecord ? 'Save Changes' : 'Create'}
               </button>
             </form>
+          </div>
+        </div>
+      )}
+
+      {showBulkModal && selectedObject && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[85vh] overflow-y-auto">
+            <div className="flex items-center justify-between p-5 border-b border-slate-100">
+              <h3 className="font-semibold text-slate-800">Bulk Upload {selectedObject.label}</h3>
+              <button onClick={() => setShowBulkModal(false)}><X className="h-4 w-4 text-slate-400" /></button>
+            </div>
+            <div className="p-5 space-y-3">
+              <p className="text-xs text-slate-500">
+                Paste comma-separated data with a header row. Column names should match this object's field keys or labels: <span className="font-mono text-slate-700">{selectedObject.fields.map((f) => f.key).join(', ')}</span>
+              </p>
+              <textarea
+                value={bulkText}
+                onChange={(e) => setBulkText(e.target.value)}
+                rows={8}
+                placeholder={`${selectedObject.fields.slice(0, 3).map((f) => f.key).join(',')}\nJohn Doe,+1234567890,...`}
+                className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs font-mono focus:outline-none"
+              />
+              {bulkPreview.error && <p className="text-xs text-rose-500">{bulkPreview.error}</p>}
+              {bulkPreview.rows.length > 0 && !bulkPreview.error && (
+                <div className="border border-slate-200 rounded-lg overflow-hidden max-h-40 overflow-y-auto">
+                  <table className="w-full text-left text-[11px]">
+                    <thead>
+                      <tr className="bg-slate-50 text-slate-400 uppercase">
+                        {Object.keys(bulkPreview.rows[0]).map((k) => <th key={k} className="p-2 px-3">{k}</th>)}
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {bulkPreview.rows.slice(0, 10).map((row, i) => (
+                        <tr key={i}>
+                          {Object.values(row).map((v, j) => <td key={j} className="p-2 px-3">{v}</td>)}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                  <p className="text-[10px] text-slate-400 px-3 py-1.5 bg-slate-50">{bulkPreview.rows.length} row{bulkPreview.rows.length === 1 ? '' : 's'} ready to upload{bulkPreview.rows.length > 10 ? ' (showing first 10)' : ''}.</p>
+                </div>
+              )}
+              {bulkResult && (
+                <p className={`text-xs font-semibold ${bulkResult.failed ? 'text-amber-600' : 'text-emerald-600'}`}>
+                  {bulkResult.success} uploaded{bulkResult.failed ? `, ${bulkResult.failed} failed` : ''}.
+                </p>
+              )}
+              <button
+                onClick={handleBulkUpload}
+                disabled={bulkUploading || !bulkPreview.rows.length || !!bulkPreview.error}
+                className="w-full bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white text-sm font-medium py-2.5 rounded-xl transition-colors"
+              >
+                {bulkUploading ? 'Uploading…' : `Upload ${bulkPreview.rows.length || ''} Record${bulkPreview.rows.length === 1 ? '' : 's'}`}
+              </button>
+            </div>
           </div>
         </div>
       )}

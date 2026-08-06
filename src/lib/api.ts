@@ -23,7 +23,10 @@ export async function apiFetch(url: string, options: RequestInit = {}): Promise<
   const token = getAuthToken();
   const headers = new Headers(options.headers || {});
   if (token) headers.set('Authorization', `Bearer ${token}`);
-  if (options.body && !headers.has('Content-Type')) {
+  // FormData bodies (file uploads) need the browser to set their own
+  // multipart boundary in Content-Type — forcing application/json here
+  // would break the upload.
+  if (options.body && !headers.has('Content-Type') && !(options.body instanceof FormData)) {
     headers.set('Content-Type', 'application/json');
   }
   return fetch(url, { ...options, headers });

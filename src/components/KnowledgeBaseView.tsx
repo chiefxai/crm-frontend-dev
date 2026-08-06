@@ -1,5 +1,5 @@
-import React, { useEffect, useState } from 'react';
-import { BookOpen, Plus, Trash2, Search, Loader2, X } from 'lucide-react';
+import React, { useEffect, useRef, useState } from 'react';
+import { BookOpen, Plus, Trash2, Search, Loader2, X, Upload } from 'lucide-react';
 import { apiFetch } from '../lib/api';
 import PageHeader from './PageHeader';
 
@@ -27,6 +27,9 @@ export default function KnowledgeBaseView() {
   const [results, setResults] = useState<SearchResult[] | null>(null);
   const [searching, setSearching] = useState(false);
 
+  const [uploading, setUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
   const loadDocuments = () => {
     apiFetch('/api/knowledge/documents')
       .then((r) => r.json())
@@ -48,6 +51,24 @@ export default function KnowledgeBaseView() {
       loadDocuments();
     } else {
       alert((await res.json()).error || 'Failed to add document');
+    }
+  };
+
+  const handleFileUpload = async (file: File) => {
+    setUploading(true);
+    const formData = new FormData();
+    formData.append('file', file);
+    if (title.trim()) formData.append('title', title.trim());
+    const res = await apiFetch('/api/knowledge/documents/upload', { method: 'POST', body: formData });
+    setUploading(false);
+    if (res.ok) {
+      setShowAdd(false);
+      setTitle('');
+      setText('');
+      if (fileInputRef.current) fileInputRef.current.value = '';
+      loadDocuments();
+    } else {
+      alert((await res.json()).error || 'Failed to upload document');
     }
   };
 
@@ -146,14 +167,42 @@ export default function KnowledgeBaseView() {
             </div>
             <div className="p-5 space-y-4">
               <div>
-                <label className="block text-xs font-semibold text-slate-500 uppercase mb-1.5">Title</label>
+                <label className="block text-xs font-semibold text-slate-500 uppercase mb-1.5">Title <span className="normal-case text-slate-400 font-normal">(optional for file upload — defaults to the filename)</span></label>
                 <input value={title} onChange={(e) => setTitle(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm" placeholder="e.g. Refund Policy" />
               </div>
+
               <div>
-                <label className="block text-xs font-semibold text-slate-500 uppercase mb-1.5">Content</label>
-                <textarea value={text} onChange={(e) => setText(e.target.value)} rows={10} className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm font-mono" placeholder="Paste the document text here. Separate paragraphs with a blank line." />
+                <label className="block text-xs font-semibold text-slate-500 uppercase mb-1.5">Upload a file</label>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept=".pdf,.docx,.xlsx,.xls,.csv,.txt,.md"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) handleFileUpload(file);
+                  }}
+                  disabled={uploading}
+                  className="w-full text-xs text-slate-600 file:mr-3 file:py-2 file:px-3 file:rounded-lg file:border-0 file:bg-indigo-50 file:text-indigo-700 file:text-xs file:font-semibold hover:file:bg-indigo-100 cursor-pointer disabled:opacity-60"
+                />
+                <p className="text-[10px] text-slate-400 mt-1.5 flex items-center gap-1">
+                  {uploading ? (
+                    <><Loader2 className="h-3 w-3 animate-spin" /> Extracting and indexing…</>
+                  ) : (
+                    <><Upload className="h-3 w-3" /> PDF, Word (.docx), Excel (.xlsx/.xls), CSV, TXT, or Markdown</>
+                  )}
+                </p>
               </div>
-              <button onClick={handleAdd} disabled={saving} className="w-full bg-indigo-600 hover:bg-indigo-500 disabled:opacity-60 text-white text-sm font-medium py-2.5 rounded-xl">
+
+              <div className="flex items-center gap-2">
+                <div className="flex-1 h-px bg-slate-100" />
+                <span className="text-[10px] text-slate-400 uppercase font-semibold">or paste text</span>
+                <div className="flex-1 h-px bg-slate-100" />
+              </div>
+
+              <div>
+                <textarea value={text} onChange={(e) => setText(e.target.value)} rows={8} className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm font-mono" placeholder="Paste the document text here. Separate paragraphs with a blank line." />
+              </div>
+              <button onClick={handleAdd} disabled={saving || !title.trim() || !text.trim()} className="w-full bg-indigo-600 hover:bg-indigo-500 disabled:opacity-60 text-white text-sm font-medium py-2.5 rounded-xl">
                 {saving ? 'Saving…' : 'Add to Knowledge Base'}
               </button>
             </div>

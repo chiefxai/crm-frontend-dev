@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { apiFetch, clearAuthToken } from './lib/api';
+import { apiFetch, clearAuthToken, getAuthToken } from './lib/api';
 import { loadFromStorage, saveToStorage } from './lib/storage';
+import { recordToLead, leadToRecordPatch } from './lib/objectContacts';
 import {
   Lead,
   Workflow,
@@ -29,7 +30,6 @@ const EMPTY_ORG_SETTINGS: OrganizationSettings = {
   workspaceName: '',
   subscriptionPlan: 'Starter',
   aiMinutesUsed: 0,
-  aiMinutesLimit: 0,
   phoneCharges: 0,
   billingPeriodEnd: '',
   apiKeys: []
@@ -46,6 +46,7 @@ import DialerSimulator from './components/DialerSimulator';
 import LoanLifecycleView from './components/LoanLifecycleView';
 import SettingsView from './components/SettingsView';
 import ContactDirectoryView from './components/ContactDirectoryView';
+import CallLogsView from './components/CallLogsView';
 import CompanyProfileView from './components/CompanyProfileView';
 import CustomObjectsView from './components/CustomObjectsView';
 import UnifiedInboxView from './components/UnifiedInboxView';
@@ -97,8 +98,24 @@ export default function App() {
   const [orgSettings, setOrgSettings] = useState<OrganizationSettings>(() =>
     loadFromStorage<OrganizationSettings>('chiefx_org', EMPTY_ORG_SETTINGS)
   );
+  const [dialerTasks, setDialerTasks] = useState<any[]>(() =>
+    loadFromStorage<any[]>('chiefx_dialer_tasks', [])
+  );
+  // Non-lending orgs have no `leads` table rows at all — their real
+  // contacts live as Industry Objects records instead. When set, `leads`
+  // is populated from this object's records (mapped via
+  // lib/objectContacts.ts) and synced back to it instead of /api/leads,
+  // so the Voice Simulator (and anything else reading `leads`) has real
+  // data to work with for every industry, not just lending.
+  const [primaryObject, setPrimaryObject] = useState<{ key: string; stages: { id: string; key: string; label: string }[] } | null>(null);
 
   const [hasLoaded, setHasLoaded] = useState<boolean>(false);
+
+  // Live call notifications — set when a real inbound/outbound call is in
+  // progress (from the org-scoped /api/logs-stream SSE connection below),
+  // cleared when it completes. Not a simulation: this only fires for real
+  // Twilio/Vobiz call events from server.js/vobizProxy.js/twilioProxy.js.
+  const [liveCallBanner, setLiveCallBanner] = useState<{ message: string; startedAt: number } | null>(null);
 
   // Load database content once authenticated (every backend CRM route now
   // requires a session — see services/auth.js)
@@ -116,7 +133,8 @@ export default function App() {
           resNumbers,
           resTeam,
           resOrg,
-          resMe
+          resMe,
+          resDialerTasks
         ] = await Promise.all([
           apiFetch('/api/leads').then(r => r.json()),
           apiFetch('/api/workflows').then(r => r.json()),
@@ -126,7 +144,11 @@ export default function App() {
           apiFetch('/api/settings/numbers').then(r => r.json()),
           apiFetch('/api/settings/team').then(r => r.json()),
           apiFetch('/api/settings/org').then(r => r.json()),
-          apiFetch('/api/auth/me').then(r => r.json())
+          apiFetch('/api/auth/me').then(r => r.json()),
+          // Falls back to [] rather than reject the whole Promise.all if a
+          // not-yet-restarted backend doesn't have this route yet, so a
+          // missing route can't silently block every other tab's real data.
+          apiFetch('/api/dialer-tasks').then(r => r.json()).catch(() => [])
         ]);
 
         // Trust the backend's answer even when it's an empty array — that's
@@ -145,6 +167,27 @@ export default function App() {
         if (Array.isArray(resTeam)) setTeamMembers(resTeam);
         if (resOrg && Object.keys(resOrg).length > 0) setOrgSettings(resOrg);
         if (resMe && resMe.user) setCurrentUser(resMe.user);
+        if (Array.isArray(resDialerTasks)) setDialerTasks(resDialerTasks);
+
+        // Non-lending org: bridge its real Industry Objects records into
+        // `leads` instead of leaving it permanently empty (resLeads above
+        // is always [] for these orgs — the leads table is lending-only).
+        const industry = (resOrg && resOrg.industry) || orgSettings.industry;
+        if (industry && industry !== 'lending') {
+          try {
+            const objects = await apiFetch('/api/objects').then(r => r.json());
+            const primary = Array.isArray(objects) ? objects[0] : null;
+            if (primary) {
+              const records = await apiFetch(`/api/objects/${primary.key}/records`).then(r => r.json());
+              setLeads(Array.isArray(records) ? records.map((r: any) => recordToLead(r, primary.stages)) : []);
+              setPrimaryObject({ key: primary.key, stages: primary.stages });
+            }
+          } catch (err) {
+            console.warn("Failed to load Industry Objects records:", err);
+          }
+        } else {
+          setPrimaryObject(null);
+        }
       } catch (err) {
         console.warn("Failed to fetch backend data, using local fallbacks:", err);
       } finally {
@@ -153,6 +196,38 @@ export default function App() {
     };
     loadBackendData();
   }, [isAuthenticated]);
+
+  // Live call events — real inbound/outbound calls only, org-scoped server
+  // side (see server.js's broadcastLog + /api/logs-stream). Shows a banner
+  // while a call is in progress and pushes completed calls straight into
+  // `callLogs` state as they finish, without waiting for a page refresh.
+  useEffect(() => {
+    if (!isAuthenticated || !hasLoaded) return;
+    const token = getAuthToken();
+    if (!token) return;
+
+    const source = new EventSource(`/api/logs-stream?token=${encodeURIComponent(token)}`);
+    source.onmessage = (event) => {
+      try {
+        const data = JSON.parse(event.data);
+        if (data.type === 'call_started') {
+          setLiveCallBanner({ message: `Incoming call from ${data.callerNumber || 'unknown number'}…`, startedAt: Date.now() });
+        } else if (data.type === 'call_completed') {
+          setLiveCallBanner(null);
+          if (data.callLog) {
+            setCallLogs((prev) => [data.callLog, ...prev]);
+          }
+        }
+      } catch {
+        // non-JSON keepalive/init messages — ignore
+      }
+    };
+    source.onerror = () => {
+      // EventSource auto-reconnects on its own; nothing to do here beyond
+      // not crashing the app if the tunnel/backend is briefly unreachable.
+    };
+    return () => source.close();
+  }, [isAuthenticated, hasLoaded]);
 
   // Synchronization persistence effects
   useEffect(() => {
@@ -173,22 +248,38 @@ export default function App() {
   // hidden/irrelevant view.
   useEffect(() => {
     const isLending = !orgSettings.industry || orgSettings.industry === 'lending';
-    const lendingOnlyTabs = new Set(['leads', 'contacts', 'campaigns', 'loans']);
-    if (!isLending && lendingOnlyTabs.has(activeTab)) {
+    const lendingOnlyTabs = new Set(['leads', 'campaigns', 'loans']);
+    // "objects" (the old separate "Contacts" tab) is retired — Contact
+    // Directory covers every industry now — so redirect away from it too
+    // if a stale activeTab from before this change is still pointing there.
+    if ((!isLending && lendingOnlyTabs.has(activeTab)) || activeTab === 'objects') {
       setActiveTab('dashboard');
     }
   }, [orgSettings.industry, activeTab]);
 
   useEffect(() => {
     saveToStorage('chiefx_leads', leads);
-    if (hasLoaded) {
+    if (!hasLoaded) return;
+    if (primaryObject) {
+      // Non-lending org — `leads` here are really Industry Objects
+      // records (see the load effect above). Patch each one back to its
+      // real record instead of /api/leads/sync, which would write into
+      // the (unused, for this org) lending leads table.
+      leads.forEach((lead) => {
+        apiFetch(`/api/objects/${primaryObject.key}/records/${lead.id}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(leadToRecordPatch(lead, primaryObject.stages))
+        }).catch(err => console.error("Error syncing object record:", err));
+      });
+    } else {
       apiFetch('/api/leads/sync', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(leads)
       }).catch(err => console.error("Error syncing leads:", err));
     }
-  }, [leads, hasLoaded]);
+  }, [leads, hasLoaded, primaryObject]);
 
   useEffect(() => {
     saveToStorage('chiefx_workflows', workflows);
@@ -222,6 +313,17 @@ export default function App() {
       }).catch(err => console.error("Error syncing call logs:", err));
     }
   }, [callLogs, hasLoaded]);
+
+  useEffect(() => {
+    saveToStorage('chiefx_dialer_tasks', dialerTasks);
+    if (hasLoaded) {
+      apiFetch('/api/dialer-tasks/sync', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(dialerTasks)
+      }).catch(err => console.error("Error syncing dialer tasks:", err));
+    }
+  }, [dialerTasks, hasLoaded]);
 
   useEffect(() => {
     saveToStorage('chiefx_loans', loans);
@@ -301,8 +403,11 @@ export default function App() {
           <ContactDirectoryView
             leads={leads}
             setLeads={setLeads}
+            industry={orgSettings.industry}
           />
         );
+      case 'call-logs':
+        return <CallLogsView callLogs={callLogs} />;
       case 'workflows':
         return (
           <WorkflowBuilderView
@@ -330,6 +435,9 @@ export default function App() {
             setLeadsDatabase={setLeads}
             virtualNumbers={virtualNumbers}
             setVirtualNumbers={setVirtualNumbers}
+            tasks={dialerTasks}
+            setTasks={setDialerTasks}
+            companyName={orgSettings.workspaceName}
           />
         );
       case 'loans':
@@ -400,6 +508,12 @@ export default function App() {
 
       {/* Main Workspace Frame */}
       <main className="flex-1 flex flex-col min-w-0 overflow-hidden relative">
+        {liveCallBanner && (
+          <div className="absolute top-0 left-0 right-0 z-50 bg-emerald-600 text-white text-xs font-semibold px-4 py-2 flex items-center justify-center gap-2 animate-pulse">
+            <span className="h-1.5 w-1.5 rounded-full bg-white"></span>
+            {liveCallBanner.message}
+          </div>
+        )}
         {/* Global Floating Header */}
         <header className="h-16 bg-white border-b border-slate-100 flex items-center justify-between px-8 shrink-0 relative z-10">
           <div className="flex items-center space-x-2">

@@ -79,6 +79,7 @@ export interface CallLog {
   transcript: { speaker: 'AI' | 'Customer'; text: string; timestamp: string }[];
   summary: string;
   recordingUrl?: string;
+  direction?: 'inbound' | 'outbound';
   createdAt: string;
 }
 
@@ -121,7 +122,7 @@ export interface Loan {
 export interface VirtualNumber {
   id: string;
   number: string;
-  provider: 'Twilio' | 'Telnyx' | 'Plivo' | 'SIP Trunk';
+  provider: 'Twilio' | 'Vobiz.ai' | 'Telnyx' | 'Plivo' | 'SIP Trunk';
   status: 'Active' | 'Inactive';
   friendlyName: string;
   routingUrl: string;
@@ -154,7 +155,6 @@ export interface OrganizationSettings {
   workspaceName: string;
   subscriptionPlan: 'Starter' | 'Growth' | 'Enterprise';
   aiMinutesUsed: number;
-  aiMinutesLimit: number;
   phoneCharges: number;
   billingPeriodEnd: string;
   apiKeys: {

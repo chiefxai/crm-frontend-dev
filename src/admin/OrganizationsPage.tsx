@@ -3,6 +3,7 @@ import { Search, Loader2, ChevronUp, ChevronDown } from 'lucide-react';
 import { apiFetch } from '../lib/api';
 import { OrgRow } from './types';
 import OrgDetailPanel from './OrgDetailPanel';
+import { formatInr } from '../lib/pricing';
 
 type SortKey = 'name' | 'industry' | 'subscriptionPlan' | 'memberCount' | 'leadCount' | 'createdAt';
 
@@ -69,6 +70,7 @@ export default function OrganizationsPage() {
                 <SortHeader label="Industry" sortKeyName="industry" />
                 <SortHeader label="Plan" sortKeyName="subscriptionPlan" />
                 <th className="px-5 py-3">AI Minutes</th>
+                <th className="px-5 py-3">AI Cost</th>
                 <SortHeader label="Members" sortKeyName="memberCount" />
                 <SortHeader label="Leads" sortKeyName="leadCount" />
                 <SortHeader label="Signed Up" sortKeyName="createdAt" />
@@ -80,14 +82,15 @@ export default function OrganizationsPage() {
                   <td className="px-5 py-3 font-medium text-slate-700">{o.name}<div className="text-[10px] text-slate-400 font-normal">{o.workspaceName}</div></td>
                   <td className="px-5 py-3 text-slate-500">{o.industry}</td>
                   <td className="px-5 py-3 text-slate-500">{o.subscriptionPlan}</td>
-                  <td className="px-5 py-3 text-slate-500">{o.aiMinutesUsed}/{o.aiMinutesLimit}</td>
+                  <td className="px-5 py-3 text-slate-500">{o.aiMinutesUsed}</td>
+                  <td className="px-5 py-3 text-slate-500">{formatInr(o.totalCostInr)}</td>
                   <td className="px-5 py-3 text-slate-500">{o.memberCount}</td>
                   <td className="px-5 py-3 text-slate-500">{o.leadCount}</td>
                   <td className="px-5 py-3 text-slate-400 text-xs whitespace-nowrap">{new Date(o.createdAt).toLocaleDateString()}</td>
                 </tr>
               ))}
               {filtered.length === 0 && (
-                <tr><td colSpan={7} className="px-5 py-8 text-center text-slate-400 text-xs">No organizations match "{query}"</td></tr>
+                <tr><td colSpan={8} className="px-5 py-8 text-center text-slate-400 text-xs">No organizations match "{query}"</td></tr>
               )}
             </tbody>
           </table>

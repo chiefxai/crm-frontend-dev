@@ -19,7 +19,8 @@ import {
   ShieldBan,
   BookOpen,
   ScrollText,
-  CreditCard
+  CreditCard,
+  History
 } from 'lucide-react';
 import { UserRole } from '../types';
 
@@ -33,7 +34,7 @@ interface SidebarProps {
 
 // Lending-specific screens (the original hardcoded Lead/Loan/Campaign
 // system in db.js) — only relevant for orgs on the "lending" vertical.
-const LENDING_ONLY_TAB_IDS = new Set(['leads', 'contacts', 'campaigns', 'loans']);
+const LENDING_ONLY_TAB_IDS = new Set(['leads', 'campaigns', 'loans']);
 
 export default function Sidebar({
   activeTab,
@@ -44,6 +45,20 @@ export default function Sidebar({
 }: SidebarProps) {
   const isLending = !industry || industry === 'lending';
 
+  // Sidebar header tagline — was hardcoded "Loan CRM Platform" for every
+  // org regardless of industry. Real per-industry labels, matching
+  // industryPacks.js's listIndustries() naming.
+  const INDUSTRY_TAGLINES: Record<string, string> = {
+    lending: 'Loan CRM Platform',
+    real_estate: 'Real Estate CRM Platform',
+    healthcare: 'Healthcare CRM Platform',
+    education: 'Education CRM Platform',
+    ecommerce: 'E-commerce CRM Platform',
+    automotive: 'Automotive CRM Platform',
+    field_services: 'Field Services CRM Platform'
+  };
+  const tagline = INDUSTRY_TAGLINES[industry] || 'AI CRM Platform';
+
   const allMenuItems = [
     { id: 'dashboard', label: 'Executive Desk', icon: LayoutDashboard },
     { id: 'leads', label: 'Lead CRM', icon: Users },
@@ -51,6 +66,7 @@ export default function Sidebar({
     { id: 'workflows', label: 'Workflow Builder', icon: GitBranch },
     { id: 'campaigns', label: 'AI Campaigns', icon: Briefcase },
     { id: 'dialer', label: 'Voice Simulator', icon: PhoneCall },
+    { id: 'call-logs', label: 'Call Logs', icon: History },
     { id: 'inbox', label: 'Unified Inbox', icon: Inbox },
     { id: 'agent-studio', label: 'Agent Studio', icon: Sparkles },
     { id: 'compliance', label: 'Compliance', icon: ShieldBan },
@@ -58,17 +74,18 @@ export default function Sidebar({
     { id: 'audit-log', label: 'Audit Log', icon: ScrollText },
     { id: 'billing', label: 'Billing & Usage', icon: CreditCard },
     { id: 'loans', label: 'Loan Lifecycle', icon: Layers },
-    { id: 'objects', label: 'Industry Objects', icon: Boxes },
+    { id: 'objects', label: 'Contacts', icon: Boxes },
     { id: 'company', label: 'Company Profile', icon: Building2 },
     { id: 'settings', label: 'Administration', icon: Settings }
   ];
 
-  // Lending orgs keep today's exact menu (including a currently-empty
-  // "Industry Objects" tab, since lending has no seeded pack). Every other
-  // industry hides the lending-only screens — their real pipeline lives
-  // under "Industry Objects" instead.
+  // "Contact Directory" now works for every industry — non-lending orgs'
+  // contacts are their real Industry Objects records, bridged into the
+  // same `leads` state (see src/lib/objectContacts.ts). The separate
+  // "Contacts" (objects) tab is retired so there's one contact list, not
+  // two screens showing the same underlying data.
   const menuItems = allMenuItems.filter((item) => {
-    if (item.id === 'objects') return !isLending;
+    if (item.id === 'objects') return false;
     if (LENDING_ONLY_TAB_IDS.has(item.id)) return isLending;
     return true;
   });
@@ -81,10 +98,10 @@ export default function Sidebar({
           <div className="h-10 w-10 rounded-xl flex items-center justify-center shadow-lg bg-blue-600 shadow-blue-600/20 text-white">
             <Layers className="h-5.5 w-5.5" />
           </div>
-          <div>
-            <h1 className="text-lg font-bold font-display tracking-tight leading-none text-slate-900">ChiefXAI</h1>
+          <div className="min-w-0">
+            <h1 className="text-lg font-bold font-display tracking-tight leading-none text-slate-900 truncate">{organizationName || 'ChiefXAI'}</h1>
             <p className="text-[10px] text-slate-400 font-mono mt-1 uppercase tracking-widest">
-              Loan CRM Platform
+              {tagline}
             </p>
           </div>
         </div>
