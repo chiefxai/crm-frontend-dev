@@ -20,7 +20,8 @@ import {
   BookOpen,
   ScrollText,
   CreditCard,
-  History
+  History,
+  MessageCircleQuestion
 } from 'lucide-react';
 import { UserRole } from '../types';
 
@@ -55,7 +56,8 @@ export default function Sidebar({
     education: 'Education CRM Platform',
     ecommerce: 'E-commerce CRM Platform',
     automotive: 'Automotive CRM Platform',
-    field_services: 'Field Services CRM Platform'
+    field_services: 'Field Services CRM Platform',
+    it_sales: 'IT Sales CRM Platform'
   };
   const tagline = INDUSTRY_TAGLINES[industry] || 'AI CRM Platform';
 
@@ -63,7 +65,8 @@ export default function Sidebar({
     { id: 'dashboard', label: 'Executive Desk', icon: LayoutDashboard },
     { id: 'leads', label: 'Lead CRM', icon: Users },
     { id: 'contacts', label: 'Contact Directory', icon: Contact },
-    { id: 'workflows', label: 'Workflow Builder', icon: GitBranch },
+    // Disabled for now (not yet configured/used) — uncomment to re-enable.
+    // { id: 'workflows', label: 'Workflow Builder', icon: GitBranch },
     { id: 'campaigns', label: 'AI Campaigns', icon: Briefcase },
     { id: 'dialer', label: 'Voice Simulator', icon: PhoneCall },
     { id: 'call-logs', label: 'Call Logs', icon: History },
@@ -71,6 +74,7 @@ export default function Sidebar({
     { id: 'agent-studio', label: 'Agent Studio', icon: Sparkles },
     { id: 'compliance', label: 'Compliance', icon: ShieldBan },
     { id: 'knowledge', label: 'Knowledge Base', icon: BookOpen },
+    { id: 'enquiries', label: 'Enquiries', icon: MessageCircleQuestion },
     { id: 'audit-log', label: 'Audit Log', icon: ScrollText },
     { id: 'billing', label: 'Billing & Usage', icon: CreditCard },
     { id: 'loans', label: 'Loan Lifecycle', icon: Layers },

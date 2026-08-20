@@ -90,7 +90,7 @@ export default function LoanLifecycleView({
                 return {
                   ...d,
                   status: data.status,
-                  ocrData: data.ocrData
+                  ocrData: { ...data.ocrData, degraded: !!data.degraded }
                 };
               }
               return d;
@@ -367,6 +367,11 @@ export default function LoanLifecycleView({
                     {/* OCR Data outputs */}
                     {activeDoc.ocrData ? (
                       <div className="space-y-2 border-t border-slate-200/60 pt-2 text-[10px] font-mono text-slate-600">
+                        {activeDoc.ocrData.degraded && (
+                          <div title="Document AI was unavailable — this data is a placeholder, not real extraction from the uploaded file" className="flex items-center gap-1 text-amber-600 bg-amber-50 border border-amber-200 rounded px-1.5 py-1 font-sans font-semibold">
+                            ⚠ Estimated — AI document analysis temporarily unavailable
+                          </div>
+                        )}
                         <div className="flex justify-between">
                           <span>
                             Verified Borrower Name:

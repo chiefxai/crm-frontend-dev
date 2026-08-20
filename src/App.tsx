@@ -54,6 +54,7 @@ import AgentStudioView from './components/AgentStudioView';
 import ComplianceView from './components/ComplianceView';
 import KnowledgeBaseView from './components/KnowledgeBaseView';
 import AuditLogView from './components/AuditLogView';
+import EnquiriesView from './components/EnquiriesView';
 import BillingView from './components/BillingView';
 
 export default function App() {
@@ -165,7 +166,12 @@ export default function App() {
         if (Array.isArray(resLoans)) setLoans(resLoans);
         if (Array.isArray(resNumbers)) setVirtualNumbers(resNumbers);
         if (Array.isArray(resTeam)) setTeamMembers(resTeam);
-        if (resOrg && Object.keys(resOrg).length > 0) setOrgSettings(resOrg);
+        // Merge over EMPTY_ORG_SETTINGS rather than replacing wholesale —
+        // the backend only returns fields that were ever explicitly set on
+        // this org, so a freshly created/consolidated org can omit e.g.
+        // phoneCharges/apiKeys entirely, and SettingsView calls
+        // .toFixed()/.map() on those unconditionally.
+        if (resOrg && Object.keys(resOrg).length > 0) setOrgSettings({ ...EMPTY_ORG_SETTINGS, ...resOrg });
         if (resMe && resMe.user) setCurrentUser(resMe.user);
         if (Array.isArray(resDialerTasks)) setDialerTasks(resDialerTasks);
 
@@ -371,7 +377,7 @@ export default function App() {
 
   // Handle Onboarding Completion
   const handleAuthSuccess = (org: OrganizationSettings) => {
-    setOrgSettings(org);
+    setOrgSettings({ ...EMPTY_ORG_SETTINGS, ...org });
     setIsAuthenticated(true);
     setActiveTab('dashboard');
   };
@@ -438,6 +444,7 @@ export default function App() {
             tasks={dialerTasks}
             setTasks={setDialerTasks}
             companyName={orgSettings.workspaceName}
+            teamMembers={teamMembers}
           />
         );
       case 'loans':
@@ -459,6 +466,8 @@ export default function App() {
         return <ComplianceView />;
       case 'knowledge':
         return <KnowledgeBaseView />;
+      case 'enquiries':
+        return <EnquiriesView />;
       case 'audit-log':
         return <AuditLogView />;
       case 'billing':

@@ -15,12 +15,14 @@ export default function OrganizationsPage() {
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
   const [selectedOrgId, setSelectedOrgId] = useState<string | null>(null);
 
-  useEffect(() => {
+  const loadOrgs = () => {
     apiFetch('/api/platform/organizations')
       .then((r) => r.json())
       .then((data) => setOrgs(Array.isArray(data) ? data : []))
       .finally(() => setLoading(false));
-  }, []);
+  };
+
+  useEffect(loadOrgs, []);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -67,6 +69,7 @@ export default function OrganizationsPage() {
             <thead>
               <tr className="border-b border-slate-100 text-left text-[10px] font-bold text-slate-400 uppercase tracking-wide">
                 <SortHeader label="Organization" sortKeyName="name" />
+                <th className="px-5 py-3">Status</th>
                 <SortHeader label="Industry" sortKeyName="industry" />
                 <SortHeader label="Plan" sortKeyName="subscriptionPlan" />
                 <th className="px-5 py-3">AI Minutes</th>
@@ -80,6 +83,11 @@ export default function OrganizationsPage() {
               {filtered.map((o) => (
                 <tr key={o.id} onClick={() => setSelectedOrgId(o.id)} className="border-b border-slate-50 last:border-0 cursor-pointer hover:bg-slate-50">
                   <td className="px-5 py-3 font-medium text-slate-700">{o.name}<div className="text-[10px] text-slate-400 font-normal">{o.workspaceName}</div></td>
+                  <td className="px-5 py-3">
+                    <span className={`text-[10px] font-bold uppercase tracking-wide px-2 py-0.5 rounded-full ${o.status === 'Suspended' ? 'bg-rose-50 text-rose-600' : 'bg-emerald-50 text-emerald-600'}`}>
+                      {o.status || 'Active'}
+                    </span>
+                  </td>
                   <td className="px-5 py-3 text-slate-500">{o.industry}</td>
                   <td className="px-5 py-3 text-slate-500">{o.subscriptionPlan}</td>
                   <td className="px-5 py-3 text-slate-500">{o.aiMinutesUsed}</td>
@@ -90,14 +98,20 @@ export default function OrganizationsPage() {
                 </tr>
               ))}
               {filtered.length === 0 && (
-                <tr><td colSpan={8} className="px-5 py-8 text-center text-slate-400 text-xs">No organizations match "{query}"</td></tr>
+                <tr><td colSpan={9} className="px-5 py-8 text-center text-slate-400 text-xs">No organizations match "{query}"</td></tr>
               )}
             </tbody>
           </table>
         )}
       </div>
 
-      {selectedOrgId && <OrgDetailPanel orgId={selectedOrgId} onClose={() => setSelectedOrgId(null)} />}
+      {selectedOrgId && (
+        <OrgDetailPanel
+          orgId={selectedOrgId}
+          onClose={() => setSelectedOrgId(null)}
+          onChanged={loadOrgs}
+        />
+      )}
     </div>
   );
 }

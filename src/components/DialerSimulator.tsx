@@ -32,7 +32,7 @@ import {
   History,
   PhoneForwarded
 } from 'lucide-react';
-import { Lead, CallLog, VirtualNumber } from '../types';
+import { Lead, CallLog, VirtualNumber, TeamMember } from '../types';
 import { apiFetch } from '../lib/api';
 import { callCostInr, formatInr } from '../lib/pricing';
 
@@ -47,7 +47,27 @@ interface DialerSimulatorProps {
   tasks: DialTask[];
   setTasks: React.Dispatch<React.SetStateAction<DialTask[]>>;
   companyName: string;
+  teamMembers?: TeamMember[];
 }
+
+// Broad language list for per-task selection — a generic "speak fluently
+// in {language}" instruction is used for anything other than the default,
+// which still uses the hand-tuned Tamil/Tanglish speech-pattern prompt.
+// See services/config.js on the backend for where this gets applied.
+export const TASK_LANGUAGE_OPTIONS = [
+  'Tamil + English (Tanglish)',
+  'Hindi',
+  'Telugu',
+  'Kannada',
+  'Malayalam',
+  'Bengali',
+  'Marathi',
+  'Gujarati',
+  'Punjabi',
+  'Odia',
+  'English'
+];
+export const DEFAULT_TASK_LANGUAGE = TASK_LANGUAGE_OPTIONS[0];
 
 interface DialTask {
   id: string;
@@ -56,6 +76,8 @@ interface DialTask {
   leadIds: string[];
   status: 'Pending' | 'In Progress' | 'Completed';
   createdAt: string;
+  language?: string;
+  assignedTeamMemberId?: string;
   callResults: {
     [leadId: string]: {
       status: 'Pending' | 'Calling' | 'Completed' | 'No Answer' | 'Skipped';
@@ -80,7 +102,8 @@ export default function DialerSimulator({
   setVirtualNumbers,
   tasks,
   setTasks,
-  companyName
+  companyName,
+  teamMembers = []
 }: DialerSimulatorProps) {
   // Inbound Call states
   const [dialerMode, setDialerMode] = useState<'outbound' | 'inbound'>('outbound');
@@ -150,6 +173,8 @@ Real Tamil speakers do not say the "correct" written form of a word. They contra
   // Task Creation Form States
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [newTaskName, setNewTaskName] = useState('');
+  const [newTaskLanguage, setNewTaskLanguage] = useState(DEFAULT_TASK_LANGUAGE);
+  const [newTaskAssignedMemberId, setNewTaskAssignedMemberId] = useState('');
   const [newQuestions, setNewQuestions] = useState<string[]>([]);
   const [tempQuestionInput, setTempQuestionInput] = useState('');
   const [selectedFormLeadIds, setSelectedFormLeadIds] = useState<string[]>([]);
@@ -160,6 +185,10 @@ Real Tamil speakers do not say the "correct" written form of a word. They contra
   const [twilioCallSid, setTwilioCallSid] = useState<string | null>(null);
   const [vobizCallSid, setVobizCallSid] = useState<string | null>(null);
   const [callState, setCallState] = useState<'idle' | 'dialing' | 'connected' | 'completed'>('idle');
+  // When on, finishing a call automatically dials the next pending lead in
+  // the task instead of requiring "Auto-Dial Next List Target" + "Dial"
+  // clicked separately for every single lead.
+  const [autoDialOn, setAutoDialOn] = useState(false);
   const [duration, setDuration] = useState(0);
   const [transcript, setTranscript] = useState<{ speaker: 'AI' | 'Customer'; text: string; timestamp: string }[]>([]);
   const [customerUtterance, setCustomerUtterance] = useState('');
@@ -279,7 +308,9 @@ Real Tamil speakers do not say the "correct" written form of a word. They contra
       leadIds: selectedFormLeadIds,
       status: 'Pending',
       createdAt: new Date().toISOString(),
-      callResults: {}
+      callResults: {},
+      language: newTaskLanguage,
+      assignedTeamMemberId: newTaskAssignedMemberId || undefined
     };
 
     const updatedTasks = [...tasks, newTask];
@@ -291,6 +322,8 @@ Real Tamil speakers do not say the "correct" written form of a word. They contra
     // type this task's questions themselves every time, not start from
     // any default (org's, industry's, or otherwise).
     setNewTaskName('');
+    setNewTaskLanguage(DEFAULT_TASK_LANGUAGE);
+    setNewTaskAssignedMemberId('');
     setNewQuestions([]);
     setSelectedFormLeadIds([]);
   };
@@ -315,12 +348,17 @@ Real Tamil speakers do not say the "correct" written form of a word. They contra
     setIsTapePlaying(false);
 
     try {
+      const assignedMember = selectedTask?.assignedTeamMemberId
+        ? teamMembers.find((m) => m.id === selectedTask.assignedTeamMemberId)
+        : undefined;
       const res = await apiFetch('/api/vobiz/call', {
         method: 'POST',
         body: JSON.stringify({
           phoneNumber: lead.phone,
           questions: selectedTask ? selectedTask.questions : [],
-          from: selectedOutboundNumber || undefined
+          from: selectedOutboundNumber || undefined,
+          language: selectedTask?.language || undefined,
+          assignedContact: assignedMember ? { name: assignedMember.name, phone: assignedMember.phone } : undefined
         })
       });
       const data = await res.json();
@@ -363,12 +401,17 @@ Real Tamil speakers do not say the "correct" written form of a word. They contra
     setIsTapePlaying(false);
 
     try {
+      const assignedMemberTwilio = selectedTask?.assignedTeamMemberId
+        ? teamMembers.find((m) => m.id === selectedTask.assignedTeamMemberId)
+        : undefined;
       const res = await apiFetch('/api/twilio/call', {
         method: 'POST',
         body: JSON.stringify({
           phoneNumber: lead.phone,
           questions: selectedTask ? selectedTask.questions : [],
-          from: selectedOutboundNumber || undefined
+          from: selectedOutboundNumber || undefined,
+          language: selectedTask?.language || undefined,
+          assignedContact: assignedMemberTwilio ? { name: assignedMemberTwilio.name, phone: assignedMemberTwilio.phone } : undefined
         })
       });
       const data = await res.json();
@@ -542,7 +585,11 @@ Currently on question ${nextIndex} out of ${selectedTask.questions.length}. Next
 
         setTranscript((prev) => [
           ...prev,
-          { speaker: 'AI', text: aiReply, timestamp: new Date().toTimeString().split(' ')[0] }
+          {
+            speaker: 'AI',
+            text: data.degraded ? `[Estimated — AI unavailable, using scripted fallback] ${aiReply}` : aiReply,
+            timestamp: new Date().toTimeString().split(' ')[0]
+          }
         ]);
 
         // Auto hang up if final question completed
@@ -610,6 +657,60 @@ Currently on question ${nextIndex} out of ${selectedTask.questions.length}. Next
   const activeTapeLead = playingTapeType === 'inbound'
     ? null
     : leadsDatabase.find((l) => l.id === playingTapeId);
+
+  const dialLead = (lead: Lead) => {
+    const num = dialableNumbers.find((n) => n.number === selectedOutboundNumber);
+    if (/vobiz/i.test(num?.provider || '')) handleInitiateVobizCall(lead);
+    else handleInitiateTwilioCall(lead);
+  };
+
+  // Continuous auto-dial: once a call finishes, if autoDialOn is set, move
+  // to the next pending lead and place the call immediately — no manual
+  // "Auto-Dial Next" + "Dial" click pair needed per lead in the list. A
+  // short pause between calls keeps this from looking like a rapid-fire
+  // robo-dialer and gives the UI time to show the "completed" state.
+  useEffect(() => {
+    if (!autoDialOn || callState !== 'completed' || !selectedTask || dialableNumbers.length === 0) return;
+    const nextPendingId = selectedTask.leadIds.find((lId) => {
+      const res = selectedTask.callResults[lId];
+      return !res || res.status === 'Pending';
+    });
+    if (!nextPendingId) {
+      setAutoDialOn(false);
+      return;
+    }
+    const lead = leadsDatabase.find((l) => l.id === nextPendingId);
+    if (!lead) {
+      setAutoDialOn(false);
+      return;
+    }
+    const timer = setTimeout(() => dialLead(lead), 3000);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoDialOn, callState, selectedTask, leadsDatabase, selectedOutboundNumber, dialableNumbers.length]);
+
+  // Kicks off the very first call the moment auto-dial is switched on
+  // (the effect above only reacts to a call *finishing*) — otherwise
+  // turning it on would just sit idle until you manually dialed once.
+  // Picks a pending lead itself if none was already selected.
+  useEffect(() => {
+    if (!autoDialOn || callState !== 'idle' || !selectedTask) return;
+    let lead = activeLead;
+    if (!lead) {
+      const nextPendingId = selectedTask.leadIds.find((lId) => {
+        const res = selectedTask.callResults[lId];
+        return !res || res.status === 'Pending';
+      });
+      lead = nextPendingId ? leadsDatabase.find((l) => l.id === nextPendingId) || null : null;
+    }
+    if (!lead) {
+      setAutoDialOn(false);
+      return;
+    }
+    const timer = setTimeout(() => dialLead(lead as Lead), 500);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoDialOn]);
 
   if (playingTapeId && activeTapeResult) {
     const isOutbound = playingTapeType === 'outbound';
@@ -863,25 +964,6 @@ Currently on question ${nextIndex} out of ${selectedTask.questions.length}. Next
     );
   }
 
-  // Auto-Dial Next Pending lead
-  const handleAutoDialNext = () => {
-    if (!selectedTask) return;
-    const nextPendingId = selectedTask.leadIds.find((lId) => {
-      const res = selectedTask.callResults[lId];
-      return !res || res.status === 'Pending';
-    });
-
-    if (nextPendingId) {
-      const lead = leadsDatabase.find((l) => l.id === nextPendingId);
-      if (lead) {
-        setActiveLead(lead);
-        setCallState('idle');
-      }
-    } else {
-      alert("All leads in today's task are already dialed!");
-    }
-  };
-
   // Quick speech suggestions based on active question
   const getSuggestionsForActiveQuestion = () => {
     if (activeQuestionIndex === 0) {
@@ -1026,10 +1108,14 @@ Currently on question ${nextIndex} out of ${selectedTask.questions.length}. Next
           <div className="bg-slate-900 text-white rounded-xl p-4 space-y-2 relative overflow-hidden">
             <div className="absolute -right-8 -bottom-8 w-24 h-24 bg-blue-500/10 rounded-full blur-xl"></div>
             <div className="relative z-10 space-y-1">
-              <span className="text-[9px] font-mono text-emerald-400 uppercase tracking-wider font-bold">Calling Telemetry</span>
-              <p className="text-lg font-bold">Continuous Dialer Mode</p>
+              <span className={`text-[9px] font-mono uppercase tracking-wider font-bold ${autoDialOn ? 'text-emerald-400' : 'text-slate-500'}`}>
+                Calling Telemetry {autoDialOn && '· LIVE'}
+              </span>
+              <p className="text-lg font-bold">Continuous Dialer Mode: {autoDialOn ? 'ON' : 'OFF'}</p>
               <p className="text-[10px] text-slate-400 leading-normal">
-                AI parses voice audio stream, converts caller speech to text in real-time, matching questionnaire patterns instantly.
+                {autoDialOn
+                  ? 'Auto-dialing every pending lead in the active list, one after another — hit "Stop Auto-Dial" to pause after the current call.'
+                  : 'AI parses voice audio stream, converts caller speech to text in real-time, matching questionnaire patterns instantly. Click "Auto-Dial Next List Target" to work through the whole list without clicking Dial per lead.'}
               </p>
             </div>
           </div>
@@ -1063,12 +1149,15 @@ Currently on question ${nextIndex} out of ${selectedTask.questions.length}. Next
 
               <div className="flex items-center gap-2">
                 <button
-                  onClick={handleAutoDialNext}
-                  disabled={callState === 'dialing' || callState === 'connected'}
-                  className="flex items-center px-4 py-2 bg-slate-900 hover:bg-slate-800 disabled:opacity-50 text-white text-xs font-bold rounded-xl shadow-sm transition-all cursor-pointer"
+                  onClick={() => setAutoDialOn((v) => !v)}
+                  disabled={dialableNumbers.length === 0}
+                  className={`flex items-center px-4 py-2 disabled:opacity-50 text-xs font-bold rounded-xl shadow-sm transition-all cursor-pointer ${
+                    autoDialOn ? 'bg-rose-600 hover:bg-rose-500 text-white' : 'bg-slate-900 hover:bg-slate-800 text-white'
+                  }`}
+                  title={autoDialOn ? 'Stops after the current call finishes' : 'Dials the next pending lead now, then keeps going through the rest of the list automatically'}
                 >
-                  <PhoneCall className="h-3.5 w-3.5 mr-1.5 text-emerald-400" />
-                  Auto-Dial Next List Target
+                  <PhoneCall className={`h-3.5 w-3.5 mr-1.5 ${autoDialOn ? '' : 'text-emerald-400'}`} />
+                  {autoDialOn ? 'Stop Auto-Dial' : 'Auto-Dial Next List Target'}
                 </button>
               </div>
             </div>
@@ -1302,11 +1391,7 @@ Currently on question ${nextIndex} out of ${selectedTask.questions.length}. Next
                           ))}
                         </select>
                         <button
-                          onClick={() => {
-                            const num = dialableNumbers.find((n) => n.number === selectedOutboundNumber);
-                            if (/vobiz/i.test(num?.provider || '')) handleInitiateVobizCall(activeLead);
-                            else handleInitiateTwilioCall(activeLead);
-                          }}
+                          onClick={() => dialLead(activeLead)}
                           className="px-5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs rounded-xl shadow-md cursor-pointer"
                         >
                           Dial
@@ -1654,6 +1739,40 @@ Currently on question ${nextIndex} out of ${selectedTask.questions.length}. Next
                   onChange={(e) => setNewTaskName(e.target.value)}
                   className="w-full border border-slate-200 rounded-xl px-4 py-2.5 text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
                 />
+              </div>
+
+              {/* Language + assigned team member */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-slate-600 block">Call Language</label>
+                  <select
+                    value={newTaskLanguage}
+                    onChange={(e) => setNewTaskLanguage(e.target.value)}
+                    className="w-full border border-slate-200 rounded-xl px-4 py-2.5 text-xs text-slate-800 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                  >
+                    {TASK_LANGUAGE_OPTIONS.map((lang) => (
+                      <option key={lang} value={lang}>{lang}</option>
+                    ))}
+                  </select>
+                  {newTaskLanguage !== DEFAULT_TASK_LANGUAGE && (
+                    <p className="text-[10px] text-amber-600">
+                      Non-default languages use a generic fluency instruction — voice naturalness won't yet match the hand-tuned Tamil default.
+                    </p>
+                  )}
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-slate-600 block">Assign to Team Member</label>
+                  <select
+                    value={newTaskAssignedMemberId}
+                    onChange={(e) => setNewTaskAssignedMemberId(e.target.value)}
+                    className="w-full border border-slate-200 rounded-xl px-4 py-2.5 text-xs text-slate-800 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                  >
+                    <option value="">None — no callback contact shared</option>
+                    {teamMembers.map((m) => (
+                      <option key={m.id} value={m.id}>{m.name}{m.phone ? ` (${m.phone})` : ' (no phone on file)'}</option>
+                    ))}
+                  </select>
+                </div>
               </div>
 
               {/* Define Questions sequential flow */}

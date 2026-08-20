@@ -13,13 +13,7 @@ import {
   Activity,
   UserPlus,
   DollarSign,
-  Briefcase,
-  Sparkles,
-  Sliders,
-  Volume2,
-  Check,
-  CheckCircle as CheckCircle2,
-  RefreshCw
+  Briefcase
 } from 'lucide-react';
 import { apiFetch } from '../lib/api';
 import { VirtualNumber, TeamMember, OrganizationSettings, UserRole } from '../types';
@@ -52,7 +46,7 @@ export default function SettingsView({
   orgSettings,
   setOrgSettings
 }: SettingsViewProps) {
-  const [subTab, setSubTab] = useState<'numbers' | 'team' | 'billing' | 'api' | 'speech'>('numbers');
+  const [subTab, setSubTab] = useState<'numbers' | 'team' | 'billing' | 'api'>('numbers');
 
   const [auditLogs, setAuditLogs] = useState<AuditEntry[]>([]);
   useEffect(() => {
@@ -63,46 +57,6 @@ export default function SettingsView({
       .catch(() => setAuditLogs([]));
   }, [subTab]);
 
-  // AI Voice and Prompt Configuration states
-  const [voicePersona, setVoicePersona] = useState<string>(() => {
-    return localStorage.getItem('chiefx_voice_persona') || 'Priya — Female (friendly & clear)';
-  });
-  const [emotionIntensity, setEmotionIntensity] = useState<number>(() => {
-    return Number(localStorage.getItem('chiefx_emotion_intensity') || '78');
-  });
-  const [speechSpeed, setSpeechSpeed] = useState<number>(() => {
-    return Number(localStorage.getItem('chiefx_speech_speed') || '52');
-  });
-  const [friendliness, setFriendliness] = useState<number>(() => {
-    return Number(localStorage.getItem('chiefx_friendliness') || '82');
-  });
-  const [systemPrompt, setSystemPrompt] = useState<string>(() => {
-    return localStorage.getItem('chiefx_system_prompt') || 
-`You are a real human speaking out loud - not an AI, not reading a script.
-
-========================================
-CORE RULE - SPEAK THE VERBATIM FORM, NOT THE NORMALIZED FORM
-========================================
-
-Real Tamil speakers do not say the "correct" written form of a word. They contract it. This is the single most reliable, verified pattern in real Tamil speech data, and it holds no matter what the topic is or who the speaker is talking to. Apply it constantly...`;
-  });
-  const [isConfigSaving, setIsConfigSaving] = useState(false);
-  const [configSaveSuccess, setConfigSaveSuccess] = useState(false);
-
-  const handleSaveConfig = () => {
-    setIsConfigSaving(true);
-    localStorage.setItem('chiefx_voice_persona', voicePersona);
-    localStorage.setItem('chiefx_emotion_intensity', String(emotionIntensity));
-    localStorage.setItem('chiefx_speech_speed', String(speechSpeed));
-    localStorage.setItem('chiefx_friendliness', String(friendliness));
-    localStorage.setItem('chiefx_system_prompt', systemPrompt);
-    
-    setTimeout(() => {
-      setIsConfigSaving(false);
-      setConfigSaveSuccess(true);
-      setTimeout(() => setConfigSaveSuccess(false), 3000);
-    }, 600);
-  };
 
   // Per-org telephony credentials — lets this org use its own Twilio/Vobiz
   // account for real outbound calls instead of the single shared account
@@ -191,6 +145,7 @@ Real Tamil speakers do not say the "correct" written form of a word. They contra
   // Team Member states
   const [newStaffName, setNewStaffName] = useState('');
   const [newStaffEmail, setNewStaffEmail] = useState('');
+  const [newStaffPhone, setNewStaffPhone] = useState('');
   const [newStaffRole, setNewStaffRole] = useState<UserRole>('Loan Agent');
 
   // Delete virtual line
@@ -207,6 +162,7 @@ Real Tamil speakers do not say the "correct" written form of a word. They contra
       id: `T-${200 + teamMembers.length + 1}`,
       name: newStaffName,
       email: newStaffEmail,
+      phone: newStaffPhone || undefined,
       role: newStaffRole,
       status: 'Active',
       performanceScore: 90,
@@ -216,6 +172,7 @@ Real Tamil speakers do not say the "correct" written form of a word. They contra
     setTeamMembers([...teamMembers, added]);
     setNewStaffName('');
     setNewStaffEmail('');
+    setNewStaffPhone('');
   };
 
   // Deactivate Staff member
@@ -275,14 +232,6 @@ Real Tamil speakers do not say the "correct" written form of a word. They contra
             }`}
           >
             <Key className="h-4 w-4 mr-3" /> API Credentials
-          </button>
-          <button
-            onClick={() => setSubTab('speech')}
-            className={`w-full flex items-center px-4 py-2.5 rounded-xl text-xs font-bold uppercase tracking-wider transition-all cursor-pointer ${
-              subTab === 'speech' ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-500 hover:bg-slate-50'
-            }`}
-          >
-            <Sparkles className="h-4 w-4 mr-3" /> AI Speech Config
           </button>
         </div>
 
@@ -392,7 +341,7 @@ Real Tamil speakers do not say the "correct" written form of a word. They contra
                   <h4 className="text-sm font-bold text-slate-800 font-display">Add Associate Team Member</h4>
                   <p className="text-xs text-slate-400 mt-1">Assign appropriate workflow role profiles and credit credentials to new staff.</p>
                 </div>
-                <form onSubmit={handleAddStaff} className="grid grid-cols-1 md:grid-cols-4 gap-3">
+                <form onSubmit={handleAddStaff} className="grid grid-cols-1 md:grid-cols-5 gap-3">
                   <input
                     type="text"
                     required
@@ -407,6 +356,13 @@ Real Tamil speakers do not say the "correct" written form of a word. They contra
                     value={newStaffEmail}
                     onChange={(e) => setNewStaffEmail(e.target.value)}
                     placeholder="name@chiefxai.com"
+                    className="bg-slate-50 border border-slate-100 rounded-lg px-3 py-2 text-xs focus:outline-none"
+                  />
+                  <input
+                    type="tel"
+                    value={newStaffPhone}
+                    onChange={(e) => setNewStaffPhone(e.target.value)}
+                    placeholder="+91 98765 43210"
                     className="bg-slate-50 border border-slate-100 rounded-lg px-3 py-2 text-xs focus:outline-none"
                   />
                   <select
@@ -446,6 +402,9 @@ Real Tamil speakers do not say the "correct" written form of a word. They contra
                           <div>
                             <p className="font-semibold text-slate-800">{member.name}</p>
                             <p className="text-[10px] text-slate-400 mt-0.5">{member.email}</p>
+                            {member.phone && (
+                              <p className="text-[10px] text-slate-400 mt-0.5">{member.phone}</p>
+                            )}
                           </div>
                         </td>
                         <td className="p-4 px-6">
@@ -552,151 +511,6 @@ Real Tamil speakers do not say the "correct" written form of a word. They contra
             </div>
           )}
 
-          {/* Subtab: AI Speech Config */}
-          {subTab === 'speech' && (
-            <div className="space-y-6">
-              <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm">
-                <h4 className="text-sm font-bold text-slate-800 font-display flex items-center gap-2">
-                  <Sparkles className="h-4 w-4 text-indigo-600" /> AI Speech & Campaign Persona Configuration
-                </h4>
-                <p className="text-xs text-slate-400 mt-1">
-                  Control the synthetic speech parameters, custom language rules, emotion intensity, and global prompt behaviors.
-                </p>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {/* Voice Parameters */}
-                <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm space-y-6 flex flex-col justify-between">
-                  <div>
-                    <h5 className="text-xs font-bold text-slate-700 uppercase tracking-wider border-b border-slate-100 pb-3 flex items-center gap-2">
-                      <Volume2 className="h-4 w-4 text-indigo-500" /> Synthetic Voice & Rhythm
-                    </h5>
-                  </div>
-
-                  <div className="space-y-5 flex-1 pt-2">
-                    <div className="space-y-1.5">
-                      <label className="text-xs font-semibold text-slate-500 block">
-                        Voice Persona
-                      </label>
-                      <select
-                        value={voicePersona}
-                        onChange={(e) => setVoicePersona(e.target.value)}
-                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs focus:outline-none focus:ring-1 focus:ring-indigo-500 cursor-pointer text-slate-700 font-semibold"
-                      >
-                        <option value="Priya — Female (friendly & clear)">Priya — Female (friendly & clear)</option>
-                        <option value="Arjun — Male (warm & expressive)">Arjun — Male (warm & expressive)</option>
-                        <option value="Dev — Male (calm & professional)">Dev — Male (calm & professional)</option>
-                        <option value="Kavya — Female (formal & polite)">Kavya — Female (formal & polite)</option>
-                      </select>
-                    </div>
-
-                    <div className="space-y-2">
-                      <div className="flex justify-between items-center">
-                        <label className="text-xs font-semibold text-slate-500">
-                          Emotion Intensity
-                        </label>
-                        <span className="text-xs font-bold text-slate-700 font-mono bg-slate-100 px-2 py-0.5 rounded-full">{emotionIntensity}%</span>
-                      </div>
-                      <input
-                        type="range"
-                        min="0"
-                        max="100"
-                        value={emotionIntensity}
-                        onChange={(e) => setEmotionIntensity(Number(e.target.value))}
-                        className="w-full h-1.5 bg-slate-100 rounded-lg appearance-none cursor-pointer accent-indigo-600 focus:outline-none"
-                      />
-                    </div>
-
-                    <div className="space-y-2">
-                      <div className="flex justify-between items-center">
-                        <label className="text-xs font-semibold text-slate-500">
-                          Speech Speed
-                        </label>
-                        <span className="text-xs font-bold text-slate-700 font-mono bg-slate-100 px-2 py-0.5 rounded-full">{speechSpeed}%</span>
-                      </div>
-                      <input
-                        type="range"
-                        min="0"
-                        max="100"
-                        value={speechSpeed}
-                        onChange={(e) => setSpeechSpeed(Number(e.target.value))}
-                        className="w-full h-1.5 bg-slate-100 rounded-lg appearance-none cursor-pointer accent-indigo-600 focus:outline-none"
-                      />
-                    </div>
-
-                    <div className="space-y-2">
-                      <div className="flex justify-between items-center">
-                        <label className="text-xs font-semibold text-slate-500">
-                          Friendliness Index
-                        </label>
-                        <span className="text-xs font-bold text-slate-700 font-mono bg-slate-100 px-2 py-0.5 rounded-full">{friendliness}%</span>
-                      </div>
-                      <input
-                        type="range"
-                        min="0"
-                        max="100"
-                        value={friendliness}
-                        onChange={(e) => setFriendliness(Number(e.target.value))}
-                        className="w-full h-1.5 bg-slate-100 rounded-lg appearance-none cursor-pointer accent-indigo-600 focus:outline-none"
-                      />
-                    </div>
-                  </div>
-                </div>
-
-                {/* System Prompt Instructions */}
-                <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm flex flex-col space-y-4">
-                  <div>
-                    <h5 className="text-xs font-bold text-slate-700 uppercase tracking-wider border-b border-slate-100 pb-3 flex items-center gap-2">
-                      <Sliders className="h-4 w-4 text-indigo-500" /> Core AI Campaign Instructions
-                    </h5>
-                  </div>
-
-                  <div className="flex-1 flex flex-col space-y-2">
-                    <label className="text-xs font-semibold text-slate-500 block">
-                      System Prompt & Guidelines
-                    </label>
-                    <textarea
-                      value={systemPrompt}
-                      onChange={(e) => setSystemPrompt(e.target.value)}
-                      className="w-full flex-1 bg-slate-50 border border-slate-200 rounded-xl p-4 text-xs font-mono text-slate-800 focus:outline-none focus:ring-1 focus:ring-indigo-500 leading-relaxed min-h-[250px]"
-                      placeholder="Describe your AI agent system instructions here..."
-                    />
-                  </div>
-                </div>
-              </div>
-
-              {/* Action Bar */}
-              <div className="flex flex-col sm:flex-row sm:items-center gap-4 bg-white p-5 rounded-2xl border border-slate-100 shadow-sm">
-                <button
-                  onClick={handleSaveConfig}
-                  disabled={isConfigSaving}
-                  className="bg-indigo-600 hover:bg-indigo-500 disabled:bg-indigo-300 text-white text-xs font-bold px-6 py-3 rounded-xl shadow-md shadow-indigo-600/10 transition-all cursor-pointer flex items-center space-x-2 shrink-0 justify-center sm:justify-start"
-                >
-                  {isConfigSaving ? (
-                    <>
-                      <RefreshCw className="h-3.5 w-3.5 animate-spin" />
-                      <span>Deploying Changes...</span>
-                    </>
-                  ) : (
-                    <>
-                      <CheckCircle2 className="h-3.5 w-3.5" />
-                      <span>Apply & Sync Settings</span>
-                    </>
-                  )}
-                </button>
-
-                {configSaveSuccess ? (
-                  <span className="text-xs text-emerald-600 font-bold flex items-center gap-1.5 animate-fade-in font-sans">
-                    <Check className="h-4 w-4 bg-emerald-100 text-emerald-700 rounded-full p-0.5 shrink-0" /> Speech configurations successfully saved & deployed. Campaign models are synchronized.
-                  </span>
-                ) : (
-                  <span className="text-xs text-slate-400 font-sans">
-                    Click Apply to synchronize speech models, dialer behavior, and instruction sets globally.
-                  </span>
-                )}
-              </div>
-            </div>
-          )}
         </div>
       </div>
     </div>

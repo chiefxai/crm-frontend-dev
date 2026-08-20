@@ -17,6 +17,7 @@ export interface OrgRow {
   workspaceName: string;
   industry: string;
   subscriptionPlan: string;
+  status?: 'Active' | 'Suspended';
   aiMinutesUsed: number;
   totalCostInr: number;
   billingPeriodEnd?: string;
@@ -31,6 +32,8 @@ export interface OrgDetail {
   workspaceName: string;
   industry: string;
   subscriptionPlan: string;
+  status?: 'Active' | 'Suspended';
+  aiMinutesLimit?: number | null;
   aiMinutesUsed: number;
   totalCostInr: number;
   billingPeriodEnd: string | null;

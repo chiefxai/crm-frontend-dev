@@ -18,6 +18,9 @@ export interface Lead {
   createdAt: string;
   notes: string;
   financialInfo?: FinancialInfo;
+  // True when the last score came from the offline fallback algorithm
+  // (Gemini unavailable/unconfigured), not a real AI assessment.
+  scoreDegraded?: boolean;
 }
 
 export type CampaignStatus = 'Draft' | 'Running' | 'Paused' | 'Completed';
@@ -95,6 +98,9 @@ export interface LoanDocument {
     extractedEmployer?: string;
     confidenceScore?: number;
     issues?: string[];
+    // True when this came from the fallback stub (Gemini unavailable),
+    // not real OCR/document analysis.
+    degraded?: boolean;
   };
 }
 
@@ -143,6 +149,7 @@ export interface TeamMember {
   id: string;
   name: string;
   email: string;
+  phone?: string;
   role: UserRole;
   status: 'Active' | 'Inactive';
   performanceScore: number; // 0-100 rating

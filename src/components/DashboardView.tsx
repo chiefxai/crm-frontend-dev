@@ -57,6 +57,7 @@ export default function DashboardView({
   orgSettings
 }: DashboardViewProps) {
   const [insights, setInsights] = useState<string>('');
+  const [insightsDegraded, setInsightsDegraded] = useState<boolean>(false);
   const [loadingInsights, setLoadingInsights] = useState<boolean>(false);
   const [metrics, setMetrics] = useState<DashboardMetrics | null>(null);
 
@@ -96,8 +97,10 @@ export default function DashboardView({
       const data = await res.json();
       if (data.success) {
         setInsights(data.insights);
+        setInsightsDegraded(!!data.degraded);
       } else {
         setInsights('Could not generate insights at this moment.');
+        setInsightsDegraded(false);
       }
     } catch (err: any) {
       console.error(err);
@@ -344,6 +347,11 @@ export default function DashboardView({
               </div>
             ) : (
               <div className="text-sm text-slate-300 leading-relaxed font-sans whitespace-pre-line bg-white/5 p-5 rounded-xl border border-white/5 font-mono text-xs">
+                {insights && insightsDegraded && (
+                  <div title="Gemini was unavailable — this brief is a generic placeholder, not a real analysis of your data" className="mb-3 flex items-center gap-1 text-amber-400 bg-amber-500/10 border border-amber-500/30 rounded px-2 py-1 font-sans font-semibold not-italic">
+                    ⚠ Estimated — AI analysis temporarily unavailable, showing a generic brief
+                  </div>
+                )}
                 {insights || 'Strategic advice database is empty. Click "Refresh AI Model" to prompt the advisor.'}
               </div>
             )}

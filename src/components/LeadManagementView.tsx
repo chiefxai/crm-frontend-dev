@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import {
   Search,
   Filter,
@@ -43,6 +43,7 @@ export default function LeadManagementView({
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isScoringLoading, setIsScoringLoading] = useState(false);
   const [selectedCallLog, setSelectedCallLog] = useState<CallLog | null>(null);
+  const csvFileInputRef = useRef<HTMLInputElement>(null);
 
   // New Lead Form state
   const [newLeadName, setNewLeadName] = useState('');
@@ -100,53 +101,85 @@ export default function LeadManagementView({
     setNewLeadEmployer('');
   };
 
-  // Automated CSV Import Simulator
-  const handleCSVImportSimulate = () => {
-    const importedLeads: Lead[] = [
-      {
-        id: `L-${100 + leads.length + 1}`,
-        name: 'Gavin Belson',
-        phone: '+1 (555) 011-2290',
-        email: 'gavin@hooli.xyz',
-        amountRequested: 500000,
-        score: 99,
+  // Real CSV batch import — parses whatever file the user actually
+  // selects (same header/column shape as ContactDirectoryView's
+  // parser: name, phone, email required; amount, employer, income,
+  // credit, dti optional) instead of always injecting fake sample leads.
+  const handleCSVImportClick = () => {
+    csvFileInputRef.current?.click();
+  };
+
+  const parseCSVAndImport = (text: string) => {
+    if (!text.trim()) return;
+
+    const lines = text.trim().split(/\r?\n/);
+    if (lines.length < 2) {
+      alert('CSV must include at least a header row and one data row.');
+      return;
+    }
+
+    const headers = lines[0].toLowerCase().split(',').map((h) => h.trim());
+    const hasName = headers.includes('name');
+    const hasPhone = headers.includes('phone');
+    const hasEmail = headers.includes('email');
+
+    if (!hasName || !hasPhone || !hasEmail) {
+      alert('CSV columns must include: "name", "phone", and "email". Other optional keys: amount, employer, income, credit, dti');
+      return;
+    }
+
+    const importedLeads: Lead[] = [];
+    let rowIndex = leads.length;
+    for (let i = 1; i < lines.length; i++) {
+      if (!lines[i].trim()) continue;
+      const cols = lines[i].split(',').map((c) => c.trim());
+      const rowObj: Record<string, string> = {};
+      headers.forEach((header, idx) => {
+        if (cols[idx] !== undefined) rowObj[header] = cols[idx];
+      });
+
+      rowIndex += 1;
+      importedLeads.push({
+        id: `L-${100 + rowIndex}`,
+        name: rowObj.name || `Lead #${i}`,
+        phone: rowObj.phone || 'N/A',
+        email: rowObj.email || 'N/A',
+        amountRequested: parseFloat(rowObj.amount) || 20000,
+        score: 0,
         source: 'CSV Upload',
         status: 'New',
-        tags: ['Jumbo Loan', 'Tech Exec'],
+        tags: ['Bulk Uploaded'],
         createdAt: new Date().toISOString(),
-        notes: 'Inported via CSV batch underwriting request.',
+        notes: 'Imported via CSV batch upload.',
         financialInfo: {
-          monthlyIncome: 45000,
-          creditScore: 825,
-          employer: 'Hooli Systems',
-          debtToIncome: 0.05
+          employer: rowObj.employer || 'Unspecified',
+          monthlyIncome: parseFloat(rowObj.income) || 5000,
+          creditScore: parseInt(rowObj.credit) || 680,
+          debtToIncome: parseFloat(rowObj.dti) || 0.3
         }
-      },
-      {
-        id: `L-${100 + leads.length + 2}`,
-        name: 'Richard Hendricks',
-        phone: '+1 (555) 012-4411',
-        email: 'richard@piedpiper.io',
-        amountRequested: 20000,
-        score: 65,
-        source: 'CSV Upload',
-        status: 'New',
-        tags: ['Self-Employed'],
-        createdAt: new Date().toISOString(),
-        notes: 'Requested debt consolidation for startup runway.',
-        financialInfo: {
-          monthlyIncome: 3500,
-          creditScore: 660,
-          employer: 'Pied Piper Corp',
-          debtToIncome: 0.40
-        }
-      }
-    ];
+      });
+    }
+
+    if (importedLeads.length === 0) {
+      alert('No valid rows found in the CSV.');
+      return;
+    }
 
     setLeads([...importedLeads, ...leads]);
-    alert(
-      'Successfully parsed and imported 2 new leads from batch loan file (Gavin Belson, Richard Hendricks).'
-    );
+    alert(`Imported ${importedLeads.length} lead${importedLeads.length === 1 ? '' : 's'}: ${importedLeads.map((l) => l.name).join(', ')}.`);
+  };
+
+  const handleCSVFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (evt) => {
+      const text = evt.target?.result as string;
+      parseCSVAndImport(text);
+    };
+    reader.readAsText(file);
+    // Allow re-selecting the same file name to re-trigger onChange next time.
+    e.target.value = '';
   };
 
   // Run dynamic Gemini AI Lead Scorer
@@ -167,7 +200,8 @@ export default function LeadManagementView({
               ...l,
               score: data.score,
               tags: data.tags,
-              notes: `${data.decision}\n\nNotes: ${l.notes}`
+              notes: `${data.decision}\n\nNotes: ${l.notes}`,
+              scoreDegraded: !!data.degraded
             };
           }
           return l;
@@ -178,7 +212,8 @@ export default function LeadManagementView({
           ...lead,
           score: data.score,
           tags: data.tags,
-          notes: `${data.decision}\n\nNotes: ${lead.notes}`
+          notes: `${data.decision}\n\nNotes: ${lead.notes}`,
+          scoreDegraded: !!data.degraded
         });
       }
     } catch (err) {
@@ -227,8 +262,15 @@ export default function LeadManagementView({
           </p>
         </div>
         <div className="flex items-center space-x-3 shrink-0">
+          <input
+            type="file"
+            accept=".csv,text/csv"
+            ref={csvFileInputRef}
+            onChange={handleCSVFileChange}
+            className="hidden"
+          />
           <button
-            onClick={handleCSVImportSimulate}
+            onClick={handleCSVImportClick}
             className="flex items-center px-4 py-2 border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-sm font-semibold rounded-xl shadow-sm transition-all cursor-pointer"
           >
             <Upload className="h-4 w-4 mr-2" />
@@ -344,6 +386,11 @@ export default function LeadManagementView({
                             }`}
                           ></div>
                           <span className="font-bold text-slate-800">{lead.score} / 100</span>
+                          {lead.scoreDegraded && (
+                            <span title="AI scoring was unavailable — this is an estimate from an offline fallback algorithm" className="text-[10px] font-semibold text-amber-600 bg-amber-50 border border-amber-200 rounded px-1.5 py-0.5">
+                              Estimated
+                            </span>
+                          )}
                         </div>
                       ) : (
                         <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-slate-100 text-slate-600">
@@ -442,6 +489,11 @@ export default function LeadManagementView({
                     <div className="text-center">
                       <span className="text-3xl font-extrabold font-display text-emerald-400">{selectedLead.score}</span>
                       <span className="text-xs text-slate-400">/ 100</span>
+                      {selectedLead.scoreDegraded && (
+                        <div title="AI scoring was unavailable — this is an estimate from an offline fallback algorithm" className="text-[10px] font-semibold text-amber-400 mt-1">
+                          Estimated (AI unavailable)
+                        </div>
+                      )}
                     </div>
                   ) : (
                     <button

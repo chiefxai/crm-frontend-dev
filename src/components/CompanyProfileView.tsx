@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
+import { apiFetch } from '../lib/api';
 import {
   Building2,
   Globe,
@@ -22,6 +23,55 @@ import {
 import { OrganizationSettings } from '../types';
 import { motion } from 'motion/react';
 
+interface CompanyProfileFieldConfig {
+  key: string;
+  label: string;
+  hint: string;
+  placeholder: string;
+  default: string[];
+}
+
+interface CompanyProfileConfig {
+  taxIdLabel: string;
+  taxIdPlaceholder: string;
+  license: { key: string; label: string; placeholder: string };
+  rate: { key: string; label: string } | null;
+  risk: { key: string } | null;
+  bioPlaceholder: string;
+  sectors: CompanyProfileFieldConfig;
+  jurisdictions: CompanyProfileFieldConfig;
+}
+
+// Lending fallback shown until the real per-industry config loads from
+// GET /api/settings/org/profile-config (services/industryPacks.js's
+// getCompanyProfileConfig on the backend) — matches its lending entry
+// so there's no visible flash of different field labels on load.
+const DEFAULT_PROFILE_CONFIG: CompanyProfileConfig = {
+  taxIdLabel: 'EIN / Tax Identification Number',
+  taxIdPlaceholder: 'XX-XXXXXXX',
+  license: { key: 'nmlsId', label: 'NMLS License Identifier', placeholder: 'NMLS-XXXXXX' },
+  rate: { key: 'defaultInterestRate', label: 'Default Loan Portfolio APR (%)' },
+  risk: { key: 'riskProfile' },
+  bioPlaceholder: "Describe your lending company's market niche and credit guidelines...",
+  sectors: {
+    key: 'primaryLendingSectors', label: 'Primary Loan Financing Sectors',
+    hint: 'Manage which product classes your organization is authorized to underwrite.',
+    placeholder: 'e.g. Small Business Loans',
+    default: ['Personal Loans', 'Mortgages', 'Auto Refinancing']
+  },
+  jurisdictions: {
+    key: 'regulatoryJurisdictions', label: 'Licensed Operational Jurisdictions',
+    hint: 'Lending operates only within states that match your active regulatory clearances.',
+    placeholder: 'e.g. New York, Arizona',
+    default: ['California', 'Texas', 'Florida', 'New York']
+  }
+};
+
+// Cache the last-fetched config across mounts so switching away from and
+// back to this view doesn't flash the lending default before the real
+// per-industry config re-fetches.
+let cachedProfileConfig: CompanyProfileConfig | null = null;
+
 interface CompanyProfileViewProps {
   orgSettings: OrganizationSettings;
   setOrgSettings: React.Dispatch<React.SetStateAction<OrganizationSettings>>;
@@ -31,12 +81,19 @@ export default function CompanyProfileView({
   orgSettings,
   setOrgSettings
 }: CompanyProfileViewProps) {
+  // Which fields/labels/tag-lists to show — differs per org industry.
+  // formData keeps generic internal field names (`nmlsId`, `defaultInterestRate`,
+  // `riskProfile`) regardless of industry so the Compliance tab (untouched,
+  // lending-only logic) keeps working; only the *label* shown to the user
+  // and the *storage key* used when saving to orgSettings vary by industry.
+  const [config, setConfig] = useState<CompanyProfileConfig>(cachedProfileConfig || DEFAULT_PROFILE_CONFIG);
+
   // Local state copy of all settings to allow saving
   const [formData, setFormData] = useState({
     name: orgSettings.name || '',
     workspaceName: orgSettings.workspaceName || '',
     taxId: orgSettings.taxId || '',
-    nmlsId: orgSettings.nmlsId || '',
+    nmlsId: (orgSettings as any)[(cachedProfileConfig || DEFAULT_PROFILE_CONFIG).license.key] || '',
     foundedYear: orgSettings.foundedYear || '',
     headquarters: orgSettings.headquarters || '',
     website: orgSettings.website || '',
@@ -51,11 +108,37 @@ export default function CompanyProfileView({
   });
 
   const [jurisdictions, setJurisdictions] = useState<string[]>(
-    orgSettings.regulatoryJurisdictions || ['California', 'Texas', 'Florida', 'New York']
+    (orgSettings as any)[(cachedProfileConfig || DEFAULT_PROFILE_CONFIG).jurisdictions.key] || (cachedProfileConfig || DEFAULT_PROFILE_CONFIG).jurisdictions.default
   );
   const [sectors, setSectors] = useState<string[]>(
-    orgSettings.primaryLendingSectors || ['Personal Loans', 'Mortgages', 'Auto Refinancing']
+    (orgSettings as any)[(cachedProfileConfig || DEFAULT_PROFILE_CONFIG).sectors.key] || (cachedProfileConfig || DEFAULT_PROFILE_CONFIG).sectors.default
   );
+
+  // Fetch the real per-industry config, then re-derive form values from
+  // orgSettings under THAT industry's actual storage keys (a non-lending
+  // org's license number lives at e.g. orgSettings.realEstateLicenseId,
+  // not orgSettings.nmlsId).
+  useEffect(() => {
+    let cancelled = false;
+    apiFetch('/api/settings/org/profile-config')
+      .then((r) => r.json())
+      .then((cfg: CompanyProfileConfig) => {
+        if (cancelled || !cfg || !cfg.license) return;
+        cachedProfileConfig = cfg;
+        setConfig(cfg);
+        setFormData((prev) => ({
+          ...prev,
+          nmlsId: (orgSettings as any)[cfg.license.key] || '',
+          defaultInterestRate: cfg.rate ? ((orgSettings as any)[cfg.rate.key] ?? 8.5) : prev.defaultInterestRate,
+          riskProfile: cfg.risk ? ((orgSettings as any)[cfg.risk.key] || 'Moderate') : prev.riskProfile
+        }));
+        setSectors((orgSettings as any)[cfg.sectors.key] || cfg.sectors.default);
+        setJurisdictions((orgSettings as any)[cfg.jurisdictions.key] || cfg.jurisdictions.default);
+      })
+      .catch((err) => console.warn('Failed to load company profile config:', err));
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [orgSettings.industry]);
 
   const [newJurisdiction, setNewJurisdiction] = useState('');
   const [newSector, setNewSector] = useState('');
@@ -111,14 +194,16 @@ export default function CompanyProfileView({
     setIsSaving(true);
     setSaveMessage(null);
 
-    // Simulate saving delay
+    // Brief UX delay before showing the success banner — the actual
+    // persistence happens for real via App.tsx's effect that POSTs
+    // orgSettings to /api/settings/org whenever it changes.
     setTimeout(() => {
       setOrgSettings((prev) => ({
         ...prev,
         name: formData.name,
         workspaceName: formData.workspaceName,
         taxId: formData.taxId,
-        nmlsId: formData.nmlsId,
+        [config.license.key]: formData.nmlsId,
         foundedYear: formData.foundedYear,
         headquarters: formData.headquarters,
         website: formData.website,
@@ -126,12 +211,12 @@ export default function CompanyProfileView({
         supportPhone: formData.supportPhone,
         complianceOfficer: formData.complianceOfficer,
         businessType: formData.businessType,
-        defaultInterestRate: formData.defaultInterestRate,
-        riskProfile: formData.riskProfile as any,
+        ...(config.rate ? { [config.rate.key]: formData.defaultInterestRate } : {}),
+        ...(config.risk ? { [config.risk.key]: formData.riskProfile as any } : {}),
         companyBio: formData.companyBio,
         verificationStatus: formData.verificationStatus as any,
-        regulatoryJurisdictions: jurisdictions,
-        primaryLendingSectors: sectors
+        [config.jurisdictions.key]: jurisdictions,
+        [config.sectors.key]: sectors
       }));
 
       setIsSaving(false);
@@ -218,7 +303,7 @@ export default function CompanyProfileView({
             <h2 className="text-2xl font-bold font-display tracking-tight text-slate-800">Company Information</h2>
           </div>
           <p className="text-sm text-slate-500 mt-1">
-            Configure your lending organization identity, legal EIN licenses, operating sectors, and verify compliance criteria.
+            Configure your organization identity, legal registrations, operating {config.sectors.label.toLowerCase()}, and verify compliance criteria.
           </p>
         </div>
 
@@ -270,10 +355,10 @@ export default function CompanyProfileView({
           </div>
         </div>
 
-        {/* Card 2: NMLS Id */}
+        {/* Card 2: License Id */}
         <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex items-center justify-between">
           <div className="space-y-1">
-            <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block">Lending License</span>
+            <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block">{config.license.label}</span>
             <span className="text-sm font-semibold font-mono text-slate-800">{formData.nmlsId || 'None Provided'}</span>
           </div>
           <div className="h-10 w-10 bg-indigo-50 rounded-xl flex items-center justify-center text-indigo-600">
@@ -284,8 +369,8 @@ export default function CompanyProfileView({
         {/* Card 3: Jurisdictions */}
         <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex items-center justify-between">
           <div className="space-y-1">
-            <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block">Active Regions</span>
-            <span className="text-sm font-semibold text-slate-800">{jurisdictions.length} States licensed</span>
+            <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block">{config.jurisdictions.label}</span>
+            <span className="text-sm font-semibold text-slate-800">{jurisdictions.length} configured</span>
           </div>
           <div className="h-10 w-10 bg-emerald-50 rounded-xl flex items-center justify-center text-emerald-600">
             <MapPin className="h-5 w-5" />
@@ -430,41 +515,45 @@ export default function CompanyProfileView({
                     </div>
                   </div>
 
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide flex items-center justify-between">
-                      <span>Default Loan Portfolio APR (%)</span>
-                      <span className="text-[10px] text-blue-600 font-mono">Platform Standard</span>
-                    </label>
-                    <div className="relative">
-                      <input
-                        type="number"
-                        step="0.01"
-                        name="defaultInterestRate"
-                        value={formData.defaultInterestRate}
-                        onChange={handleInputChange}
-                        placeholder="e.g. 7.99"
-                        className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-9 pr-3 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500 font-mono"
-                      />
-                      <Percent className="absolute left-3 top-2.5 h-3.5 w-3.5 text-slate-400" />
+                  {config.rate && (
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide flex items-center justify-between">
+                        <span>{config.rate.label}</span>
+                        <span className="text-[10px] text-blue-600 font-mono">Platform Standard</span>
+                      </label>
+                      <div className="relative">
+                        <input
+                          type="number"
+                          step="0.01"
+                          name="defaultInterestRate"
+                          value={formData.defaultInterestRate}
+                          onChange={handleInputChange}
+                          placeholder="e.g. 7.99"
+                          className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-9 pr-3 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500 font-mono"
+                        />
+                        <Percent className="absolute left-3 top-2.5 h-3.5 w-3.5 text-slate-400" />
+                      </div>
                     </div>
-                  </div>
+                  )}
 
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Underwriting Risk Appetite</label>
-                    <div className="relative">
-                      <select
-                        name="riskProfile"
-                        value={formData.riskProfile}
-                        onChange={handleInputChange}
-                        className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-9 pr-3 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500 cursor-pointer"
-                      >
-                        <option value="Conservative">Conservative (Lower Default, Lower Return)</option>
-                        <option value="Moderate">Moderate (Standard Balanced Model)</option>
-                        <option value="Aggressive">Aggressive (High Yield, Sub-Prime Tolerance)</option>
-                      </select>
-                      <TrendingUp className="absolute left-3 top-2.5 h-3.5 w-3.5 text-slate-400" />
+                  {config.risk && (
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Underwriting Risk Appetite</label>
+                      <div className="relative">
+                        <select
+                          name="riskProfile"
+                          value={formData.riskProfile}
+                          onChange={handleInputChange}
+                          className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-9 pr-3 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500 cursor-pointer"
+                        >
+                          <option value="Conservative">Conservative (Lower Default, Lower Return)</option>
+                          <option value="Moderate">Moderate (Standard Balanced Model)</option>
+                          <option value="Aggressive">Aggressive (High Yield, Sub-Prime Tolerance)</option>
+                        </select>
+                        <TrendingUp className="absolute left-3 top-2.5 h-3.5 w-3.5 text-slate-400" />
+                      </div>
                     </div>
-                  </div>
+                  )}
                 </div>
 
                 {/* Bio text */}
@@ -475,16 +564,16 @@ export default function CompanyProfileView({
                     value={formData.companyBio}
                     onChange={handleInputChange}
                     rows={4}
-                    placeholder="Describe your lending company's market niche and credit guidelines..."
+                    placeholder={config.bioPlaceholder}
                     className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
                   />
                 </div>
 
-                {/* Lending Sectors Sub-section */}
+                {/* Sectors Sub-section (per-industry: lending sectors, property types, product categories, etc.) */}
                 <div className="space-y-3 pt-3 border-t border-slate-100">
                   <div>
-                    <h4 className="text-xs font-bold text-slate-700 uppercase tracking-wider">Primary Loan Financing Sectors</h4>
-                    <p className="text-[11px] text-slate-400 mt-0.5">Manage which product classes your organization is authorized to underwriting.</p>
+                    <h4 className="text-xs font-bold text-slate-700 uppercase tracking-wider">{config.sectors.label}</h4>
+                    <p className="text-[11px] text-slate-400 mt-0.5">{config.sectors.hint}</p>
                   </div>
 
                   <div className="flex flex-wrap gap-2">
@@ -505,7 +594,7 @@ export default function CompanyProfileView({
                   <div className="flex max-w-sm gap-2">
                     <input
                       type="text"
-                      placeholder="e.g. Small Business Loans"
+                      placeholder={config.sectors.placeholder}
                       value={newSector}
                       onChange={(e) => setNewSector(e.target.value)}
                       className="flex-1 bg-slate-50 border border-slate-200 rounded-xl px-3 py-1.5 text-xs focus:outline-none"
@@ -537,25 +626,25 @@ export default function CompanyProfileView({
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-1.5">
-                    <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide">EIN / Tax Identification Number</label>
+                    <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide">{config.taxIdLabel}</label>
                     <input
                       type="text"
                       name="taxId"
                       value={formData.taxId}
                       onChange={handleInputChange}
-                      placeholder="XX-XXXXXXX"
+                      placeholder={config.taxIdPlaceholder}
                       className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500 font-mono"
                     />
                   </div>
 
                   <div className="space-y-1.5">
-                    <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide">NMLS License Identifier</label>
+                    <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide">{config.license.label}</label>
                     <input
                       type="text"
                       name="nmlsId"
                       value={formData.nmlsId}
                       onChange={handleInputChange}
-                      placeholder="NMLS-XXXXXX"
+                      placeholder={config.license.placeholder}
                       className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500 font-mono"
                     />
                   </div>
@@ -588,11 +677,11 @@ export default function CompanyProfileView({
                   </div>
                 </div>
 
-                {/* Licensed Jurisdictions List */}
+                {/* Jurisdictions / Service Areas List (label & storage key vary per industry) */}
                 <div className="space-y-3 pt-3 border-t border-slate-100">
                   <div>
-                    <h4 className="text-xs font-bold text-slate-700 uppercase tracking-wider">Licensed Operational Jurisdictions</h4>
-                    <p className="text-[11px] text-slate-400 mt-0.5">Lending operates only within states that match your active regulatory clearances.</p>
+                    <h4 className="text-xs font-bold text-slate-700 uppercase tracking-wider">{config.jurisdictions.label}</h4>
+                    <p className="text-[11px] text-slate-400 mt-0.5">{config.jurisdictions.hint}</p>
                   </div>
 
                   <div className="flex flex-wrap gap-2">
@@ -613,7 +702,7 @@ export default function CompanyProfileView({
                   <div className="flex max-w-sm gap-2">
                     <input
                       type="text"
-                      placeholder="e.g. New York, Arizona"
+                      placeholder={config.jurisdictions.placeholder}
                       value={newJurisdiction}
                       onChange={(e) => setNewJurisdiction(e.target.value)}
                       className="flex-1 bg-slate-50 border border-slate-200 rounded-xl px-3 py-1.5 text-xs focus:outline-none"
@@ -695,7 +784,7 @@ export default function CompanyProfileView({
                   <div className="space-y-1">
                     <p className="font-bold">Dynamic Lead CRM Alignment</p>
                     <p className="text-blue-700/85">
-                      Changing support channels automatically routes outbound customer callbacks, auto-responses, and generated loan agreements to use these contact credentials dynamically.
+                      Changing support channels automatically routes outbound customer callbacks, auto-responses, and generated documents to use these contact credentials dynamically.
                     </p>
                   </div>
                 </div>
