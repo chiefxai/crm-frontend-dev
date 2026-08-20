@@ -33,7 +33,7 @@ import {
   PhoneForwarded
 } from 'lucide-react';
 import { Lead, CallLog, VirtualNumber, TeamMember } from '../types';
-import { apiFetch } from '../lib/api';
+import { apiFetch, getPlayableRecordingUrl } from '../lib/api';
 import { callCostInr, formatInr } from '../lib/pricing';
 
 interface DialerSimulatorProps {
@@ -654,6 +654,18 @@ Currently on question ${nextIndex} out of ${selectedTask.questions.length}. Next
     ? realInboundCallLogs.find((log) => log.id === playingTapeId)
     : selectedTask?.callResults[playingTapeId || ''];
 
+  // Inbound tape entries are real CallLog rows (have a stable call_logs
+  // id), so Vobiz-hosted recordings can go through the authenticated
+  // proxy (see getPlayableRecordingUrl — media.vobiz.ai requires headers
+  // a plain <audio src> can't send). Outbound dialer-task results don't
+  // carry that id, so those still use the raw URL — a pre-existing gap,
+  // not something introduced here.
+  const playableTapeRecordingUrl = activeTapeResult?.recordingUrl
+    ? (playingTapeType === 'inbound'
+        ? getPlayableRecordingUrl((activeTapeResult as CallLog).id, activeTapeResult.recordingUrl)
+        : activeTapeResult.recordingUrl)
+    : undefined;
+
   const activeTapeLead = playingTapeType === 'inbound'
     ? null
     : leadsDatabase.find((l) => l.id === playingTapeId);
@@ -760,10 +772,10 @@ Currently on question ${nextIndex} out of ${selectedTask.questions.length}. Next
                 recording via activeTapeResult.recordingUrl; no recording
                 means no playback, not a simulated animation. */}
             <div className="flex-1 max-w-2xl bg-slate-50 border border-slate-200 rounded-xl p-3 flex items-center gap-4">
-              {activeTapeResult.recordingUrl && (
+              {playableTapeRecordingUrl && (
                 <audio
                   ref={audioElRef}
-                  src={activeTapeResult.recordingUrl}
+                  src={playableTapeRecordingUrl}
                   preload="metadata"
                   onLoadedMetadata={(e) => setTapeDuration(e.currentTarget.duration || 0)}
                   onTimeUpdate={(e) => {
@@ -781,9 +793,9 @@ Currently on question ${nextIndex} out of ${selectedTask.questions.length}. Next
               {/* Play/Pause Button */}
               <button
                 onClick={() => setIsTapePlaying(!isTapePlaying)}
-                disabled={!activeTapeResult.recordingUrl}
+                disabled={!playableTapeRecordingUrl}
                 className="h-9 w-9 shrink-0 rounded-lg flex items-center justify-center bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40 disabled:cursor-not-allowed text-white transition-all cursor-pointer active:scale-95 shadow-md shadow-emerald-600/10"
-                title={!activeTapeResult.recordingUrl ? 'No recording available' : isTapePlaying ? 'Pause Tape' : 'Play Tape'}
+                title={!playableTapeRecordingUrl ? 'No recording available' : isTapePlaying ? 'Pause Tape' : 'Play Tape'}
               >
                 {isTapePlaying ? (
                   <Pause className="h-4 w-4 fill-white text-white" />
