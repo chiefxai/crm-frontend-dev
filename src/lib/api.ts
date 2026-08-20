@@ -19,6 +19,19 @@ export function clearAuthToken(): void {
   localStorage.removeItem(TOKEN_KEY);
 }
 
+// Vobiz-hosted recordings (media.vobiz.ai) require X-Auth-ID/X-Auth-Token
+// headers the browser can't attach to a plain <audio src> — the backend's
+// /api/vobiz/recording/:callLogId route proxies them instead, authenticated
+// via ?token= (the same query-param fallback used for EventSource, since
+// <audio> can't set an Authorization header either). Non-Vobiz recordings
+// (e.g. older Supabase-hosted ones) are already public — use the URL as-is.
+export function getPlayableRecordingUrl(callLogId: string, recordingUrl: string): string {
+  if (!recordingUrl.includes('media.vobiz.ai')) return recordingUrl;
+  const apiBase = (import.meta as any).env.VITE_API_URL || '';
+  const token = getAuthToken();
+  return `${apiBase}/api/vobiz/recording/${callLogId}${token ? `?token=${encodeURIComponent(token)}` : ''}`;
+}
+
 export async function apiFetch(url: string, options: RequestInit = {}): Promise<Response> {
   const token = getAuthToken();
   const headers = new Headers(options.headers || {});

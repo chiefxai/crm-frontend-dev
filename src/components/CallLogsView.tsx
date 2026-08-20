@@ -3,6 +3,7 @@ import { Phone, Search, X, PlayCircle } from 'lucide-react';
 import { CallLog } from '../types';
 import PageHeader from './PageHeader';
 import { callCostInr, formatInr } from '../lib/pricing';
+import { getPlayableRecordingUrl } from '../lib/api';
 
 interface CallLogsViewProps {
   callLogs: CallLog[];
@@ -106,7 +107,7 @@ export default function CallLogsView({ callLogs }: CallLogsViewProps) {
               {selected.recordingUrl && (
                 <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 flex items-center gap-3">
                   <PlayCircle className="h-5 w-5 text-blue-600 shrink-0" />
-                  <audio controls src={selected.recordingUrl} className="w-full h-8" />
+                  <audio controls src={getPlayableRecordingUrl(selected.id, selected.recordingUrl)} className="w-full h-8" />
                 </div>
               )}
               <div>
