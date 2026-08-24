@@ -349,6 +349,17 @@ export default function App() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(virtualNumbers)
+      }).then(async (res) => {
+        if (res.ok) return;
+        // A number already owned by another org gets rejected here — the
+        // Connect button that triggered this only checked the channels-
+        // connect response, not this sync, so without surfacing the error
+        // and re-pulling server truth the UI kept showing the rejected
+        // number as if it had actually saved.
+        const body = await res.json().catch(() => ({}));
+        alert(body.error || 'Failed to save virtual number(s) — reverting to last saved state.');
+        const fresh = await apiFetch('/api/settings/numbers').then((r) => r.json()).catch(() => null);
+        if (Array.isArray(fresh)) setVirtualNumbers(fresh);
       }).catch(err => console.error("Error syncing virtual numbers:", err));
     }
   }, [virtualNumbers, hasLoaded]);
