@@ -7,16 +7,21 @@
 
 const TOKEN_KEY = 'chiefx_auth_token';
 
+// sessionStorage, not localStorage — it's per-tab. localStorage is shared
+// across every tab of the same browser, so logging into a second org in
+// another tab silently overwrote the token for tabs already open on a
+// different org, making them authenticate (and display data) as the wrong
+// organization.
 export function getAuthToken(): string | null {
-  return localStorage.getItem(TOKEN_KEY);
+  return sessionStorage.getItem(TOKEN_KEY);
 }
 
 export function setAuthToken(token: string): void {
-  localStorage.setItem(TOKEN_KEY, token);
+  sessionStorage.setItem(TOKEN_KEY, token);
 }
 
 export function clearAuthToken(): void {
-  localStorage.removeItem(TOKEN_KEY);
+  sessionStorage.removeItem(TOKEN_KEY);
 }
 
 // Vobiz-hosted recordings (media.vobiz.ai) require X-Auth-ID/X-Auth-Token
