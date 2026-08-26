@@ -1,19 +1,21 @@
 import React, { useState } from 'react';
-import { Globe2, LayoutDashboard, Building2, Users, PhoneCall, ScrollText, LogOut } from 'lucide-react';
+import { Globe2, LayoutDashboard, Building2, Users, PhoneCall, ScrollText, LogOut, Settings } from 'lucide-react';
 import OverviewPage from './OverviewPage';
 import OrganizationsPage from './OrganizationsPage';
 import UsersPage from './UsersPage';
 import CallsPage from './CallsPage';
 import ActivityPage from './ActivityPage';
+import SettingsPage from './SettingsPage';
 
-type Page = 'overview' | 'organizations' | 'users' | 'calls' | 'activity';
+type Page = 'overview' | 'organizations' | 'users' | 'calls' | 'activity' | 'settings';
 
 const NAV: { id: Page; label: string; icon: React.ElementType }[] = [
   { id: 'overview', label: 'Overview', icon: LayoutDashboard },
   { id: 'organizations', label: 'Organizations', icon: Building2 },
   { id: 'users', label: 'Users', icon: Users },
   { id: 'calls', label: 'Calls & Recordings', icon: PhoneCall },
-  { id: 'activity', label: 'Activity', icon: ScrollText }
+  { id: 'activity', label: 'Activity', icon: ScrollText },
+  { id: 'settings', label: 'Pricing & Features', icon: Settings }
 ];
 
 const PAGE_TITLES: Record<Page, string> = {
@@ -21,7 +23,8 @@ const PAGE_TITLES: Record<Page, string> = {
   organizations: 'Organizations',
   users: 'Users',
   calls: 'Calls & Recordings',
-  activity: 'Activity'
+  activity: 'Activity',
+  settings: 'Pricing & Features'
 };
 
 export default function AdminShell({ email, onLogout }: { email: string; onLogout: () => void }) {
@@ -77,6 +80,7 @@ export default function AdminShell({ email, onLogout }: { email: string; onLogou
           {page === 'users' && <UsersPage />}
           {page === 'calls' && <CallsPage />}
           {page === 'activity' && <ActivityPage />}
+          {page === 'settings' && <SettingsPage />}
         </div>
       </main>
     </div>
