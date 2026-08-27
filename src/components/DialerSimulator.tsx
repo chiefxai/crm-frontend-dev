@@ -449,8 +449,14 @@ Real Tamil speakers do not say the "correct" written form of a word. They contra
     handleHangupCall();
   };
 
-  // Hangup call and save detailed conversation history, questionnaire answers, and tape logs
-  const handleHangupCall = () => {
+  // Hangup call and save detailed conversation history, questionnaire answers, and tape logs.
+  // `realCallLog` — when this was triggered by the real "call_completed" SSE
+  // event (see the effect above) — carries the actual backend-saved call
+  // data (recording, duration, sentiment). Without it, the outbound tape
+  // player always showed "No recording available" even though the call
+  // really was recorded: this function only ever wrote the local
+  // simulated timer/transcript, never the real Supabase-hosted recording URL.
+  const handleHangupCall = (realCallLog?: { recordingUrl?: string; duration?: number; sentiment?: string; summary?: string }) => {
     if (!activeLead) return;
     setCallState('completed');
 
@@ -477,12 +483,13 @@ Real Tamil speakers do not say the "correct" written form of a word. They contra
             ...task.callResults,
             [activeLead.id]: {
               status: 'Completed' as const,
-              duration: duration,
+              duration: realCallLog?.duration ?? duration,
               transcript: transcript,
-              sentiment: currentSentiment,
+              sentiment: (realCallLog?.sentiment as typeof currentSentiment) || currentSentiment,
               intent: currentIntent,
-              summary: summaryText,
-              answers: { ...extractedAnswers }
+              summary: realCallLog?.summary || summaryText,
+              answers: { ...extractedAnswers },
+              recordingUrl: realCallLog?.recordingUrl
             }
           }
         };
@@ -498,12 +505,13 @@ Real Tamil speakers do not say the "correct" written form of a word. They contra
       leadId: activeLead.id,
       leadName: activeLead.name,
       campaignId: selectedTask.id,
-      duration: duration,
+      duration: realCallLog?.duration ?? duration,
       status: 'Completed',
-      sentiment: currentSentiment,
+      sentiment: (realCallLog?.sentiment as typeof currentSentiment) || currentSentiment,
       intent: currentIntent,
       transcript: transcript,
-      summary: summaryText,
+      summary: realCallLog?.summary || summaryText,
+      recordingUrl: realCallLog?.recordingUrl,
       createdAt: new Date().toISOString()
     };
 
@@ -701,7 +709,12 @@ Currently on question ${nextIndex} out of ${selectedTask.questions.length}. Next
         const log = data.callLog;
         if (log.direction !== 'outbound') return;
         if (sanitize(log.leadName || '') !== activePhone) return;
-        handleHangupCall();
+        handleHangupCall({
+          recordingUrl: log.recordingUrl,
+          duration: log.duration,
+          sentiment: log.sentiment,
+          summary: log.summary
+        });
       } catch {
         // non-JSON keepalive/init messages — ignore
       }
