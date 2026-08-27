@@ -26,6 +26,14 @@ interface ObjectStage {
   label: string;
 }
 
+interface ObjectField {
+  id: string;
+  key: string;
+  label: string;
+  type: string;
+  required?: boolean;
+}
+
 function firstDefined(record: ObjectRecord, keys: string[]): string {
   for (const key of keys) {
     if (record[key]) return String(record[key]);
@@ -66,4 +74,29 @@ export function leadToRecordPatch(lead: Lead, stages: ObjectStage[]): { stageKey
   const stage = stages.find((s) => s.label.toLowerCase() === lead.status.toLowerCase());
   if (stage) patch.stageKey = stage.key;
   return patch;
+}
+
+// Builds the POST body for a brand-new contact added via LeadManagementView
+// or CSV bulk import. Field keys vary per industry pack (e.g. "contactName"
+// vs "customerName"), so — same approach as recordToLead's firstDefined —
+// this resolves the right field to write into by TYPE (phone/email/
+// currency) rather than assuming one fixed key name. Without this, new
+// contacts for any non-lending org were only ever added to local/localStorage
+// state (leadToRecordPatch has no way to create a record, only update
+// tags/notes/stage on one that already exists) — they never actually
+// reached the database at all.
+export function leadToRecordCreate(lead: Lead, fields: ObjectField[]): Record<string, any> {
+  const data: Record<string, any> = { tags: lead.tags || [], notes: lead.notes || '' };
+
+  const nameField = fields.find((f) => f.type === 'text' && f.required) || fields.find((f) => f.type === 'text');
+  const phoneField = fields.find((f) => f.type === 'phone') || fields.find((f) => f.key === 'phone');
+  const emailField = fields.find((f) => f.type === 'email') || fields.find((f) => f.key === 'email');
+  const amountField = fields.find((f) => f.type === 'currency' || f.type === 'number');
+
+  if (nameField) data[nameField.key] = lead.name;
+  if (phoneField) data[phoneField.key] = lead.phone;
+  if (emailField && lead.email) data[emailField.key] = lead.email;
+  if (amountField && lead.amountRequested) data[amountField.key] = lead.amountRequested;
+
+  return data;
 }

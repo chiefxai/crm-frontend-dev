@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { apiFetch, clearAuthToken, getAuthToken } from './lib/api';
 import { loadFromStorage, saveToStorage } from './lib/storage';
-import { recordToLead, leadToRecordPatch } from './lib/objectContacts';
+import { recordToLead, leadToRecordPatch, leadToRecordCreate } from './lib/objectContacts';
 import {
   Lead,
   Workflow,
@@ -108,7 +108,7 @@ export default function App() {
   // lib/objectContacts.ts) and synced back to it instead of /api/leads,
   // so the Voice Simulator (and anything else reading `leads`) has real
   // data to work with for every industry, not just lending.
-  const [primaryObject, setPrimaryObject] = useState<{ key: string; stages: { id: string; key: string; label: string }[] } | null>(null);
+  const [primaryObject, setPrimaryObject] = useState<{ key: string; stages: { id: string; key: string; label: string }[]; fields: { id: string; key: string; label: string; type: string; required?: boolean }[] } | null>(null);
 
   const [hasLoaded, setHasLoaded] = useState<boolean>(false);
 
@@ -186,7 +186,7 @@ export default function App() {
             if (primary) {
               const records = await apiFetch(`/api/objects/${primary.key}/records`).then(r => r.json());
               setLeads(Array.isArray(records) ? records.map((r: any) => recordToLead(r, primary.stages)) : []);
-              setPrimaryObject({ key: primary.key, stages: primary.stages });
+              setPrimaryObject({ key: primary.key, stages: primary.stages, fields: primary.fields || [] });
             }
           } catch (err) {
             console.warn("Failed to load Industry Objects records:", err);
@@ -272,11 +272,33 @@ export default function App() {
       // real record instead of /api/leads/sync, which would write into
       // the (unused, for this org) lending leads table.
       leads.forEach((lead) => {
-        apiFetch(`/api/objects/${primaryObject.key}/records/${lead.id}`, {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(leadToRecordPatch(lead, primaryObject.stages))
-        }).catch(err => console.error("Error syncing object record:", err));
+        // Contacts added via LeadManagementView/CSV import get a
+        // client-generated "L-<n>" id (see handleAddLead) that was never
+        // a real object_records row — PATCHing that id 404s silently, so
+        // the new contact only ever lived in local/localStorage state and
+        // never actually reached the database. Create it for real first,
+        // then swap in the record's actual id so every later edit PATCHes
+        // correctly.
+        if (lead.id.startsWith('L-')) {
+          apiFetch(`/api/objects/${primaryObject.key}/records`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(leadToRecordCreate(lead, primaryObject.fields))
+          })
+            .then(r => r.json())
+            .then(record => {
+              if (record?.id) {
+                setLeads(prev => prev.map(l => (l.id === lead.id ? { ...l, id: record.id } : l)));
+              }
+            })
+            .catch(err => console.error("Error creating object record:", err));
+        } else {
+          apiFetch(`/api/objects/${primaryObject.key}/records/${lead.id}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(leadToRecordPatch(lead, primaryObject.stages))
+          }).catch(err => console.error("Error syncing object record:", err));
+        }
       });
     } else {
       apiFetch('/api/leads/sync', {
