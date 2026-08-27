@@ -33,7 +33,7 @@ import {
   PhoneForwarded
 } from 'lucide-react';
 import { Lead, CallLog, VirtualNumber, TeamMember } from '../types';
-import { apiFetch, getPlayableRecordingUrl } from '../lib/api';
+import { apiFetch, getAuthToken, getPlayableRecordingUrl } from '../lib/api';
 import { callCostInr, formatInr } from '../lib/pricing';
 
 interface DialerSimulatorProps {
@@ -675,6 +675,40 @@ Currently on question ${nextIndex} out of ${selectedTask.questions.length}. Next
     if (/vobiz/i.test(num?.provider || '')) handleInitiateVobizCall(lead);
     else handleInitiateTwilioCall(lead);
   };
+
+  // Detects the REAL end of a live outbound call (the AI hanging up via
+  // end_call, or the callee hanging up) — without this, `callState` only
+  // ever flipped to 'completed' from a manual "Hang Up" button click, so
+  // Continuous Dialer Mode would sit stuck on 'connected' forever for any
+  // call the AI ended on its own, never advancing to the next lead. The
+  // backend already broadcasts a real "call_completed" event once the call
+  // is actually logged (services/vobizProxy.js / twilioProxy.js,
+  // regardless of who hung up) — this just listens for it and matches it
+  // to the lead currently on the line.
+  useEffect(() => {
+    if (callState !== 'connected' || !activeLead) return;
+    const token = getAuthToken();
+    if (!token) return;
+
+    const sanitize = (n: string) => (n || '').replace(/[\s\-\(\)\+]+/g, '');
+    const activePhone = sanitize(activeLead.phone);
+
+    const source = new EventSource(`/api/logs-stream?token=${encodeURIComponent(token)}`);
+    source.onmessage = (event) => {
+      try {
+        const data = JSON.parse(event.data);
+        if (data.type !== 'call_completed' || !data.callLog) return;
+        const log = data.callLog;
+        if (log.direction !== 'outbound') return;
+        if (sanitize(log.leadName || '') !== activePhone) return;
+        handleHangupCall();
+      } catch {
+        // non-JSON keepalive/init messages — ignore
+      }
+    };
+    return () => source.close();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [callState, activeLead]);
 
   // Continuous auto-dial: once a call finishes, if autoDialOn is set, move
   // to the next pending lead and place the call immediately — no manual
