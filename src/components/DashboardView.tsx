@@ -8,7 +8,9 @@ import {
   DollarSign,
   UserCheck,
   RefreshCw,
-  Clock
+  Clock,
+  Flame,
+  Phone
 } from 'lucide-react';
 import {
   AreaChart,
@@ -41,12 +43,24 @@ interface ObjectMetrics {
   recordsTrend: { month: string; count: number }[];
 }
 
+interface InterestedClient {
+  leadId: string;
+  name: string;
+  phone: string | null;
+  amountRequested: number | null;
+  score: number | null;
+  intent: string | null;
+  lastCallSummary: string | null;
+  lastCallAt: string;
+}
+
 interface DashboardMetrics {
   portfolioTrend: { month: string; totalDisbursed: number; loanCount: number }[];
   channelPerformance: { source: string; count: number }[];
   callsToday: number;
   positiveSentimentPct: number | null;
   objectMetrics: ObjectMetrics[];
+  topInterestedClients: InterestedClient[];
 }
 
 export default function DashboardView({
@@ -63,7 +77,10 @@ export default function DashboardView({
 
   useEffect(() => {
     apiFetch('/api/dashboard/metrics')
-      .then((r) => r.json())
+      .then((r) => {
+        if (!r.ok) throw new Error(`Dashboard metrics request failed (${r.status})`);
+        return r.json();
+      })
       .then((data: DashboardMetrics) => setMetrics(data))
       .catch((err) => console.error('Failed to load dashboard metrics:', err));
   }, [leads.length, loans.length, callLogs.length]);
@@ -230,7 +247,7 @@ export default function DashboardView({
           </div>
           <div className="h-72 w-full">
             {isLending ? (
-              metrics && metrics.portfolioTrend.some((m) => m.loanCount > 0) ? (
+              metrics?.portfolioTrend && metrics.portfolioTrend.some((m) => m.loanCount > 0) ? (
                 <ResponsiveContainer width="100%" height="100%">
                   <AreaChart data={metrics.portfolioTrend} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                     <defs>
@@ -287,7 +304,7 @@ export default function DashboardView({
           </div>
           <div className="h-72 w-full">
             {isLending ? (
-              metrics && metrics.channelPerformance.length > 0 ? (
+              metrics?.channelPerformance && metrics.channelPerformance.length > 0 ? (
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={metrics.channelPerformance} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
@@ -318,6 +335,75 @@ export default function DashboardView({
               </div>
             )}
           </div>
+        </div>
+
+        {/* Interested Clients — ranked by sentiment + lead score */}
+        <div className="lg:col-span-12 col-span-12 bg-white p-6 rounded-2xl border border-slate-200 shadow-sm hover:shadow-md transition-all">
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <h4 className="text-md font-bold text-slate-800 font-display flex items-center gap-2">
+                <span className="bg-rose-50 text-rose-600 p-1.5 rounded-lg">
+                  <Flame className="h-4 w-4" />
+                </span>
+                Interested Clients
+              </h4>
+              <p className="text-xs text-slate-400 mt-1">
+                Leads whose most recent call had positive sentiment — ranked by lead score, call them back first.
+              </p>
+            </div>
+          </div>
+          {metrics?.topInterestedClients && metrics.topInterestedClients.length > 0 ? (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="text-left text-xs text-slate-400 uppercase tracking-wider border-b border-slate-100">
+                    <th className="pb-2 font-medium">Name</th>
+                    <th className="pb-2 font-medium">Phone</th>
+                    <th className="pb-2 font-medium">Score</th>
+                    <th className="pb-2 font-medium">Amount</th>
+                    <th className="pb-2 font-medium">Intent</th>
+                    <th className="pb-2 font-medium">Last Call Summary</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {metrics.topInterestedClients.map((client) => (
+                    <tr key={client.leadId} className="border-b border-slate-50 last:border-0">
+                      <td className="py-2.5 font-semibold text-slate-800">{client.name}</td>
+                      <td className="py-2.5 text-slate-500">
+                        {client.phone ? (
+                          <span className="flex items-center gap-1">
+                            <Phone className="h-3 w-3 text-slate-400" /> {client.phone}
+                          </span>
+                        ) : (
+                          '—'
+                        )}
+                      </td>
+                      <td className="py-2.5">
+                        {client.score != null ? (
+                          <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-600">
+                            {client.score}
+                          </span>
+                        ) : (
+                          '—'
+                        )}
+                      </td>
+                      <td className="py-2.5 text-slate-600">
+                        {client.amountRequested != null ? formatInr(client.amountRequested) : '—'}
+                      </td>
+                      <td className="py-2.5 text-slate-500">{client.intent || '—'}</td>
+                      <td className="py-2.5 text-slate-500 max-w-xs truncate" title={client.lastCallSummary || ''}>
+                        {client.lastCallSummary || '—'}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <div className="py-8 text-center text-sm text-slate-400">
+              No positive-sentiment calls yet — interested clients will show up here as calls are analyzed.
+            </div>
+          )}
         </div>
 
         {/* Gemini Strategic Advisory Desk (Styled exactly like Bento AI Calling Monitor) */}
