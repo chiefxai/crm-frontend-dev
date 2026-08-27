@@ -33,7 +33,7 @@ import {
   PhoneForwarded
 } from 'lucide-react';
 import { Lead, CallLog, VirtualNumber, TeamMember } from '../types';
-import { apiFetch, getAuthToken, getPlayableRecordingUrl } from '../lib/api';
+import { apiFetch, getAuthToken, getApiBase, getPlayableRecordingUrl } from '../lib/api';
 import { callCostInr, formatInr } from '../lib/pricing';
 
 interface DialerSimulatorProps {
@@ -701,7 +701,7 @@ Currently on question ${nextIndex} out of ${selectedTask.questions.length}. Next
     const sanitize = (n: string) => (n || '').replace(/[\s\-\(\)\+]+/g, '');
     const activePhone = sanitize(activeLead.phone);
 
-    const source = new EventSource(`/api/logs-stream?token=${encodeURIComponent(token)}`);
+    const source = new EventSource(`${getApiBase()}/api/logs-stream?token=${encodeURIComponent(token)}`);
     source.onmessage = (event) => {
       try {
         const data = JSON.parse(event.data);

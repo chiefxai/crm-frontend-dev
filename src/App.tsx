@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { apiFetch, clearAuthToken, getAuthToken } from './lib/api';
+import { apiFetch, clearAuthToken, getAuthToken, getApiBase } from './lib/api';
 import { loadFromStorage, saveToStorage } from './lib/storage';
 import { recordToLead, leadToRecordPatch, leadToRecordCreate } from './lib/objectContacts';
 import {
@@ -212,7 +212,7 @@ export default function App() {
     const token = getAuthToken();
     if (!token) return;
 
-    const source = new EventSource(`/api/logs-stream?token=${encodeURIComponent(token)}`);
+    const source = new EventSource(`${getApiBase()}/api/logs-stream?token=${encodeURIComponent(token)}`);
     source.onmessage = (event) => {
       try {
         const data = JSON.parse(event.data);

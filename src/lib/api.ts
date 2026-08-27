@@ -24,6 +24,18 @@ export function clearAuthToken(): void {
   sessionStorage.removeItem(TOKEN_KEY);
 }
 
+// The backend origin, when the frontend is deployed separately from it
+// (e.g. crm.elvoryx.in vs api.elvoryx.in) — empty string when they share
+// an origin (local dev via Vite's proxy). Needed anywhere a browser API
+// takes a URL directly rather than going through apiFetch/window.fetch —
+// EventSource and <audio src> don't go through the app's fetch
+// interceptor (main.tsx), so a plain "/api/..." path resolves against
+// the CURRENT page's origin, not the backend, and silently 404s once the
+// two are split across domains.
+export function getApiBase(): string {
+  return (import.meta as any).env.VITE_API_URL || '';
+}
+
 // Vobiz-hosted recordings (media.vobiz.ai) require X-Auth-ID/X-Auth-Token
 // headers the browser can't attach to a plain <audio src> — the backend's
 // /api/vobiz/recording/:callLogId route proxies them instead, authenticated
@@ -32,7 +44,7 @@ export function clearAuthToken(): void {
 // (e.g. older Supabase-hosted ones) are already public — use the URL as-is.
 export function getPlayableRecordingUrl(callLogId: string, recordingUrl: string): string {
   if (!recordingUrl.includes('media.vobiz.ai')) return recordingUrl;
-  const apiBase = (import.meta as any).env.VITE_API_URL || '';
+  const apiBase = getApiBase();
   const token = getAuthToken();
   return `${apiBase}/api/vobiz/recording/${callLogId}${token ? `?token=${encodeURIComponent(token)}` : ''}`;
 }
