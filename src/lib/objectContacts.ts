@@ -45,7 +45,11 @@ export function recordToLead(record: ObjectRecord, stages: ObjectStage[]): Lead 
   const stage = stages.find((s) => s.id === record.stageId);
   return {
     id: record.id,
-    name: firstDefined(record, ['name', 'customerName', 'studentName']) || 'Unnamed Contact',
+    // Every industry pack's name-like field, across every pack currently
+    // defined (services/industryPacks.js) — "contactName" (IT Sales
+    // Leads) was missing here, so every contact for that pack displayed
+    // as "Unnamed Contact" even though the record itself saved correctly.
+    name: firstDefined(record, ['name', 'customerName', 'studentName', 'contactName']) || 'Unnamed Contact',
     phone: firstDefined(record, ['phone', 'parentPhone']),
     email: firstDefined(record, ['email']),
     amountRequested: Number(record.budget || record.orderValue || 0),
