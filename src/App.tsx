@@ -443,6 +443,7 @@ export default function App() {
             leads={leads}
             setLeads={setLeads}
             industry={orgSettings.industry}
+            callLogs={callLogs}
           />
         );
       case 'call-logs':

@@ -20,18 +20,21 @@ import {
   CheckCircle2,
   Sparkles
 } from 'lucide-react';
-import { Lead } from '../types';
+import { Lead, CallLog } from '../types';
+import { getPlayableRecordingUrl } from '../lib/api';
 
 interface ContactDirectoryViewProps {
   leads: Lead[];
   setLeads: React.Dispatch<React.SetStateAction<Lead[]>>;
   industry?: string;
+  callLogs?: CallLog[];
 }
 
 export default function ContactDirectoryView({
   leads,
   setLeads,
-  industry
+  industry,
+  callLogs = []
 }: ContactDirectoryViewProps) {
   // Loan-specific fields (employer/income/credit score/DTI) only make
   // sense for lending — every other industry's contacts are real Industry
@@ -556,6 +559,43 @@ Larry Page,+1 (555) 444-1111,larry@google.com,40000,Google LLC,32000,760,0.20`;
                 <X className="h-5 w-5" />
               </button>
             </div>
+            {editingLead && (() => {
+              const contactCalls = callLogs
+                .filter((log) => log.leadId === editingLead.id)
+                .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+              if (contactCalls.length === 0) return null;
+              return (
+                <div className="px-6 pt-4 pb-2 border-b border-slate-100 bg-slate-50/50">
+                  <div className="text-[10px] font-bold text-slate-500 uppercase mb-2">
+                    Call History ({contactCalls.length})
+                  </div>
+                  <div className="space-y-1.5 max-h-40 overflow-y-auto">
+                    {contactCalls.map((log) => (
+                      <div key={log.id} className="flex items-center justify-between text-xs bg-white border border-slate-200 rounded-lg px-3 py-2">
+                        <div className="flex items-center gap-2 text-slate-600">
+                          <span className="text-[10px] font-mono text-slate-400 uppercase">{log.direction || '—'}</span>
+                          <span>{new Date(log.createdAt).toLocaleString()}</span>
+                          <span className="text-slate-400">· {log.duration}s</span>
+                          <span className={`text-[10px] font-bold ${log.sentiment === 'Positive' ? 'text-emerald-600' : log.sentiment === 'Negative' ? 'text-rose-600' : 'text-slate-500'}`}>
+                            {log.sentiment}
+                          </span>
+                        </div>
+                        {log.recordingUrl && (
+                          <a
+                            href={getPlayableRecordingUrl(log.id, log.recordingUrl)}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="text-blue-600 hover:underline font-medium"
+                          >
+                            Play
+                          </a>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              );
+            })()}
             <form onSubmit={handleSaveContact} className="p-6 space-y-4 max-h-[80vh] overflow-y-auto">
               <div className="grid grid-cols-2 gap-4">
                 <div>
