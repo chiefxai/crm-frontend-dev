@@ -499,23 +499,33 @@ Real Tamil speakers do not say the "correct" written form of a word. They contra
 
     setTasks(updatedTasks);
 
-    // Save globally to call logs
-    const globalLog: CallLog = {
-      id: callLogId,
-      leadId: activeLead.id,
-      leadName: activeLead.name,
-      campaignId: selectedTask.id,
-      duration: realCallLog?.duration ?? duration,
-      status: 'Completed',
-      sentiment: (realCallLog?.sentiment as typeof currentSentiment) || currentSentiment,
-      intent: currentIntent,
-      transcript: transcript,
-      summary: realCallLog?.summary || summaryText,
-      recordingUrl: realCallLog?.recordingUrl,
-      createdAt: new Date().toISOString()
-    };
-
-    setCallLogs([globalLog, ...callLogs]);
+    // Save globally to call logs — but only when there's no real backend
+    // record for this call already. When realCallLog is set (the real
+    // "call_completed" SSE event fired — see the effect above), the
+    // backend's own vobizProxy.js/twilioProxy.js finalizeCall() already
+    // saved the authoritative row (real id, real recording, correct
+    // direction) the moment the call ended. Adding a second synthetic
+    // entry here and syncing it via /api/call-logs/sync (a full
+    // delete-and-reinsert of the whole table) just double-logged every
+    // real call under a second fake "CALL-6xx" id with no direction set
+    // — confirmed live: yesterday's call count included duplicates. The
+    // real entry surfaces on its own next time call logs are reloaded.
+    if (!realCallLog) {
+      const globalLog: CallLog = {
+        id: callLogId,
+        leadId: activeLead.id,
+        leadName: activeLead.name,
+        campaignId: selectedTask.id,
+        duration: duration,
+        status: 'Completed',
+        sentiment: currentSentiment,
+        intent: currentIntent,
+        transcript: transcript,
+        summary: summaryText,
+        createdAt: new Date().toISOString()
+      };
+      setCallLogs([globalLog, ...callLogs]);
+    }
 
     // Update Lead status in leads database
     const updatedDatabase = leadsDatabase.map((l) => {
