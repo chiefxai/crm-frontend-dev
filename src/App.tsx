@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { apiFetch, clearAuthToken, getAuthToken, getApiBase } from './lib/api';
+import { COST_PER_MINUTE_INR_FALLBACK as COST_PER_MINUTE_INR } from './lib/pricing';
 import { loadFromStorage, saveToStorage } from './lib/storage';
 import { recordToLead, leadToRecordPatch, leadToRecordCreate } from './lib/objectContacts';
 import {
@@ -47,6 +48,7 @@ import LoanLifecycleView from './components/LoanLifecycleView';
 import SettingsView from './components/SettingsView';
 import ContactDirectoryView from './components/ContactDirectoryView';
 import CallLogsView from './components/CallLogsView';
+import ReportsView from './components/ReportsView';
 import CompanyProfileView from './components/CompanyProfileView';
 import CustomObjectsView from './components/CustomObjectsView';
 import UnifiedInboxView from './components/UnifiedInboxView';
@@ -102,6 +104,13 @@ export default function App() {
   const [dialerTasks, setDialerTasks] = useState<any[]>(() =>
     loadFromStorage<any[]>('chiefx_dialer_tasks', [])
   );
+  // The org's REAL per-minute rate, set live from the super admin panel
+  // (services/pricing.js) — lib/pricing.ts's COST_PER_MINUTE_INR constant
+  // was a hardcoded 4 that never changed when an admin updated the real
+  // rate to 6, so every cost display in the app (Dashboard, Settings,
+  // Call Logs) silently showed the wrong, stale number. Fetched once
+  // here and threaded down instead.
+  const [costPerMinuteInr, setCostPerMinuteInr] = useState<number>(COST_PER_MINUTE_INR);
   // Non-lending orgs have no `leads` table rows at all — their real
   // contacts live as Industry Objects records instead. When set, `leads`
   // is populated from this object's records (mapped via
@@ -135,7 +144,8 @@ export default function App() {
           resTeam,
           resOrg,
           resMe,
-          resDialerTasks
+          resDialerTasks,
+          resBilling
         ] = await Promise.all([
           apiFetch('/api/leads').then(r => r.json()),
           apiFetch('/api/workflows').then(r => r.json()),
@@ -149,7 +159,8 @@ export default function App() {
           // Falls back to [] rather than reject the whole Promise.all if a
           // not-yet-restarted backend doesn't have this route yet, so a
           // missing route can't silently block every other tab's real data.
-          apiFetch('/api/dialer-tasks').then(r => r.json()).catch(() => [])
+          apiFetch('/api/dialer-tasks').then(r => r.json()).catch(() => []),
+          apiFetch('/api/billing').then(r => r.json()).catch(() => null)
         ]);
 
         // Trust the backend's answer even when it's an empty array — that's
@@ -166,6 +177,7 @@ export default function App() {
         if (Array.isArray(resLoans)) setLoans(resLoans);
         if (Array.isArray(resNumbers)) setVirtualNumbers(resNumbers);
         if (Array.isArray(resTeam)) setTeamMembers(resTeam);
+        if (resBilling && typeof resBilling.costPerMinuteInr === 'number') setCostPerMinuteInr(resBilling.costPerMinuteInr);
         // Merge over EMPTY_ORG_SETTINGS rather than replacing wholesale —
         // the backend only returns fields that were ever explicitly set on
         // this org, so a freshly created/consolidated org can omit e.g.
@@ -426,6 +438,7 @@ export default function App() {
             callLogs={callLogs}
             loans={loans}
             orgSettings={orgSettings}
+            costPerMinuteInr={costPerMinuteInr}
           />
         );
       case 'leads':
@@ -447,7 +460,9 @@ export default function App() {
           />
         );
       case 'call-logs':
-        return <CallLogsView callLogs={callLogs} />;
+        return <CallLogsView callLogs={callLogs} costPerMinuteInr={costPerMinuteInr} />;
+      case 'reports':
+        return <ReportsView callLogs={callLogs} dialerTasks={dialerTasks} leads={leads} costPerMinuteInr={costPerMinuteInr} />;
       case 'workflows':
         return (
           <WorkflowBuilderView
@@ -522,6 +537,7 @@ export default function App() {
             setTeamMembers={setTeamMembers}
             orgSettings={orgSettings}
             setOrgSettings={setOrgSettings}
+            costPerMinuteInr={costPerMinuteInr}
           />
         );
       default:

@@ -17,7 +17,7 @@ import {
 } from 'lucide-react';
 import { apiFetch } from '../lib/api';
 import { VirtualNumber, TeamMember, OrganizationSettings, UserRole } from '../types';
-import { COST_PER_MINUTE_INR, formatInr } from '../lib/pricing';
+import { COST_PER_MINUTE_INR_FALLBACK, formatInr } from '../lib/pricing';
 
 interface SettingsViewProps {
   virtualNumbers: VirtualNumber[];
@@ -26,6 +26,7 @@ interface SettingsViewProps {
   setTeamMembers: React.Dispatch<React.SetStateAction<TeamMember[]>>;
   orgSettings: OrganizationSettings;
   setOrgSettings: React.Dispatch<React.SetStateAction<OrganizationSettings>>;
+  costPerMinuteInr?: number;
 }
 
 interface AuditEntry {
@@ -44,7 +45,8 @@ export default function SettingsView({
   teamMembers,
   setTeamMembers,
   orgSettings,
-  setOrgSettings
+  setOrgSettings,
+  costPerMinuteInr = COST_PER_MINUTE_INR_FALLBACK
 }: SettingsViewProps) {
   const [subTab, setSubTab] = useState<'numbers' | 'team' | 'billing' | 'api'>('numbers');
 
@@ -447,8 +449,8 @@ export default function SettingsView({
                     <strong className="text-md text-slate-800 font-mono">{orgSettings.aiMinutesUsed}</strong>
                   </div>
                   <div className="bg-slate-50 p-4 rounded-xl text-center">
-                    <span className="text-[10px] text-slate-400 uppercase tracking-wider block">AI Voice Cost (₹{COST_PER_MINUTE_INR}/min)</span>
-                    <strong className="text-md text-slate-800 font-mono">{formatInr(orgSettings.aiMinutesUsed * COST_PER_MINUTE_INR)}</strong>
+                    <span className="text-[10px] text-slate-400 uppercase tracking-wider block">AI Voice Cost (₹{costPerMinuteInr}/min)</span>
+                    <strong className="text-md text-slate-800 font-mono">{formatInr(orgSettings.aiMinutesUsed * costPerMinuteInr)}</strong>
                   </div>
                   <div className="bg-slate-50 p-4 rounded-xl text-center">
                     <span className="text-[10px] text-slate-400 uppercase tracking-wider block">Phone Charges</span>

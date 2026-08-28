@@ -25,7 +25,7 @@ import {
 } from 'recharts';
 import { apiFetch } from '../lib/api';
 import { Lead, Loan, Campaign, CallLog, OrganizationSettings } from '../types';
-import { COST_PER_MINUTE_INR, formatInr } from '../lib/pricing';
+import { COST_PER_MINUTE_INR_FALLBACK, formatInr } from '../lib/pricing';
 
 interface DashboardViewProps {
   leads: Lead[];
@@ -33,6 +33,7 @@ interface DashboardViewProps {
   campaigns: Campaign[];
   callLogs: CallLog[];
   orgSettings: OrganizationSettings;
+  costPerMinuteInr?: number;
 }
 
 interface ObjectMetrics {
@@ -68,7 +69,8 @@ export default function DashboardView({
   loans,
   campaigns,
   callLogs,
-  orgSettings
+  orgSettings,
+  costPerMinuteInr = COST_PER_MINUTE_INR_FALLBACK
 }: DashboardViewProps) {
   const [insights, setInsights] = useState<string>('');
   const [insightsDegraded, setInsightsDegraded] = useState<boolean>(false);
@@ -231,7 +233,7 @@ export default function DashboardView({
             <h3 className="text-2xl font-bold text-slate-800 mt-1">
               {orgSettings.aiMinutesUsed} <span className="text-xs font-normal text-slate-400">min</span>
             </h3>
-            <p className="text-xs text-slate-400 mt-1">{formatInr(orgSettings.aiMinutesUsed * COST_PER_MINUTE_INR)} at ₹{COST_PER_MINUTE_INR}/min</p>
+            <p className="text-xs text-slate-400 mt-1">{formatInr(orgSettings.aiMinutesUsed * costPerMinuteInr)} at ₹{costPerMinuteInr}/min</p>
           </div>
         </div>
 

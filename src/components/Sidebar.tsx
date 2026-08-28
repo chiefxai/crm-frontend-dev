@@ -21,7 +21,8 @@ import {
   ScrollText,
   CreditCard,
   History,
-  MessageCircleQuestion
+  MessageCircleQuestion,
+  BarChart3
 } from 'lucide-react';
 import { UserRole } from '../types';
 
@@ -70,6 +71,7 @@ export default function Sidebar({
     { id: 'campaigns', label: 'AI Campaigns', icon: Briefcase },
     { id: 'dialer', label: 'Voice Simulator', icon: PhoneCall },
     { id: 'call-logs', label: 'Call Logs', icon: History },
+    { id: 'reports', label: 'Reports', icon: BarChart3 },
     { id: 'inbox', label: 'Unified Inbox', icon: Inbox },
     { id: 'agent-studio', label: 'Agent Studio', icon: Sparkles },
     { id: 'compliance', label: 'Compliance', icon: ShieldBan },

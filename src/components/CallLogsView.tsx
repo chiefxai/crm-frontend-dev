@@ -7,6 +7,7 @@ import { getPlayableRecordingUrl } from '../lib/api';
 
 interface CallLogsViewProps {
   callLogs: CallLog[];
+  costPerMinuteInr?: number;
 }
 
 const SENTIMENT_COLOR: Record<string, string> = {
@@ -22,17 +23,30 @@ function formatDuration(seconds: number) {
   return `${m}:${String(s).padStart(2, '0')}`;
 }
 
-export default function CallLogsView({ callLogs }: CallLogsViewProps) {
+export default function CallLogsView({ callLogs, costPerMinuteInr }: CallLogsViewProps) {
   const [searchTerm, setSearchTerm] = useState('');
   const [selected, setSelected] = useState<CallLog | null>(null);
+  const [fromDate, setFromDate] = useState('');
+  const [toDate, setToDate] = useState('');
 
-  const filtered = callLogs.filter((c) =>
-    !searchTerm.trim() ||
-    c.leadName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    c.summary.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const filtered = callLogs.filter((c) => {
+    const matchesSearch = !searchTerm.trim() ||
+      c.leadName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      c.summary.toLowerCase().includes(searchTerm.toLowerCase());
+    if (!matchesSearch) return false;
+    const created = new Date(c.createdAt);
+    if (fromDate && created < new Date(fromDate + 'T00:00:00')) return false;
+    if (toDate && created > new Date(toDate + 'T23:59:59')) return false;
+    return true;
+  });
 
   const sorted = [...filtered].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+
+  // Quick summary for whatever's currently filtered — the full breakdown
+  // (trends, sentiment, task-wise, cost) lives on the Reports page; this
+  // is just a fast at-a-glance strip for the exact rows shown below.
+  const totalDuration = filtered.reduce((sum, c) => sum + (c.duration || 0), 0);
+  const totalCost = filtered.reduce((sum, c) => sum + callCostInr(c.duration || 0, costPerMinuteInr), 0);
 
   return (
     <div className="font-sans h-full overflow-y-auto">
@@ -42,14 +56,33 @@ export default function CallLogsView({ callLogs }: CallLogsViewProps) {
       />
 
       <div className="px-8 pb-8">
-        <div className="relative max-w-sm mb-4">
-          <Search className="h-3.5 w-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
-          <input
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            placeholder="Search by caller or summary…"
-            className="w-full bg-white border border-slate-200 rounded-lg pl-8 pr-3 py-2 text-xs focus:outline-none focus:border-blue-500"
-          />
+        <div className="flex flex-wrap items-end gap-3 mb-4">
+          <div className="relative max-w-sm flex-1 min-w-[200px]">
+            <Search className="h-3.5 w-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+            <input
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              placeholder="Search by caller or summary…"
+              className="w-full bg-white border border-slate-200 rounded-lg pl-8 pr-3 py-2 text-xs focus:outline-none focus:border-blue-500"
+            />
+          </div>
+          <div>
+            <label className="block text-[9px] font-bold text-slate-400 uppercase mb-1">From</label>
+            <input type="date" value={fromDate} onChange={(e) => setFromDate(e.target.value)} className="bg-white border border-slate-200 rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-blue-500" />
+          </div>
+          <div>
+            <label className="block text-[9px] font-bold text-slate-400 uppercase mb-1">To</label>
+            <input type="date" value={toDate} onChange={(e) => setToDate(e.target.value)} className="bg-white border border-slate-200 rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-blue-500" />
+          </div>
+          {(fromDate || toDate) && (
+            <button onClick={() => { setFromDate(''); setToDate(''); }} className="text-[11px] text-slate-400 hover:text-slate-600 underline mb-2">Clear dates</button>
+          )}
+        </div>
+
+        <div className="flex flex-wrap gap-4 mb-4 text-xs">
+          <span className="bg-white border border-slate-200 rounded-lg px-3 py-1.5"><strong className="text-slate-800">{filtered.length}</strong> <span className="text-slate-400">calls</span></span>
+          <span className="bg-white border border-slate-200 rounded-lg px-3 py-1.5"><strong className="text-slate-800">{formatDuration(totalDuration)}</strong> <span className="text-slate-400">total duration</span></span>
+          <span className="bg-white border border-slate-200 rounded-lg px-3 py-1.5"><strong className="text-slate-800">{formatInr(totalCost)}</strong> <span className="text-slate-400">total cost</span></span>
         </div>
 
         <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
@@ -70,7 +103,7 @@ export default function CallLogsView({ callLogs }: CallLogsViewProps) {
                 <tr key={c.id} className="hover:bg-slate-50/50">
                   <td className="p-4 px-6 font-semibold text-slate-800">{c.leadName}</td>
                   <td className="p-4 px-6 font-mono">{formatDuration(c.duration)}</td>
-                  <td className="p-4 px-6 font-mono">{formatInr(callCostInr(c.duration))}</td>
+                  <td className="p-4 px-6 font-mono">{formatInr(callCostInr(c.duration, costPerMinuteInr))}</td>
                   <td className="p-4 px-6">{c.status}</td>
                   <td className="p-4 px-6">
                     <span className={`px-2 py-0.5 rounded-md text-[10px] font-semibold ${SENTIMENT_COLOR[c.sentiment] || SENTIMENT_COLOR.Unknown}`}>
@@ -99,7 +132,7 @@ export default function CallLogsView({ callLogs }: CallLogsViewProps) {
             <div className="flex items-center justify-between p-5 border-b border-slate-100">
               <div>
                 <h3 className="font-semibold text-slate-800">{selected.leadName}</h3>
-                <p className="text-xs text-slate-400 mt-0.5">{new Date(selected.createdAt).toLocaleString()} • {formatDuration(selected.duration)} • {formatInr(callCostInr(selected.duration))}</p>
+                <p className="text-xs text-slate-400 mt-0.5">{new Date(selected.createdAt).toLocaleString()} • {formatDuration(selected.duration)} • {formatInr(callCostInr(selected.duration, costPerMinuteInr))}</p>
               </div>
               <button onClick={() => setSelected(null)}><X className="h-4 w-4 text-slate-400" /></button>
             </div>
