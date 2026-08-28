@@ -9,10 +9,11 @@ import {
   Legend,
   ResponsiveContainer
 } from 'recharts';
-import { PhoneIncoming, PhoneOutgoing, Clock, DollarSign, Smile, CheckCircle2, ListChecks } from 'lucide-react';
+import { PhoneIncoming, PhoneOutgoing, Clock, DollarSign, Smile, CheckCircle2, ListChecks, FileDown } from 'lucide-react';
 import PageHeader from './PageHeader';
 import { CallLog } from '../types';
 import { callCostInr, formatInr, COST_PER_MINUTE_INR_FALLBACK } from '../lib/pricing';
+import PrintableReport from './PrintableReport';
 
 // Colors chosen to match this app's existing conventions (blue = primary/
 // AI accent used throughout, amber = the paired categorical hue) rather
@@ -52,6 +53,7 @@ interface ReportsViewProps {
   dialerTasks: DialTask[];
   leads: { id: string; name: string; phone: string }[];
   costPerMinuteInr?: number;
+  orgName?: string;
 }
 
 function bucketKey(dateStr: string, granularity: Granularity): string {
@@ -76,12 +78,13 @@ function daysAgo(n: number): string {
   return d.toISOString().slice(0, 10);
 }
 
-export default function ReportsView({ callLogs, dialerTasks, leads, costPerMinuteInr = COST_PER_MINUTE_INR_FALLBACK }: ReportsViewProps) {
+export default function ReportsView({ callLogs, dialerTasks, leads, costPerMinuteInr = COST_PER_MINUTE_INR_FALLBACK, orgName = 'ChiefXAI' }: ReportsViewProps) {
   const [direction, setDirection] = useState<DirectionFilter>('all');
   const [granularity, setGranularity] = useState<Granularity>('day');
   const [fromDate, setFromDate] = useState(daysAgo(30));
   const [toDate, setToDate] = useState(daysAgo(0));
   const [selectedTaskId, setSelectedTaskId] = useState<string>('');
+  const [showPreview, setShowPreview] = useState(false);
 
   const filteredCalls = useMemo(() => {
     const from = new Date(fromDate + 'T00:00:00');
@@ -194,7 +197,7 @@ export default function ReportsView({ callLogs, dialerTasks, leads, costPerMinut
               className="bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-blue-500"
             />
           </div>
-          <div className="flex gap-2 ml-auto">
+          <div className="flex gap-2 ml-auto items-end">
             {[7, 30, 90].map((n) => (
               <button
                 key={n}
@@ -204,6 +207,12 @@ export default function ReportsView({ callLogs, dialerTasks, leads, costPerMinut
                 Last {n}d
               </button>
             ))}
+            <button
+              onClick={() => setShowPreview(true)}
+              className="flex items-center gap-1.5 px-3 py-2 text-[11px] font-semibold bg-blue-600 hover:bg-blue-700 text-white rounded-lg"
+            >
+              <FileDown className="h-3.5 w-3.5" /> Preview & Download PDF
+            </button>
           </div>
         </div>
 
@@ -351,6 +360,21 @@ export default function ReportsView({ callLogs, dialerTasks, leads, costPerMinut
           </div>
         </div>
       </div>
+
+      {showPreview && (
+        <PrintableReport
+          onClose={() => setShowPreview(false)}
+          orgName={orgName}
+          fromDate={fromDate}
+          toDate={toDate}
+          direction={direction}
+          granularity={granularity}
+          filteredCalls={filteredCalls}
+          dialerTasks={dialerTasks}
+          leads={leads}
+          costPerMinuteInr={costPerMinuteInr}
+        />
+      )}
     </div>
   );
 }

@@ -462,7 +462,7 @@ export default function App() {
       case 'call-logs':
         return <CallLogsView callLogs={callLogs} costPerMinuteInr={costPerMinuteInr} />;
       case 'reports':
-        return <ReportsView callLogs={callLogs} dialerTasks={dialerTasks} leads={leads} costPerMinuteInr={costPerMinuteInr} />;
+        return <ReportsView callLogs={callLogs} dialerTasks={dialerTasks} leads={leads} costPerMinuteInr={costPerMinuteInr} orgName={orgSettings.name} />;
       case 'workflows':
         return (
           <WorkflowBuilderView
