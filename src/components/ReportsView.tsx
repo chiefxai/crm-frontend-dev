@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from 'react';
+import { apiFetch } from '../lib/api';
 import {
   BarChart,
   Bar,
@@ -9,7 +10,7 @@ import {
   Legend,
   ResponsiveContainer
 } from 'recharts';
-import { PhoneIncoming, PhoneOutgoing, Clock, DollarSign, Smile, CheckCircle2, ListChecks, FileDown } from 'lucide-react';
+import { PhoneIncoming, PhoneOutgoing, Clock, DollarSign, Smile, CheckCircle2, ListChecks, FileDown, ChevronDown, ChevronRight, Download } from 'lucide-react';
 import PageHeader from './PageHeader';
 import { CallLog } from '../types';
 import { callCostInr, formatInr, COST_PER_MINUTE_INR_FALLBACK } from '../lib/pricing';
@@ -85,6 +86,32 @@ export default function ReportsView({ callLogs, dialerTasks, leads, costPerMinut
   const [toDate, setToDate] = useState(daysAgo(0));
   const [selectedTaskId, setSelectedTaskId] = useState<string>('');
   const [showPreview, setShowPreview] = useState(false);
+  // Answers are keyed by call_id, not by lead — the Reports page only knows
+  // a lead's phone number, so this fetches per-phone and caches by phone to
+  // avoid re-fetching on every expand/collapse.
+  const [expandedLeadId, setExpandedLeadId] = useState<string | null>(null);
+  const [answersByPhone, setAnswersByPhone] = useState<Record<string, { question: string; answer: string }[]>>({});
+  const [loadingAnswersFor, setLoadingAnswersFor] = useState<string | null>(null);
+  const [exportingCsv, setExportingCsv] = useState(false);
+
+  async function toggleLeadExpand(leadId: string, phone: string) {
+    if (expandedLeadId === leadId) {
+      setExpandedLeadId(null);
+      return;
+    }
+    setExpandedLeadId(leadId);
+    if (!phone || answersByPhone[phone]) return;
+    setLoadingAnswersFor(phone);
+    try {
+      const res = await apiFetch(`/api/lead-responses?phone=${encodeURIComponent(phone)}`);
+      const data = await res.json();
+      setAnswersByPhone((prev) => ({ ...prev, [phone]: Array.isArray(data) ? data : [] }));
+    } catch {
+      setAnswersByPhone((prev) => ({ ...prev, [phone]: [] }));
+    } finally {
+      setLoadingAnswersFor(null);
+    }
+  }
 
   const filteredCalls = useMemo(() => {
     const from = new Date(fromDate + 'T00:00:00');
@@ -144,6 +171,57 @@ export default function ReportsView({ callLogs, dialerTasks, leads, costPerMinut
     const conversionRate = completed > 0 ? Math.round((interested / completed) * 100) : 0;
     return { rows, completed, interested, conversionRate, total: rows.length };
   }, [selectedTask, leads]);
+
+  // Fetches every lead's answers (reusing the same cache the expandable
+  // rows use) and lays them out wide — one row per lead, Q1/A1/Q2/A2...
+  // columns — since that's what reads cleanly in Excel/Sheets.
+  async function exportTaskCsv(task: DialTask, report: typeof taskReport) {
+    if (!report) return;
+    setExportingCsv(true);
+    try {
+      const perLead = await Promise.all(
+        report.rows.map(async (r) => {
+          if (!r.phone) return { ...r, answers: [] as { question: string; answer: string }[] };
+          if (answersByPhone[r.phone]) return { ...r, answers: answersByPhone[r.phone] };
+          try {
+            const res = await apiFetch(`/api/lead-responses?phone=${encodeURIComponent(r.phone)}`);
+            const data = await res.json();
+            const answers = Array.isArray(data) ? data : [];
+            setAnswersByPhone((prev) => ({ ...prev, [r.phone]: answers }));
+            return { ...r, answers };
+          } catch {
+            return { ...r, answers: [] as { question: string; answer: string }[] };
+          }
+        })
+      );
+
+      const maxAnswers = Math.max(0, ...perLead.map((r) => r.answers.length));
+      const qaHeaders: string[] = [];
+      for (let i = 0; i < maxAnswers; i++) qaHeaders.push(`Question ${i + 1}`, `Answer ${i + 1}`);
+
+      const escapeCsv = (val: string) => `"${String(val ?? '').replace(/"/g, '""')}"`;
+      const header = ['Name', 'Phone', 'Status', 'Duration', 'Sentiment', 'Intent', ...qaHeaders];
+      const lines = [header.map(escapeCsv).join(',')];
+      for (const r of perLead) {
+        const qaCells: string[] = [];
+        for (let i = 0; i < maxAnswers; i++) {
+          qaCells.push(r.answers[i]?.question || '', r.answers[i]?.answer || '');
+        }
+        const row = [r.name, r.phone, r.status, formatDuration(r.duration), r.sentiment, r.intent, ...qaCells];
+        lines.push(row.map(escapeCsv).join(','));
+      }
+
+      const blob = new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${task.name.replace(/[^a-z0-9]+/gi, '_')}_report.csv`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } finally {
+      setExportingCsv(false);
+    }
+  }
 
   return (
     <div className="font-sans h-full overflow-y-auto bg-slate-50/50">
@@ -269,16 +347,27 @@ export default function ReportsView({ callLogs, dialerTasks, leads, costPerMinut
         <div className="bg-white border border-slate-200 rounded-2xl p-5">
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-sm font-bold text-slate-700 flex items-center gap-2"><ListChecks className="h-4 w-4" /> Report by Task</h3>
-            <select
-              value={selectedTaskId}
-              onChange={(e) => setSelectedTaskId(e.target.value)}
-              className="bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-blue-500 min-w-[200px]"
-            >
-              <option value="">Select an outbound task…</option>
-              {dialerTasks.map((t) => (
-                <option key={t.id} value={t.id}>{t.name}</option>
-              ))}
-            </select>
+            <div className="flex items-center gap-2">
+              <select
+                value={selectedTaskId}
+                onChange={(e) => setSelectedTaskId(e.target.value)}
+                className="bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-blue-500 min-w-[200px]"
+              >
+                <option value="">Select an outbound task…</option>
+                {dialerTasks.map((t) => (
+                  <option key={t.id} value={t.id}>{t.name}</option>
+                ))}
+              </select>
+              {selectedTask && (
+                <button
+                  onClick={() => exportTaskCsv(selectedTask, taskReport)}
+                  disabled={exportingCsv}
+                  className="flex items-center gap-1.5 px-3 py-2 text-[11px] font-semibold bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white rounded-lg"
+                >
+                  <Download className="h-3.5 w-3.5" /> {exportingCsv ? 'Exporting…' : 'Export to CSV'}
+                </button>
+              )}
+            </div>
           </div>
           {!selectedTask && <p className="text-xs text-slate-400 text-center py-8">Pick a task above to see its per-lead outcomes and conversion rate.</p>}
           {taskReport && (
@@ -292,6 +381,7 @@ export default function ReportsView({ callLogs, dialerTasks, leads, costPerMinut
                 <table className="w-full text-left text-xs">
                   <thead>
                     <tr className="border-b border-slate-100 text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                      <th className="py-2 pr-2 w-6"></th>
                       <th className="py-2 pr-4">Lead</th>
                       <th className="py-2 pr-4">Phone</th>
                       <th className="py-2 pr-4">Status</th>
@@ -301,20 +391,53 @@ export default function ReportsView({ callLogs, dialerTasks, leads, costPerMinut
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-50">
-                    {taskReport.rows.map((r) => (
-                      <tr key={r.leadId}>
-                        <td className="py-2 pr-4 font-medium text-slate-700">{r.name}</td>
-                        <td className="py-2 pr-4 text-slate-500">{r.phone}</td>
-                        <td className="py-2 pr-4">{r.status}</td>
-                        <td className="py-2 pr-4">{formatDuration(r.duration)}</td>
-                        <td className="py-2 pr-4">
-                          <span className="px-2 py-0.5 rounded-md text-[10px] font-semibold" style={{ color: SENTIMENT_COLOR[r.sentiment], backgroundColor: `${SENTIMENT_COLOR[r.sentiment]}1a` }}>
-                            {r.sentiment}
-                          </span>
-                        </td>
-                        <td className="py-2 pr-4">{r.intent}</td>
-                      </tr>
-                    ))}
+                    {taskReport.rows.map((r) => {
+                      const isExpanded = expandedLeadId === r.leadId;
+                      const answers = r.phone ? answersByPhone[r.phone] : undefined;
+                      return (
+                        <React.Fragment key={r.leadId}>
+                          <tr
+                            className="cursor-pointer hover:bg-slate-50/75"
+                            onClick={() => toggleLeadExpand(r.leadId, r.phone)}
+                          >
+                            <td className="py-2 pr-2 text-slate-400">
+                              {isExpanded ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
+                            </td>
+                            <td className="py-2 pr-4 font-medium text-slate-700">{r.name}</td>
+                            <td className="py-2 pr-4 text-slate-500">{r.phone}</td>
+                            <td className="py-2 pr-4">{r.status}</td>
+                            <td className="py-2 pr-4">{formatDuration(r.duration)}</td>
+                            <td className="py-2 pr-4">
+                              <span className="px-2 py-0.5 rounded-md text-[10px] font-semibold" style={{ color: SENTIMENT_COLOR[r.sentiment], backgroundColor: `${SENTIMENT_COLOR[r.sentiment]}1a` }}>
+                                {r.sentiment}
+                              </span>
+                            </td>
+                            <td className="py-2 pr-4">{r.intent}</td>
+                          </tr>
+                          {isExpanded && (
+                            <tr className="bg-slate-50/50">
+                              <td colSpan={7} className="px-4 pb-3 pt-1">
+                                {loadingAnswersFor === r.phone ? (
+                                  <p className="text-[11px] text-slate-400 py-2">Loading answers…</p>
+                                ) : !answers || answers.length === 0 ? (
+                                  <p className="text-[11px] text-slate-400 py-2">No answers captured for this call.</p>
+                                ) : (
+                                  <div className="space-y-1.5 py-1">
+                                    {answers.map((a, i) => (
+                                      <div key={i} className="flex gap-2 text-[11px]">
+                                        <span className="text-slate-400 shrink-0 min-w-[16px]">{i + 1}.</span>
+                                        <span className="text-slate-500 font-medium min-w-[180px]">{a.question}</span>
+                                        <span className="text-slate-700">{a.answer}</span>
+                                      </div>
+                                    ))}
+                                  </div>
+                                )}
+                              </td>
+                            </tr>
+                          )}
+                        </React.Fragment>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>
