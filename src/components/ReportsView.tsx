@@ -415,19 +415,28 @@ export default function ReportsView({ callLogs, dialerTasks, leads, costPerMinut
                             <td className="py-2 pr-4">{r.intent}</td>
                           </tr>
                           {isExpanded && (
-                            <tr className="bg-slate-50/50">
-                              <td colSpan={7} className="px-4 pb-3 pt-1">
+                            <tr className="bg-slate-50/40">
+                              <td colSpan={7} className="px-4 pb-4 pt-1">
                                 {loadingAnswersFor === r.phone ? (
-                                  <p className="text-[11px] text-slate-400 py-2">Loading answers…</p>
+                                  <div className="flex items-center gap-2 py-3 text-[11px] text-slate-400">
+                                    <span className="h-3 w-3 border-2 border-slate-300 border-t-blue-500 rounded-full animate-spin" />
+                                    Loading answers…
+                                  </div>
                                 ) : !answers || answers.length === 0 ? (
-                                  <p className="text-[11px] text-slate-400 py-2">No answers captured for this call.</p>
+                                  <div className="py-3 px-3.5 bg-white border border-dashed border-slate-200 rounded-xl text-[11px] text-slate-400 italic">
+                                    No answers captured for this call.
+                                  </div>
                                 ) : (
-                                  <div className="space-y-1.5 py-1">
+                                  <div className="bg-white border border-slate-200 rounded-xl divide-y divide-slate-100 overflow-hidden">
                                     {answers.map((a, i) => (
-                                      <div key={i} className="flex gap-2 text-[11px]">
-                                        <span className="text-slate-400 shrink-0 min-w-[16px]">{i + 1}.</span>
-                                        <span className="text-slate-500 font-medium min-w-[180px]">{a.question}</span>
-                                        <span className="text-slate-700">{a.answer}</span>
+                                      <div key={i} className="flex gap-3 px-3.5 py-2.5">
+                                        <span className="shrink-0 h-5 w-5 rounded-full bg-blue-50 text-blue-600 text-[10px] font-bold flex items-center justify-center mt-0.5">
+                                          {i + 1}
+                                        </span>
+                                        <div className="min-w-0 flex-1">
+                                          <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide">{a.question}</p>
+                                          <p className="text-[12px] text-slate-700 mt-0.5 break-words">{a.answer}</p>
+                                        </div>
                                       </div>
                                     ))}
                                   </div>
