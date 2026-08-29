@@ -462,7 +462,7 @@ Real Tamil speakers do not say the "correct" written form of a word. They contra
   // player always showed "No recording available" even though the call
   // really was recorded: this function only ever wrote the local
   // simulated timer/transcript, never the real Supabase-hosted recording URL.
-  const handleHangupCall = (realCallLog?: { recordingUrl?: string; duration?: number; sentiment?: string; summary?: string; callId?: string }) => {
+  const handleHangupCall = (realCallLog?: { recordingUrl?: string; duration?: number; sentiment?: string; summary?: string; callId?: string; transcript?: { speaker: 'AI' | 'Customer'; text: string; timestamp: string }[] }) => {
     if (!activeLead) return;
     setCallState('completed');
 
@@ -490,7 +490,13 @@ Real Tamil speakers do not say the "correct" written form of a word. They contra
             [activeLead.id]: {
               status: 'Completed' as const,
               duration: realCallLog?.duration ?? duration,
-              transcript: transcript,
+              // Real AI-driven outbound calls never go through the manual
+              // simulation input flow that fills the local `transcript`
+              // state — confirmed live: Archive Room showed a real,
+              // completed outbound call with zero conversation displayed,
+              // because it was reading that always-empty local state
+              // instead of the actual saved transcript from the call.
+              transcript: realCallLog?.transcript || transcript,
               sentiment: (realCallLog?.sentiment as typeof currentSentiment) || currentSentiment,
               intent: currentIntent,
               summary: realCallLog?.summary || summaryText,
@@ -736,7 +742,8 @@ Currently on question ${nextIndex} out of ${selectedTask.questions.length}. Next
           duration: log.duration,
           sentiment: log.sentiment,
           summary: log.summary,
-          callId: log.id
+          callId: log.id,
+          transcript: log.transcript
         });
       } catch {
         // non-JSON keepalive/init messages — ignore
