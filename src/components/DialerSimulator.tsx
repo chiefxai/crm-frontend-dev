@@ -302,7 +302,13 @@ Real Tamil speakers do not say the "correct" written form of a word. They contra
     }
 
     const newTask: DialTask = {
-      id: `TASK-${100 + tasks.length + 1}`,
+      // dialer_tasks.id is a global primary key, not scoped per org — a
+      // sequential "TASK-101, TASK-102..." counter based on this org's own
+      // local task count collides with another org's tasks the moment both
+      // start counting from the same number (this is exactly what caused
+      // "my task disappeared": the insert 500'd on a duplicate key and the
+      // failure was never surfaced). Use a value no other org can generate.
+      id: `TASK-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`,
       name: newTaskName.trim(),
       questions: newQuestions,
       leadIds: selectedFormLeadIds,
