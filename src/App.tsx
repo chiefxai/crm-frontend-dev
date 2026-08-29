@@ -260,6 +260,21 @@ export default function App() {
     saveToStorage('chiefx_tab', activeTab);
   }, [activeTab]);
 
+  // apiFetch (lib/api.ts) dispatches this the moment any request comes back
+  // 401 — force the user back to the login screen right away instead of
+  // letting them keep working on a dead session where every save silently
+  // no-ops (see the comment in apiFetch for the incident this fixes).
+  useEffect(() => {
+    const handleUnauthorized = () => {
+      setIsAuthenticated(false);
+      setCurrentUser(null);
+      saveToStorage('chiefx_auth', false);
+      saveToStorage('chiefx_user', null);
+    };
+    window.addEventListener('chiefx:unauthorized', handleUnauthorized);
+    return () => window.removeEventListener('chiefx:unauthorized', handleUnauthorized);
+  }, []);
+
   // If a non-lending org somehow lands on a lending-only screen (e.g. a
   // stale activeTab restored from a previous session, or the org's
   // industry changed), redirect to the dashboard rather than showing a

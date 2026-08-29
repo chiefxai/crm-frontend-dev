@@ -59,5 +59,16 @@ export async function apiFetch(url: string, options: RequestInit = {}): Promise<
   if (options.body && !headers.has('Content-Type') && !(options.body instanceof FormData)) {
     headers.set('Content-Type', 'application/json');
   }
-  return fetch(url, { ...options, headers });
+  const res = await fetch(url, { ...options, headers });
+  // A stale/expired token used to fail silently: every *-sync effect in
+  // App.tsx only .catch()es network errors, never checks response.ok, so a
+  // 401 here looked like a successful save while the write never reached
+  // the DB — the user would see their new data locally, then lose it on
+  // the next real reload. Force an immediate logout instead, so a dead
+  // session can't keep "succeeding" at writes that are actually no-ops.
+  if (res.status === 401 && token) {
+    clearAuthToken();
+    window.dispatchEvent(new CustomEvent('chiefx:unauthorized'));
+  }
+  return res;
 }
