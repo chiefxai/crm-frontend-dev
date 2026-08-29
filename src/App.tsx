@@ -156,10 +156,13 @@ export default function App() {
           apiFetch('/api/settings/team').then(r => r.json()),
           apiFetch('/api/settings/org').then(r => r.json()),
           apiFetch('/api/auth/me').then(r => r.json()),
-          // Falls back to [] rather than reject the whole Promise.all if a
-          // not-yet-restarted backend doesn't have this route yet, so a
-          // missing route can't silently block every other tab's real data.
-          apiFetch('/api/dialer-tasks').then(r => r.json()).catch(() => []),
+          // Falls back to null (not []) on failure so a transient error here
+          // can't be mistaken for "this org genuinely has zero tasks" — that
+          // used to overwrite real local/session state with an empty array,
+          // which the sync effect below would then dutifully write back to
+          // the backend, permanently deleting real tasks. See db.js
+          // replaceAll for the matching backend-side guard.
+          apiFetch('/api/dialer-tasks').then(r => r.json()).catch(() => null),
           apiFetch('/api/billing').then(r => r.json()).catch(() => null)
         ]);
 
