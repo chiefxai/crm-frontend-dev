@@ -462,7 +462,7 @@ Real Tamil speakers do not say the "correct" written form of a word. They contra
   // player always showed "No recording available" even though the call
   // really was recorded: this function only ever wrote the local
   // simulated timer/transcript, never the real Supabase-hosted recording URL.
-  const handleHangupCall = (realCallLog?: { recordingUrl?: string; duration?: number; sentiment?: string; summary?: string }) => {
+  const handleHangupCall = (realCallLog?: { recordingUrl?: string; duration?: number; sentiment?: string; summary?: string; callId?: string }) => {
     if (!activeLead) return;
     setCallState('completed');
 
@@ -495,7 +495,13 @@ Real Tamil speakers do not say the "correct" written form of a word. They contra
               intent: currentIntent,
               summary: realCallLog?.summary || summaryText,
               answers: { ...extractedAnswers },
-              recordingUrl: realCallLog?.recordingUrl
+              recordingUrl: realCallLog?.recordingUrl,
+              // The real call_logs row's id — server.js now writes this as
+              // the same internal call id lead_responses.call_id uses, so
+              // this is the one precise way to fetch THIS call's actual
+              // answers instead of guessing by phone (which returns every
+              // answer that phone number ever gave, across every call).
+              callId: realCallLog?.callId
             }
           }
         };
@@ -729,7 +735,8 @@ Currently on question ${nextIndex} out of ${selectedTask.questions.length}. Next
           recordingUrl: log.recordingUrl,
           duration: log.duration,
           sentiment: log.sentiment,
-          summary: log.summary
+          summary: log.summary,
+          callId: log.id
         });
       } catch {
         // non-JSON keepalive/init messages — ignore

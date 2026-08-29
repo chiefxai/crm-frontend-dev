@@ -38,6 +38,11 @@ interface DialTaskCallResult {
   intent: 'Interested' | 'Not Interested' | 'Callback Scheduled' | 'Wrong Number' | 'Unknown';
   summary: string;
   recordingUrl?: string;
+  // The real call_logs id, matching lead_responses.call_id one-to-one —
+  // lets the Q&A lookup target this exact call instead of guessing by
+  // phone (which returns every answer that number ever gave, across every
+  // call/task). Absent on data captured before this field existed.
+  callId?: string;
 }
 
 interface DialTask {
@@ -86,31 +91,46 @@ export default function ReportsView({ callLogs, dialerTasks, leads, costPerMinut
   const [toDate, setToDate] = useState(daysAgo(0));
   const [selectedTaskId, setSelectedTaskId] = useState<string>('');
   const [showPreview, setShowPreview] = useState(false);
-  // Answers are keyed by call_id, not by lead — the Reports page only knows
-  // a lead's phone number, so this fetches per-phone and caches by phone to
-  // avoid re-fetching on every expand/collapse.
+  // Prefer callId when a task result has one (exact match against exactly
+  // this call, via /api/calls/:id/lead-responses) — phone alone returns
+  // every answer that number ever gave across every call/task, which is
+  // wrong the moment the same lead gets dialed more than once. callId is
+  // absent on data captured before this field existed, so phone stays as
+  // the fallback for that older data. Cached by whichever key was used.
   const [expandedLeadId, setExpandedLeadId] = useState<string | null>(null);
-  const [answersByPhone, setAnswersByPhone] = useState<Record<string, { question: string; answer: string }[]>>({});
+  const [answersCache, setAnswersCache] = useState<Record<string, { question: string; answer: string }[]>>({});
   const [loadingAnswersFor, setLoadingAnswersFor] = useState<string | null>(null);
   const [exportingCsv, setExportingCsv] = useState(false);
 
-  async function toggleLeadExpand(leadId: string, phone: string) {
+  async function fetchAnswers(callId: string | undefined, phone: string): Promise<{ question: string; answer: string }[]> {
+    const cacheKey = callId || phone;
+    if (!cacheKey) return [];
+    if (answersCache[cacheKey]) return answersCache[cacheKey];
+    try {
+      const res = await apiFetch(
+        callId ? `/api/calls/${encodeURIComponent(callId)}/lead-responses` : `/api/lead-responses?phone=${encodeURIComponent(phone)}`
+      );
+      const data = await res.json();
+      const answers = Array.isArray(data) ? data : [];
+      setAnswersCache((prev) => ({ ...prev, [cacheKey]: answers }));
+      return answers;
+    } catch {
+      setAnswersCache((prev) => ({ ...prev, [cacheKey]: [] }));
+      return [];
+    }
+  }
+
+  async function toggleLeadExpand(leadId: string, phone: string, callId?: string) {
     if (expandedLeadId === leadId) {
       setExpandedLeadId(null);
       return;
     }
     setExpandedLeadId(leadId);
-    if (!phone || answersByPhone[phone]) return;
-    setLoadingAnswersFor(phone);
-    try {
-      const res = await apiFetch(`/api/lead-responses?phone=${encodeURIComponent(phone)}`);
-      const data = await res.json();
-      setAnswersByPhone((prev) => ({ ...prev, [phone]: Array.isArray(data) ? data : [] }));
-    } catch {
-      setAnswersByPhone((prev) => ({ ...prev, [phone]: [] }));
-    } finally {
-      setLoadingAnswersFor(null);
-    }
+    const cacheKey = callId || phone;
+    if (!cacheKey || answersCache[cacheKey]) return;
+    setLoadingAnswersFor(cacheKey);
+    await fetchAnswers(callId, phone);
+    setLoadingAnswersFor(null);
   }
 
   const filteredCalls = useMemo(() => {
@@ -163,7 +183,8 @@ export default function ReportsView({ callLogs, dialerTasks, leads, costPerMinut
         duration: result?.duration || 0,
         sentiment: result?.sentiment || 'Unknown',
         intent: result?.intent || 'Unknown',
-        recordingUrl: result?.recordingUrl
+        recordingUrl: result?.recordingUrl,
+        callId: result?.callId
       };
     });
     const completed = rows.filter((r) => r.status === 'Completed').length;
@@ -180,19 +201,7 @@ export default function ReportsView({ callLogs, dialerTasks, leads, costPerMinut
     setExportingCsv(true);
     try {
       const perLead = await Promise.all(
-        report.rows.map(async (r) => {
-          if (!r.phone) return { ...r, answers: [] as { question: string; answer: string }[] };
-          if (answersByPhone[r.phone]) return { ...r, answers: answersByPhone[r.phone] };
-          try {
-            const res = await apiFetch(`/api/lead-responses?phone=${encodeURIComponent(r.phone)}`);
-            const data = await res.json();
-            const answers = Array.isArray(data) ? data : [];
-            setAnswersByPhone((prev) => ({ ...prev, [r.phone]: answers }));
-            return { ...r, answers };
-          } catch {
-            return { ...r, answers: [] as { question: string; answer: string }[] };
-          }
-        })
+        report.rows.map(async (r) => ({ ...r, answers: await fetchAnswers(r.callId, r.phone) }))
       );
 
       const maxAnswers = Math.max(0, ...perLead.map((r) => r.answers.length));
@@ -393,12 +402,13 @@ export default function ReportsView({ callLogs, dialerTasks, leads, costPerMinut
                   <tbody className="divide-y divide-slate-50">
                     {taskReport.rows.map((r) => {
                       const isExpanded = expandedLeadId === r.leadId;
-                      const answers = r.phone ? answersByPhone[r.phone] : undefined;
+                      const cacheKey = r.callId || r.phone;
+                      const answers = cacheKey ? answersCache[cacheKey] : undefined;
                       return (
                         <React.Fragment key={r.leadId}>
                           <tr
                             className="cursor-pointer hover:bg-slate-50/75"
-                            onClick={() => toggleLeadExpand(r.leadId, r.phone)}
+                            onClick={() => toggleLeadExpand(r.leadId, r.phone, r.callId)}
                           >
                             <td className="py-2 pr-2 text-slate-400">
                               {isExpanded ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
@@ -417,7 +427,7 @@ export default function ReportsView({ callLogs, dialerTasks, leads, costPerMinut
                           {isExpanded && (
                             <tr className="bg-slate-50/40">
                               <td colSpan={7} className="px-4 pb-4 pt-1">
-                                {loadingAnswersFor === r.phone ? (
+                                {loadingAnswersFor === cacheKey ? (
                                   <div className="flex items-center gap-2 py-3 text-[11px] text-slate-400">
                                     <span className="h-3 w-3 border-2 border-slate-300 border-t-blue-500 rounded-full animate-spin" />
                                     Loading answers…
