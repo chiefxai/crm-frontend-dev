@@ -209,6 +209,11 @@ export default function ReportsView({ callLogs, dialerTasks, leads, costPerMinut
       for (let i = 0; i < maxAnswers; i++) qaHeaders.push(`Question ${i + 1}`, `Answer ${i + 1}`);
 
       const escapeCsv = (val: string) => `"${String(val ?? '').replace(/"/g, '""')}"`;
+      // Excel auto-detects a long digit string as a number and mangles it
+      // into scientific notation (9.18939E+11) — confirmed live. Wrapping
+      // it as an Excel formula that returns text ( ="..." ) forces Excel
+      // to keep it as a literal string instead of "helpfully" reformatting it.
+      const escapePhoneCsv = (val: string) => `"=""${String(val ?? '').replace(/"/g, '""')}"""`;
       const header = ['Name', 'Phone', 'Status', 'Duration', 'Sentiment', 'Intent', ...qaHeaders];
       const lines = [header.map(escapeCsv).join(',')];
       for (const r of perLead) {
@@ -216,8 +221,8 @@ export default function ReportsView({ callLogs, dialerTasks, leads, costPerMinut
         for (let i = 0; i < maxAnswers; i++) {
           qaCells.push(r.answers[i]?.question || '', r.answers[i]?.answer || '');
         }
-        const row = [r.name, r.phone, r.status, formatDuration(r.duration), r.sentiment, r.intent, ...qaCells];
-        lines.push(row.map(escapeCsv).join(','));
+        const row = [escapeCsv(r.name), escapePhoneCsv(r.phone), escapeCsv(r.status), escapeCsv(formatDuration(r.duration)), escapeCsv(r.sentiment), escapeCsv(r.intent), ...qaCells.map(escapeCsv)];
+        lines.push(row.join(','));
       }
 
       const blob = new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8;' });
