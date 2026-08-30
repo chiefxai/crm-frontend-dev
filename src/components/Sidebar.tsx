@@ -54,6 +54,7 @@ export default function Sidebar({
     lending: 'Loan CRM Platform',
     real_estate: 'Real Estate CRM Platform',
     healthcare: 'Healthcare CRM Platform',
+    insurance: 'Insurance CRM Platform',
     education: 'Education CRM Platform',
     ecommerce: 'E-commerce CRM Platform',
     automotive: 'Automotive CRM Platform',
