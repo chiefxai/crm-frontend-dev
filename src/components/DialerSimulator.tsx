@@ -223,6 +223,36 @@ Real Tamil speakers do not say the "correct" written form of a word. They contra
     }
   }, [dialableNumbers, selectedOutboundNumber]);
 
+  // Auto-redial status per phone (see services/dialerRetryEngine.js) — keyed
+  // by the last 10 digits so formatting differences (with/without country
+  // code, spaces, dashes) between a lead's saved number and what Vobiz
+  // stored on the call_logs row still match up.
+  const [retryStatuses, setRetryStatuses] = useState<Record<string, {
+    status: string; attemptNumber: number; nextRetryAt: string | null; retryStatus: string;
+  }>>({});
+  const normalizePhone = (p: string) => (p || '').replace(/\D/g, '').slice(-10);
+  useEffect(() => {
+    let cancelled = false;
+    const fetchRetries = async () => {
+      try {
+        const res = await apiFetch('/api/dialer-retries');
+        const data = await res.json();
+        if (cancelled || !Array.isArray(data)) return;
+        const byPhone: typeof retryStatuses = {};
+        for (const row of data) {
+          const key = normalizePhone(row.phone);
+          if (key) byPhone[key] = row;
+        }
+        setRetryStatuses(byPhone);
+      } catch {
+        // Silent — this is a supplementary status badge, not core dialer function.
+      }
+    };
+    fetchRetries();
+    const interval = setInterval(fetchRetries, 60000);
+    return () => { cancelled = true; clearInterval(interval); };
+  }, []);
+
   // Active call timer
   useEffect(() => {
     if (callState === 'connected') {
@@ -1323,6 +1353,30 @@ Currently on question ${nextIndex} out of ${selectedTask.questions.length}. Next
                               Pending Dial
                             </span>
                           )}
+                          {(() => {
+                            const retry = retryStatuses[normalizePhone(lead.phone)];
+                            if (!retry || isCallingActive) return null;
+                            if (retry.retryStatus === 'exhausted') {
+                              return (
+                                <p className="text-[9px] text-slate-400 mt-1">
+                                  Auto-redial gave up after {retry.attemptNumber}/3 attempts
+                                </p>
+                              );
+                            }
+                            if (retry.retryStatus === 'pending' && retry.nextRetryAt) {
+                              const mins = Math.max(0, Math.round((new Date(retry.nextRetryAt).getTime() - Date.now()) / 60000));
+                              const label = mins >= 60 ? `${Math.floor(mins / 60)}h ${mins % 60}m` : `${mins}m`;
+                              return (
+                                <p className="text-[9px] text-blue-500 mt-1">
+                                  Auto-redial {retry.attemptNumber}/3 · next in {label}
+                                </p>
+                              );
+                            }
+                            if (retry.retryStatus === 'retrying') {
+                              return <p className="text-[9px] text-blue-500 mt-1 animate-pulse">Auto-redialing…</p>;
+                            }
+                            return null;
+                          })()}
                         </td>
                         <td className="px-4 py-3">
                           {result?.sentiment ? (
