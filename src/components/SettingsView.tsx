@@ -141,6 +141,27 @@ export default function SettingsView({
     }
   };
 
+  // Disconnects the org's own Twilio/Vobiz account — separate from
+  // deleting a virtual_numbers row (handleDeleteNumber above). Without
+  // this, the actual credentials outbound calls fall back to
+  // (channelsEngine.getChannel) stayed connected forever, so a "deleted"
+  // number kept showing "Connected: <number>" on this card and kept being
+  // used to place calls.
+  const [disconnectingChannel, setDisconnectingChannel] = useState<string | null>(null);
+  const handleDisconnectChannel = async (type: 'twilio' | 'vobiz') => {
+    setDisconnectingChannel(type);
+    try {
+      const res = await apiFetch(`/api/channels/${type}`, { method: 'DELETE' });
+      if (res.ok) {
+        setConnectedChannels(connectedChannels.filter((c) => c.type !== type));
+      } else {
+        alert((await res.json().catch(() => ({}))).error || `Failed to disconnect ${type}.`);
+      }
+    } finally {
+      setDisconnectingChannel(null);
+    }
+  };
+
   const twilioChannel = connectedChannels.find((c) => c.type === 'twilio');
   const vobizChannel = connectedChannels.find((c) => c.type === 'vobiz');
 
@@ -280,7 +301,17 @@ export default function SettingsView({
                 {connectProvider === 'twilio' ? (
                   <form onSubmit={handleConnectTwilio} className="space-y-2">
                     {twilioChannel && (
-                      <p className="text-[11px] text-emerald-600 mb-1">Connected: {twilioChannel.externalId}</p>
+                      <div className="flex items-center justify-between mb-1">
+                        <p className="text-[11px] text-emerald-600">Connected: {twilioChannel.externalId}</p>
+                        <button
+                          type="button"
+                          onClick={() => handleDisconnectChannel('twilio')}
+                          disabled={disconnectingChannel === 'twilio'}
+                          className="text-[10px] font-semibold text-rose-500 hover:text-rose-600 disabled:opacity-50 cursor-pointer"
+                        >
+                          {disconnectingChannel === 'twilio' ? 'Disconnecting…' : 'Disconnect'}
+                        </button>
+                      </div>
                     )}
                     <input type="text" value={twilioSid} onChange={(e) => setTwilioSid(e.target.value)} placeholder="Account SID" className="w-full bg-slate-50 border border-slate-100 rounded-lg px-3 py-2 text-xs focus:outline-none" />
                     <input type="password" value={twilioToken} onChange={(e) => setTwilioToken(e.target.value)} placeholder="Auth Token" className="w-full bg-slate-50 border border-slate-100 rounded-lg px-3 py-2 text-xs focus:outline-none" />
@@ -293,7 +324,17 @@ export default function SettingsView({
                 ) : (
                   <form onSubmit={handleConnectVobiz} className="space-y-2">
                     {vobizChannel && (
-                      <p className="text-[11px] text-emerald-600 mb-1">Connected: {vobizChannel.externalId}</p>
+                      <div className="flex items-center justify-between mb-1">
+                        <p className="text-[11px] text-emerald-600">Connected: {vobizChannel.externalId}</p>
+                        <button
+                          type="button"
+                          onClick={() => handleDisconnectChannel('vobiz')}
+                          disabled={disconnectingChannel === 'vobiz'}
+                          className="text-[10px] font-semibold text-rose-500 hover:text-rose-600 disabled:opacity-50 cursor-pointer"
+                        >
+                          {disconnectingChannel === 'vobiz' ? 'Disconnecting…' : 'Disconnect'}
+                        </button>
+                      </div>
                     )}
                     <input type="text" value={vobizAuthId} onChange={(e) => setVobizAuthId(e.target.value)} placeholder="Auth ID" className="w-full bg-slate-50 border border-slate-100 rounded-lg px-3 py-2 text-xs focus:outline-none" />
                     <input type="password" value={vobizToken} onChange={(e) => setVobizToken(e.target.value)} placeholder="Auth Token" className="w-full bg-slate-50 border border-slate-100 rounded-lg px-3 py-2 text-xs focus:outline-none" />
