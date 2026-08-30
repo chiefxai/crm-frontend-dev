@@ -150,9 +150,25 @@ export default function SettingsView({
   const [newStaffPhone, setNewStaffPhone] = useState('');
   const [newStaffRole, setNewStaffRole] = useState<UserRole>('Loan Agent');
 
-  // Delete virtual line
-  const handleDeleteNumber = (numId: string) => {
+  // Delete virtual line — calls the dedicated DELETE route directly instead
+  // of relying on the whole-array /api/settings/numbers/sync effect, since
+  // deleting the LAST remaining number sends an empty array that's
+  // indistinguishable from a sync bug and gets silently ignored by
+  // db.replaceAll's own guard against accidental data wipes.
+  const handleDeleteNumber = async (numId: string) => {
+    const previous = virtualNumbers;
     setVirtualNumbers(virtualNumbers.filter((n) => n.id !== numId));
+    try {
+      const res = await apiFetch(`/api/settings/numbers/${encodeURIComponent(numId)}`, { method: 'DELETE' });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        alert(body.error || 'Failed to delete number.');
+        setVirtualNumbers(previous);
+      }
+    } catch (err) {
+      alert('Failed to delete number — check your connection and try again.');
+      setVirtualNumbers(previous);
+    }
   };
 
   // Add Staff Member
