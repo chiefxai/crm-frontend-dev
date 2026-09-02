@@ -522,6 +522,7 @@ export default function App() {
             setTasks={setDialerTasks}
             companyName={orgSettings.workspaceName}
             teamMembers={teamMembers}
+            industry={orgSettings.industry}
           />
         );
       case 'loans':

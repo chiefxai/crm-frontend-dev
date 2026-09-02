@@ -87,7 +87,12 @@ export default function SettingsView({
       setVirtualNumbers(virtualNumbers.map((n) => n.number === number ? { ...n, friendlyName, provider, status: 'Active' } : n));
     } else {
       setVirtualNumbers([...virtualNumbers, {
-        id: `VN-${400 + virtualNumbers.length + 1}`,
+        // Was `VN-${400 + virtualNumbers.length + 1}` — collided across
+        // orgs (the id column is a global PK, not per-org) and even within
+        // one org whenever the local list was stale, causing the sync's
+        // insert to fail with a duplicate-key error and silently revert
+        // the number the user just added. Crypto-random suffix instead.
+        id: `VN-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`,
         number, provider, status: 'Active', friendlyName,
         routingUrl: 'https://api.chiefxai.com/voice/webhook-dynamic',
         incomingCallCount: 0, outgoingCallCount: 0

@@ -48,6 +48,7 @@ interface DialerSimulatorProps {
   setTasks: React.Dispatch<React.SetStateAction<DialTask[]>>;
   companyName: string;
   teamMembers?: TeamMember[];
+  industry?: string;
 }
 
 // Broad language list for per-task selection — a generic "speak fluently
@@ -69,6 +70,84 @@ export const TASK_LANGUAGE_OPTIONS = [
 ];
 export const DEFAULT_TASK_LANGUAGE = TASK_LANGUAGE_OPTIONS[0];
 
+// Super Star Health Insurance tele-script question bank — the AI asks
+// these one by one, same sequential-flow mechanism as any other task's
+// questions. Source: Super_Star_AI_Bot_Questions_Modern_Template.pdf.
+const SUPER_STAR_QUESTIONS: string[] = [
+  'Neenga pesura time convenient-a irukka?',
+  'Super Star Health Insurance Plan pathi therinjika interest-a irukkeengala?',
+  'Indha conversation-ku eppadi language prefer pannuveenga?',
+  'Ippo unga kitta ethachum health insurance policy irukka?',
+  'Ethana health insurance policies ippo unga kitta irukku?',
+  'Unga existing policy ungalukku thaana illa family-kum sera irukka?',
+  'Unga age enna sollunga?',
+  'Neenga married-a illa single-a?',
+  'Unga spouse age enna?',
+  'Unga kitta ethana kuzhandhaigal irukanga?',
+  'Avanga age enna?',
+  'Neenga eppo edhu city-la irukeenga?',
+  'Health insurance ungalukku mattum-a venuma illa full family-kum venuma?',
+  'Enna level coverage neenga expect pannureenga?',
+  'Unga premium budget evlo-nu oru idea irukka?',
+  'Hospitalization expenses எப்படி cover aagum-nu therinjukka interest-a?',
+  'Indha policy-la 24-hour hospitalization requirement pathi therinjikanuma?',
+  'Day-care treatments pathi therinjikanuma?',
+  'Pre and post hospitalization coverage pathi therinjikanuma?',
+  'AYUSH treatments cover aagumaanu therinjikanuma?',
+  'Ambulance mattum air ambulance coverage pathi therinjikanuma?',
+  'Organ donor expenses pathi therinjikanuma?',
+  'Home-care mattum domiciliary hospitalization pathi therinjikanuma?',
+  'Second medical opinion facility pathi therinjikanuma?',
+  'Cumulative bonus eppadi work aagum-nu therinjikanuma?',
+  'Sum insured automatic-a eppadi restore aagum-nu therinjikanuma?',
+  'Unlimited tele-consultation facility pathi therinjikanuma?',
+  'AI-driven face scan facility pathi therinjikanuma?',
+  'Dental check-up benefit pathi therinjikanuma?',
+  'Star Wellness Program mattum premium discounts pathi therinjikanuma?',
+  'Smart Network option select panni premium kammi pannikanuma?',
+  'Quick Shield moolama sila pre-existing diseases-kum coverage venuma?',
+  'Hospitalization time-la use aagura consumable items-kum coverage venuma?',
+  'Neenga marriage plan panreengala, future spouse-kum coverage venuma?',
+  'Maternity coverage add pannikanuma?',
+  'Assisted reproduction treatment-kum coverage venuma?',
+  'Ippo neenga pregnant-a irukeengala, Women Care option interest-a irukka?',
+  'High-end diagnostic tests-kum extra coverage venuma?',
+  'Personal Accident Cover add pannikanuma?',
+  'Annual health check-up benefit venuma?',
+  'Voluntary co-payment vachi premium kammi pannikanuma?',
+  'Voluntary deductible vachi premium kammi pannikanuma?',
+  'Room category change panni premium kammi pannikanuma?',
+  'International second medical opinion venuma?',
+  'Durable medical equipment-kum coverage venuma?',
+  'Hospital Cash Benefit add pannikanuma?',
+  'Specified diseases-ku waiting period kammi pannikanuma?',
+  'Pre-existing diseases-ku waiting period kammi pannikanuma?',
+  'Limitless Care option pathi therinjikanuma?',
+  'Super Star Bonus option add pannikanuma?',
+  'Ippo unga kitta ethachum pre-existing medical conditions irukka?',
+  'Irundha, andha medical conditions enna-nu sollunga?',
+  'Munnadi ethachum major medical treatment illa hospitalization aagi irukeengala?',
+  'Ippo neenga ethachum medical treatment eduthu kittu irukeengala?',
+  'Pre-existing diseases eppadi cover aagum-nu therinjikanuma?',
+  '30-day initial waiting period pathi explain pannattuma?',
+  'Ethana conditions-ku two-year waiting period irukku-nu therinjikanuma?',
+  'Pre-existing diseases-ku waiting period pathi therinjikanuma?',
+  'Waiting period eppadi kammi pannalam-nu therinjikanuma?',
+  'Cashless hospitalization facility eppadi work aagum-nu therinjikanuma?',
+  'Network-ku veliya irukura hospital-la treatment eppadi work aagum-nu therinjikanuma?',
+  'Policy cancellation rules pathi therinjikanuma?',
+  '30-day free-look cancellation period pathi therinjikanuma?',
+  'Premium refund kidaikkura conditions pathi explain pannattuma?',
+  'Super Star policy-ku proceed pannalaama?',
+  'Unga full name sollunga?',
+  'Unga email address sollunga?',
+  'Proposal form-ku unga address sollunga?',
+  'Online proposal form fill panna help venuma?',
+  'Payment UPI, debit card, credit card illa NEFT moolama pannuveengala?',
+  'Required medical information ellam correct-a kudutheengala?',
+  'Nomination details complete pannikanuma?'
+];
+
 interface DialTask {
   id: string;
   name: string;
@@ -78,6 +157,7 @@ interface DialTask {
   createdAt: string;
   language?: string;
   assignedTeamMemberId?: string;
+  starhealthEnabled?: boolean;
   callResults: {
     [leadId: string]: {
       status: 'Pending' | 'Calling' | 'Completed' | 'No Answer' | 'Skipped';
@@ -103,8 +183,10 @@ export default function DialerSimulator({
   tasks,
   setTasks,
   companyName,
-  teamMembers = []
+  teamMembers = [],
+  industry
 }: DialerSimulatorProps) {
+  const isInsurance = industry === 'insurance';
   // Inbound Call states
   const [dialerMode, setDialerMode] = useState<'outbound' | 'inbound'>('outbound');
 
@@ -175,6 +257,7 @@ Real Tamil speakers do not say the "correct" written form of a word. They contra
   const [newTaskName, setNewTaskName] = useState('');
   const [newTaskLanguage, setNewTaskLanguage] = useState(DEFAULT_TASK_LANGUAGE);
   const [newTaskAssignedMemberId, setNewTaskAssignedMemberId] = useState('');
+  const [newStarhealthEnabled, setNewStarhealthEnabled] = useState(false);
   const [newQuestions, setNewQuestions] = useState<string[]>([]);
   const [tempQuestionInput, setTempQuestionInput] = useState('');
   const [selectedFormLeadIds, setSelectedFormLeadIds] = useState<string[]>([]);
@@ -346,7 +429,8 @@ Real Tamil speakers do not say the "correct" written form of a word. They contra
       createdAt: new Date().toISOString(),
       callResults: {},
       language: newTaskLanguage,
-      assignedTeamMemberId: newTaskAssignedMemberId || undefined
+      assignedTeamMemberId: newTaskAssignedMemberId || undefined,
+      starhealthEnabled: isInsurance && newStarhealthEnabled
     };
 
     const updatedTasks = [...tasks, newTask];
@@ -360,6 +444,7 @@ Real Tamil speakers do not say the "correct" written form of a word. They contra
     setNewTaskName('');
     setNewTaskLanguage(DEFAULT_TASK_LANGUAGE);
     setNewTaskAssignedMemberId('');
+    setNewStarhealthEnabled(false);
     setNewQuestions([]);
     setSelectedFormLeadIds([]);
   };
@@ -394,7 +479,8 @@ Real Tamil speakers do not say the "correct" written form of a word. They contra
           questions: selectedTask ? selectedTask.questions : [],
           from: selectedOutboundNumber || undefined,
           language: selectedTask?.language || undefined,
-          assignedContact: assignedMember ? { name: assignedMember.name, phone: assignedMember.phone } : undefined
+          assignedContact: assignedMember ? { name: assignedMember.name, phone: assignedMember.phone } : undefined,
+          starhealthEnabled: !!selectedTask?.starhealthEnabled
         })
       });
       const data = await res.json();
@@ -1918,6 +2004,23 @@ Currently on question ${nextIndex} out of ${selectedTask.questions.length}. Next
                 </div>
               </div>
 
+              {/* Star Health quoting toggle — insurance-only, opt-in per task */}
+              {isInsurance && (
+                <div className="flex items-start gap-2 border border-slate-200 rounded-xl px-4 py-2.5">
+                  <input
+                    type="checkbox"
+                    id="starhealth-enabled"
+                    checked={newStarhealthEnabled}
+                    onChange={(e) => setNewStarhealthEnabled(e.target.checked)}
+                    className="mt-0.5"
+                  />
+                  <label htmlFor="starhealth-enabled" className="text-xs text-slate-600">
+                    <span className="font-bold text-slate-700 block">Enable Star Health quoting</span>
+                    During this task's calls, the AI will collect quote details (pincode, family, ages, pre-existing disease) and read back a live Star Health quote, or send it afterward if it isn't ready during the call.
+                  </label>
+                </div>
+              )}
+
               {/* Define Questions sequential flow */}
               <div className="space-y-2">
                 <label className="text-xs font-bold text-slate-600 block">Questions Questionnaire (Sequential Flow)</label>
@@ -1939,6 +2042,16 @@ Currently on question ${nextIndex} out of ${selectedTask.questions.length}. Next
                       <option key={t.id} value={t.id}>{t.name} ({t.questions.length} question{t.questions.length === 1 ? '' : 's'})</option>
                     ))}
                   </select>
+                )}
+
+                {isInsurance && (
+                  <button
+                    type="button"
+                    onClick={() => setNewQuestions([...SUPER_STAR_QUESTIONS])}
+                    className="w-full flex items-center justify-center gap-1.5 border border-amber-200 bg-amber-50 hover:bg-amber-100 text-amber-700 text-xs font-bold rounded-lg px-3 py-2 cursor-pointer"
+                  >
+                    ⭐ Load Super Star Questions ({SUPER_STAR_QUESTIONS.length} questions)
+                  </button>
                 )}
 
                 {/* Question List */}
