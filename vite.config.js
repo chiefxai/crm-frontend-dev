@@ -29,5 +29,7 @@ export default defineConfig(({ mode }) => {
       },
     },
   },
+ preview: {
+    allowedHosts: ['chiefvoicecrm-fe-production.up.railway.app'],
   };
 })
