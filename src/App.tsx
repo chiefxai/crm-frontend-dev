@@ -45,6 +45,7 @@ import WorkflowBuilderView from './components/WorkflowBuilderView';
 import WorkflowsView from './features/workflows/WorkflowsView';
 import { QuestionFlow } from './features/workflows/types';
 import { useFeatureFlags } from './features/feature-flags/FeatureFlagContext';
+import ThemeToggle from './shared/theme/ThemeToggle';
 import CampaignView from './components/CampaignView';
 import DialerSimulator from './components/DialerSimulator';
 import LoanLifecycleView from './components/LoanLifecycleView';
@@ -622,6 +623,7 @@ export default function App() {
           </div>
 
           <div className="flex items-center space-x-4">
+            <ThemeToggle />
             <span className="text-xs text-slate-400">Representative:</span>
             <div className="flex items-center space-x-2 bg-slate-50 border border-slate-100 px-3 py-1 rounded-xl">
               <span className="h-2 w-2 rounded-full bg-emerald-500"></span>

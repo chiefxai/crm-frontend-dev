@@ -3,6 +3,7 @@ import {createRoot} from 'react-dom/client';
 import App from './App.tsx';
 import AdminApp from './AdminApp.tsx';
 import { FeatureFlagProvider } from './features/feature-flags/FeatureFlagContext.tsx';
+import { ThemeProvider } from './shared/theme/ThemeContext.tsx';
 import './index.css';
 
 // Global API Fetch Interceptor for separate deployment support
@@ -23,8 +24,10 @@ const isAdminRoute = window.location.pathname.startsWith('/admin');
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <FeatureFlagProvider>
-      {isAdminRoute ? <AdminApp /> : <App />}
-    </FeatureFlagProvider>
+    <ThemeProvider>
+      <FeatureFlagProvider>
+        {isAdminRoute ? <AdminApp /> : <App />}
+      </FeatureFlagProvider>
+    </ThemeProvider>
   </StrictMode>,
 );

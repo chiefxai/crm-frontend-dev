@@ -5,3 +5,129 @@
   --font-display: "Space Grotesk", sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
 }
+
+/* ── Light tokens (default) ─────────────────────────────────────── */
+:root {
+  --bg-base:        #f8fafc;   /* slate-50 */
+  --bg-surface:     #ffffff;
+  --bg-subtle:      #f1f5f9;   /* slate-100 */
+  --border:         #e2e8f0;   /* slate-200 */
+  --border-subtle:  #f1f5f9;
+  --text-primary:   #0f172a;   /* slate-900 */
+  --text-secondary: #475569;   /* slate-600 */
+  --text-muted:     #94a3b8;   /* slate-400 */
+  --accent:         #2563eb;   /* blue-600 */
+  --accent-subtle:  #eff6ff;   /* blue-50 */
+  --sidebar-bg:     #ffffff;
+  --sidebar-border: #e2e8f0;
+  --header-bg:      #ffffff;
+}
+
+/* ── Dark tokens ────────────────────────────────────────────────── */
+.dark {
+  --bg-base:        #0f172a;   /* slate-900 */
+  --bg-surface:     #1e293b;   /* slate-800 */
+  --bg-subtle:      #334155;   /* slate-700 */
+  --border:         #334155;
+  --border-subtle:  #1e293b;
+  --text-primary:   #f1f5f9;   /* slate-100 */
+  --text-secondary: #94a3b8;   /* slate-400 */
+  --text-muted:     #64748b;   /* slate-500 */
+  --accent:         #3b82f6;   /* blue-500 */
+  --accent-subtle:  #1e3a5f;
+  --sidebar-bg:     #1e293b;
+  --sidebar-border: #334155;
+  --header-bg:      #1e293b;
+}
+
+/* ── Apply tokens to structural elements ───────────────────────── */
+body {
+  background-color: var(--bg-base);
+  color: var(--text-primary);
+  transition: background-color 0.15s, color 0.15s;
+}
+
+/* Sidebar */
+#sidebar-container {
+  background-color: var(--sidebar-bg) !important;
+  border-color: var(--sidebar-border) !important;
+  color: var(--text-primary);
+}
+
+.dark #sidebar-container button {
+  color: var(--text-secondary);
+}
+
+.dark #sidebar-container button:hover {
+  background-color: var(--bg-subtle);
+  color: var(--text-primary);
+}
+
+/* App header */
+.dark header {
+  background-color: var(--header-bg) !important;
+  border-color: var(--border-subtle) !important;
+}
+
+/* Generic surface cards */
+.dark .bg-white {
+  background-color: var(--bg-surface) !important;
+}
+
+.dark .bg-slate-50,
+.dark .bg-slate-50\/50,
+.dark .bg-slate-50\/75 {
+  background-color: var(--bg-subtle) !important;
+}
+
+.dark .border-slate-100,
+.dark .border-slate-200 {
+  border-color: var(--border) !important;
+}
+
+.dark .text-slate-900,
+.dark .text-slate-800 {
+  color: var(--text-primary) !important;
+}
+
+.dark .text-slate-700,
+.dark .text-slate-600,
+.dark .text-slate-500 {
+  color: var(--text-secondary) !important;
+}
+
+.dark .text-slate-400 {
+  color: var(--text-muted) !important;
+}
+
+/* Tables */
+.dark table thead tr {
+  background-color: var(--bg-subtle) !important;
+}
+
+.dark table tbody tr:hover {
+  background-color: rgba(255,255,255,0.03) !important;
+}
+
+/* Inputs */
+.dark input,
+.dark textarea,
+.dark select {
+  background-color: var(--bg-subtle) !important;
+  border-color: var(--border) !important;
+  color: var(--text-primary) !important;
+}
+
+/* React Flow canvas in dark mode */
+.dark .react-flow__background {
+  background-color: var(--bg-base) !important;
+}
+
+.dark .react-flow__controls {
+  background-color: var(--bg-surface) !important;
+  border-color: var(--border) !important;
+}
+
+.dark .react-flow__minimap {
+  background-color: var(--bg-surface) !important;
+}
