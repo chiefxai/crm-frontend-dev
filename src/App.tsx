@@ -42,6 +42,9 @@ import AuthView from './components/AuthView';
 import DashboardView from './components/DashboardView';
 import LeadManagementView from './components/LeadManagementView';
 import WorkflowBuilderView from './components/WorkflowBuilderView';
+import WorkflowsView from './features/workflows/WorkflowsView';
+import { QuestionFlow } from './features/workflows/types';
+import { useFeatureFlags } from './features/feature-flags/FeatureFlagContext';
 import CampaignView from './components/CampaignView';
 import DialerSimulator from './components/DialerSimulator';
 import LoanLifecycleView from './components/LoanLifecycleView';
@@ -120,6 +123,10 @@ export default function App() {
   const [primaryObject, setPrimaryObject] = useState<{ key: string; stages: { id: string; key: string; label: string }[]; fields: { id: string; key: string; label: string; type: string; required?: boolean }[] } | null>(null);
 
   const [hasLoaded, setHasLoaded] = useState<boolean>(false);
+  const [questionFlows, setQuestionFlows] = useState<QuestionFlow[]>(() =>
+    loadFromStorage<QuestionFlow[]>('chiefx_question_flows', [])
+  );
+  const { isEnabled } = useFeatureFlags();
 
   // Live call notifications — set when a real inbound/outbound call is in
   // progress (from the org-scoped /api/logs-stream SSE connection below),
@@ -438,6 +445,10 @@ export default function App() {
   }, [teamMembers, hasLoaded]);
 
   useEffect(() => {
+    saveToStorage('chiefx_question_flows', questionFlows);
+  }, [questionFlows]);
+
+  useEffect(() => {
     saveToStorage('chiefx_org', orgSettings);
     if (hasLoaded) {
       apiFetch('/api/settings/org', {
@@ -493,10 +504,9 @@ export default function App() {
         return <ReportsView callLogs={callLogs} dialerTasks={dialerTasks} leads={leads} costPerMinuteInr={costPerMinuteInr} orgName={orgSettings.name} />;
       case 'workflows':
         return (
-          <WorkflowBuilderView
-            workflows={workflows}
-            setWorkflows={setWorkflows}
-            leads={leads}
+          <WorkflowsView
+            flows={questionFlows}
+            setFlows={setQuestionFlows}
           />
         );
       case 'campaigns':

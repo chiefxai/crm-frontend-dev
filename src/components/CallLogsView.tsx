@@ -4,6 +4,8 @@ import { CallLog } from '../types';
 import PageHeader from './PageHeader';
 import { callCostInr, formatInr } from '../lib/pricing';
 import { getPlayableRecordingUrl } from '../lib/api';
+import Pagination from '../shared/components/Pagination';
+import { usePagination } from '../shared/hooks/usePagination';
 
 interface CallLogsViewProps {
   callLogs: CallLog[];
@@ -41,6 +43,7 @@ export default function CallLogsView({ callLogs, costPerMinuteInr }: CallLogsVie
   });
 
   const sorted = [...filtered].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  const pagination = usePagination(sorted, 25);
 
   // Quick summary for whatever's currently filtered — the full breakdown
   // (trends, sentiment, task-wise, cost) lives on the Reports page; this
@@ -99,7 +102,7 @@ export default function CallLogsView({ callLogs, costPerMinuteInr }: CallLogsVie
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 text-slate-700">
-              {sorted.map((c) => (
+              {pagination.paginatedItems.map((c) => (
                 <tr key={c.id} className="hover:bg-slate-50/50">
                   <td className="p-4 px-6 font-semibold text-slate-800">{c.leadName}</td>
                   <td className="p-4 px-6 font-mono">{formatDuration(c.duration)}</td>
@@ -123,6 +126,13 @@ export default function CallLogsView({ callLogs, costPerMinuteInr }: CallLogsVie
               )}
             </tbody>
           </table>
+          <Pagination
+            page={pagination.page}
+            totalPages={pagination.totalPages}
+            totalItems={pagination.totalItems}
+            pageSize={pagination.pageSize}
+            onPageChange={pagination.setPage}
+          />
         </div>
       </div>
 

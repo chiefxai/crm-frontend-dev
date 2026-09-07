@@ -25,6 +25,8 @@ import {
   BarChart3
 } from 'lucide-react';
 import { UserRole } from '../types';
+import { useFeatureFlags } from '../features/feature-flags/FeatureFlagContext';
+import { FeatureFlagKey } from '../features/feature-flags/types';
 
 interface SidebarProps {
   activeTab: string;
@@ -46,6 +48,7 @@ export default function Sidebar({
   industry
 }: SidebarProps) {
   const isLending = !industry || industry === 'lending';
+  const { isEnabled } = useFeatureFlags();
 
   // Sidebar header tagline — was hardcoded "Loan CRM Platform" for every
   // org regardless of industry. Real per-industry labels, matching
@@ -67,20 +70,19 @@ export default function Sidebar({
     { id: 'dashboard', label: 'Executive Desk', icon: LayoutDashboard },
     { id: 'leads', label: 'Lead CRM', icon: Users },
     { id: 'contacts', label: 'Contact Directory', icon: Contact },
-    // Disabled for now (not yet configured/used) — uncomment to re-enable.
-    // { id: 'workflows', label: 'Workflow Builder', icon: GitBranch },
+    { id: 'workflows', label: 'Workflow Builder', icon: GitBranch, flagKey: 'workflows' as FeatureFlagKey },
     { id: 'campaigns', label: 'AI Campaigns', icon: Briefcase },
-    { id: 'dialer', label: 'Voice Simulator', icon: PhoneCall },
+    { id: 'dialer', label: 'Voice Simulator', icon: PhoneCall, flagKey: 'dialer' as FeatureFlagKey },
     { id: 'call-logs', label: 'Call Logs', icon: History },
-    { id: 'reports', label: 'Reports', icon: BarChart3 },
-    { id: 'inbox', label: 'Unified Inbox', icon: Inbox },
-    { id: 'agent-studio', label: 'Agent Studio', icon: Sparkles },
-    { id: 'compliance', label: 'Compliance', icon: ShieldBan },
-    { id: 'knowledge', label: 'Knowledge Base', icon: BookOpen },
-    { id: 'enquiries', label: 'Enquiries', icon: MessageCircleQuestion },
-    { id: 'audit-log', label: 'Audit Log', icon: ScrollText },
-    { id: 'billing', label: 'Billing & Usage', icon: CreditCard },
-    { id: 'loans', label: 'Loan Lifecycle', icon: Layers },
+    { id: 'reports', label: 'Reports', icon: BarChart3, flagKey: 'reports' as FeatureFlagKey },
+    { id: 'inbox', label: 'Unified Inbox', icon: Inbox, flagKey: 'unified_inbox' as FeatureFlagKey },
+    { id: 'agent-studio', label: 'Agent Studio', icon: Sparkles, flagKey: 'agent_studio' as FeatureFlagKey },
+    { id: 'compliance', label: 'Compliance', icon: ShieldBan, flagKey: 'compliance' as FeatureFlagKey },
+    { id: 'knowledge', label: 'Knowledge Base', icon: BookOpen, flagKey: 'knowledge_base' as FeatureFlagKey },
+    { id: 'enquiries', label: 'Enquiries', icon: MessageCircleQuestion, flagKey: 'enquiries' as FeatureFlagKey },
+    { id: 'audit-log', label: 'Audit Log', icon: ScrollText, flagKey: 'audit_log' as FeatureFlagKey },
+    { id: 'billing', label: 'Billing & Usage', icon: CreditCard, flagKey: 'billing' as FeatureFlagKey },
+    { id: 'loans', label: 'Loan Lifecycle', icon: Layers, flagKey: 'loan_lifecycle' as FeatureFlagKey },
     { id: 'objects', label: 'Contacts', icon: Boxes },
     { id: 'company', label: 'Company Profile', icon: Building2 },
     { id: 'settings', label: 'Administration', icon: Settings }
@@ -94,6 +96,7 @@ export default function Sidebar({
   const menuItems = allMenuItems.filter((item) => {
     if (item.id === 'objects') return false;
     if (LENDING_ONLY_TAB_IDS.has(item.id)) return isLending;
+    if ((item as any).flagKey && !isEnabled((item as any).flagKey)) return false;
     return true;
   });
 

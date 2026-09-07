@@ -22,6 +22,8 @@ import {
   X
 } from 'lucide-react';
 import { Lead, CallLog, TeamMember } from '../types';
+import Pagination from '../shared/components/Pagination';
+import { usePagination } from '../shared/hooks/usePagination';
 
 interface LeadManagementViewProps {
   leads: Lead[];
@@ -66,6 +68,7 @@ export default function LeadManagementView({
     const matchesSource = sourceFilter === 'All' || lead.source === sourceFilter;
     return matchesSearch && matchesStatus && matchesSource;
   });
+  const leadPagination = usePagination(filteredLeads, 20);
 
   // Handle lead creation
   const handleAddLead = (e: React.FormEvent) => {
@@ -347,7 +350,7 @@ export default function LeadManagementView({
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 text-sm text-slate-700">
-              {filteredLeads.map((lead) => {
+              {leadPagination.paginatedItems.map((lead) => {
                 const isUnassigned = lead.tags.includes('Unassigned');
                 return (
                   <tr
@@ -444,6 +447,13 @@ export default function LeadManagementView({
               })}
             </tbody>
           </table>
+          <Pagination
+            page={leadPagination.page}
+            totalPages={leadPagination.totalPages}
+            totalItems={leadPagination.totalItems}
+            pageSize={leadPagination.pageSize}
+            onPageChange={leadPagination.setPage}
+          />
         </div>
       </div>
 

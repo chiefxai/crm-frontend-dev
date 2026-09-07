@@ -18,6 +18,8 @@ import {
 import { apiFetch } from '../lib/api';
 import { VirtualNumber, TeamMember, OrganizationSettings, UserRole } from '../types';
 import { COST_PER_MINUTE_INR_FALLBACK, formatInr } from '../lib/pricing';
+import FeatureFlagsPanel from '../features/feature-flags/FeatureFlagsPanel';
+import { Flag } from 'lucide-react';
 
 interface SettingsViewProps {
   virtualNumbers: VirtualNumber[];
@@ -48,7 +50,7 @@ export default function SettingsView({
   setOrgSettings,
   costPerMinuteInr = COST_PER_MINUTE_INR_FALLBACK
 }: SettingsViewProps) {
-  const [subTab, setSubTab] = useState<'numbers' | 'team' | 'billing' | 'api'>('numbers');
+  const [subTab, setSubTab] = useState<'numbers' | 'team' | 'billing' | 'api' | 'features'>('numbers');
 
   const [auditLogs, setAuditLogs] = useState<AuditEntry[]>([]);
   useEffect(() => {
@@ -276,6 +278,14 @@ export default function SettingsView({
             }`}
           >
             <Key className="h-4 w-4 mr-3" /> API Credentials
+          </button>
+          <button
+            onClick={() => setSubTab('features')}
+            className={`w-full flex items-center px-4 py-2.5 rounded-xl text-xs font-bold uppercase tracking-wider transition-all cursor-pointer ${
+              subTab === 'features' ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-500 hover:bg-slate-50'
+            }`}
+          >
+            <Flag className="h-4 w-4 mr-3" /> Feature Flags
           </button>
         </div>
 
@@ -572,6 +582,13 @@ export default function SettingsView({
                   )}
                 </div>
               </div>
+            </div>
+          )}
+
+          {/* Subtab: Feature Flags */}
+          {subTab === 'features' && (
+            <div className="bg-slate-50 p-6 rounded-2xl border border-slate-100 shadow-sm">
+              <FeatureFlagsPanel />
             </div>
           )}
 
