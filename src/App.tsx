@@ -32,7 +32,6 @@ const EMPTY_ORG_SETTINGS: OrganizationSettings = {
 import Sidebar from './components/Sidebar';
 import DashboardView from './components/DashboardView';
 import LeadManagementView from './components/LeadManagementView';
-import WorkflowBuilderView from './components/WorkflowBuilderView';
 import WorkflowsView from './features/workflows/WorkflowsView';
 import { QuestionFlow } from './features/workflows/types';
 import { useFeatureFlags } from './features/feature-flags/FeatureFlagContext';
@@ -137,7 +136,6 @@ export default function App() {
           resNumbers,
           resTeam,
           resOrg,
-          resMe,
           resDialerTasks,
           resBilling
         ] = await Promise.all([
@@ -149,13 +147,8 @@ export default function App() {
           apiFetch('/api/settings/numbers').then(r => r.json()),
           apiFetch('/api/settings/team').then(r => r.json()),
           apiFetch('/api/settings/org').then(r => r.json()),
-          apiFetch('/api/auth/me').then(r => r.json()),
           // Falls back to null (not []) on failure so a transient error here
-          // can't be mistaken for "this org genuinely has zero tasks" — that
-          // used to overwrite real local/session state with an empty array,
-          // which the sync effect below would then dutifully write back to
-          // the backend, permanently deleting real tasks. See db.js
-          // replaceAll for the matching backend-side guard.
+          // can't be mistaken for "this org genuinely has zero tasks".
           apiFetch('/api/dialer-tasks').then(r => r.json()).catch(() => null),
           apiFetch('/api/billing').then(r => r.json()).catch(() => null)
         ]);
@@ -181,7 +174,6 @@ export default function App() {
         // phoneCharges/apiKeys entirely, and SettingsView calls
         // .toFixed()/.map() on those unconditionally.
         if (resOrg && Object.keys(resOrg).length > 0) setOrgSettings({ ...EMPTY_ORG_SETTINGS, ...resOrg });
-        // User identity comes from Keycloak token — /api/auth/me no longer needed.
         if (Array.isArray(resDialerTasks)) setDialerTasks(resDialerTasks);
 
         // Non-lending org: bridge its real Industry Objects records into
