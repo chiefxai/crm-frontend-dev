@@ -19,8 +19,10 @@ import {
   ChevronRight,
   Clock,
   ThumbsUp,
-  X
+  X,
+  Download
 } from 'lucide-react';
+import { downloadCSV } from '../shared/lib/exporters';
 import { Lead, CallLog, TeamMember } from '../types';
 import Pagination from '../shared/components/Pagination';
 import { usePagination } from '../shared/hooks/usePagination';
@@ -272,6 +274,16 @@ export default function LeadManagementView({
             onChange={handleCSVFileChange}
             className="hidden"
           />
+          <button
+            onClick={() => downloadCSV('leads.csv',
+              ['Name', 'Phone', 'Email', 'Status', 'Source', 'Employer', 'Loan Amount', 'Income'],
+              filteredLeads.map(l => [l.name, l.phone, l.email, l.status, l.source, l.financialInfo?.employer ?? '', l.amountRequested, l.financialInfo?.monthlyIncome ?? ''])
+            )}
+            className="flex items-center px-4 py-2 border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-sm font-semibold rounded-xl shadow-sm transition-all cursor-pointer"
+          >
+            <Download className="h-4 w-4 mr-2" />
+            Export CSV
+          </button>
           <button
             onClick={handleCSVImportClick}
             className="flex items-center px-4 py-2 border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-sm font-semibold rounded-xl shadow-sm transition-all cursor-pointer"

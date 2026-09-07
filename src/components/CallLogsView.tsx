@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { Phone, Search, X, PlayCircle } from 'lucide-react';
+import { Phone, Search, X, PlayCircle, Download } from 'lucide-react';
+import { downloadCSV } from '../shared/lib/exporters';
 import { CallLog } from '../types';
 import PageHeader from './PageHeader';
 import { callCostInr, formatInr } from '../lib/pricing';
@@ -80,6 +81,15 @@ export default function CallLogsView({ callLogs, costPerMinuteInr }: CallLogsVie
           {(fromDate || toDate) && (
             <button onClick={() => { setFromDate(''); setToDate(''); }} className="text-[11px] text-slate-400 hover:text-slate-600 underline mb-2">Clear dates</button>
           )}
+          <button
+            onClick={() => downloadCSV('call_logs.csv',
+              ['Name', 'Direction', 'Duration (s)', 'Cost (INR)', 'Status', 'Sentiment', 'Intent', 'Summary', 'Date'],
+              sorted.map(c => [c.leadName, c.direction ?? 'unknown', c.duration, callCostInr(c.duration, costPerMinuteInr ?? 0).toFixed(2), c.status, c.sentiment, c.intent, c.summary, new Date(c.createdAt).toLocaleString()])
+            )}
+            className="flex items-center gap-1.5 bg-white border border-slate-200 rounded-lg px-3 py-2 text-xs font-medium text-slate-600 hover:border-blue-400 hover:text-blue-600 transition-colors"
+          >
+            <Download className="h-3.5 w-3.5" /> Export CSV
+          </button>
         </div>
 
         <div className="flex flex-wrap gap-4 mb-4 text-xs">

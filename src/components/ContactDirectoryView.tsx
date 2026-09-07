@@ -80,7 +80,6 @@ export default function ContactDirectoryView({
   const [formNotes, setFormNotes] = useState('');
 
   // Bulk Upload State
-  const [bulkMode, setBulkMode] = useState<'csv-file' | 'paste-text'>('paste-text');
   const [pastedData, setPastedData] = useState('');
   const [parsedPreview, setParsedPreview] = useState<Partial<Lead>[]>([]);
   const [parsingError, setParsingError] = useState<string | null>(null);
@@ -273,24 +272,6 @@ export default function ContactDirectoryView({
       setParsingError(`Parsing error: ${err.message}`);
       setParsedPreview([]);
     }
-  };
-
-  // Paste Text Area change
-  const handlePasteChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    const val = e.target.value;
-    setPastedData(val);
-    parseCSVText(val);
-  };
-
-  // Paste a Sample Template
-  const handleLoadSampleTemplate = () => {
-    const sample = `name,phone,email,amount,employer,income,credit,dti
-Elon Musk,+1 (555) 912-3847,elon@spacex.com,150000,SpaceX Aerospace,45000,790,0.12
-Steve Jobs,+1 (555) 123-4567,steve@apple.com,30000,Apple Computer,25000,810,0.08
-Jeff Bezos,+1 (555) 888-2938,jeff@amazon.com,85000,Amazon Retail,38000,740,0.15
-Larry Page,+1 (555) 444-1111,larry@google.com,40000,Google LLC,32000,760,0.20`;
-    setPastedData(sample);
-    parseCSVText(sample);
   };
 
   // CSV File reader
@@ -776,70 +757,28 @@ Larry Page,+1 (555) 444-1111,larry@google.com,40000,Google LLC,32000,760,0.20`;
             </div>
 
             <div className="p-6 flex-1 overflow-y-auto space-y-6">
-              {/* Top Selector tab */}
-              <div className="flex bg-slate-100 p-1 rounded-xl">
-                <button
-                  onClick={() => setBulkMode('paste-text')}
-                  className={`flex-1 py-2 text-xs font-semibold rounded-lg transition-all ${
-                    bulkMode === 'paste-text' ? 'bg-white text-slate-800 shadow-xs' : 'text-slate-500 hover:text-slate-700'
-                  }`}
+              <div className="space-y-4">
+                <div
+                  className="border-2 border-dashed border-slate-200 hover:border-blue-400 rounded-2xl p-8 text-center transition-all cursor-pointer bg-slate-50/50"
+                  onClick={() => fileInputRef.current?.click()}
                 >
-                  Paste Raw CSV Dataset
-                </button>
-                <button
-                  onClick={() => setBulkMode('csv-file')}
-                  className={`flex-1 py-2 text-xs font-semibold rounded-lg transition-all ${
-                    bulkMode === 'csv-file' ? 'bg-white text-slate-800 shadow-xs' : 'text-slate-500 hover:text-slate-700'
-                  }`}
-                >
-                  Upload CSV File (.csv)
-                </button>
-              </div>
-
-              {bulkMode === 'paste-text' ? (
-                <div className="space-y-3">
-                  <div className="flex justify-between items-center">
-                    <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
-                      Paste CSV Records (Comma-Separated, columns: name, phone, email, amount, employer, income, credit, dti)
-                    </label>
-                    <button
-                      type="button"
-                      onClick={handleLoadSampleTemplate}
-                      className="text-xs text-blue-600 hover:underline font-semibold"
-                    >
-                      Load Sample Template
-                    </button>
-                  </div>
-                  <textarea
-                    rows={6}
-                    value={pastedData}
-                    onChange={handlePasteChange}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-xs font-mono text-slate-700 placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                    placeholder="name,phone,email,amount,employer,income,credit,dti&#10;Alice, +1 (555) 912-8822, alice@gmail.com, 18000, Walmart, 4500, 710, 0.28"
+                  <FileSpreadsheet className="h-10 w-10 text-blue-500 mx-auto mb-3" />
+                  <p className="text-xs font-semibold text-slate-700">Select .csv file to upload</p>
+                  <p className="text-[10px] text-slate-400 mt-1">Columns: name, phone, email, amount, employer, income, credit, dti</p>
+                  <input
+                    type="file"
+                    ref={fileInputRef}
+                    accept=".csv"
+                    onChange={handleFileChange}
+                    className="hidden"
                   />
                 </div>
-              ) : (
-                <div className="space-y-4">
-                  <div className="border-2 border-dashed border-slate-200 hover:border-blue-400 rounded-2xl p-8 text-center transition-all cursor-pointer bg-slate-50/50"
-                       onClick={() => fileInputRef.current?.click()}>
-                    <FileSpreadsheet className="h-10 w-10 text-blue-500 mx-auto mb-3" />
-                    <p className="text-xs font-semibold text-slate-700">Select .csv file to parse</p>
-                    <p className="text-[10px] text-slate-400 mt-1">Accepts UTF-8 comma-separated list of contacts</p>
-                    <input
-                      type="file"
-                      ref={fileInputRef}
-                      accept=".csv"
-                      onChange={handleFileChange}
-                      className="hidden"
-                    />
+                {pastedData && (
+                  <div className="text-[10px] font-mono text-slate-500 bg-slate-50 p-2 border border-slate-200 rounded-xl truncate">
+                    Loaded: {pastedData.split('\n').length} lines
                   </div>
-                  {pastedData && (
-                    <div className="text-[10px] font-mono text-slate-500 bg-slate-50 p-2 border border-slate-200 rounded-xl truncate">
-                      Loaded file contents: {pastedData.split('\n').length} lines.
-                    </div>
-                  )}
-                </div>
-              )}
+                )}
+              </div>
 
               {/* Parsing Feedback Error / Live Preview */}
               {parsingError && (

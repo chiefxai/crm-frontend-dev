@@ -11,6 +11,8 @@
   },
   "dependencies": {
     "@xyflow/react": "^12.11.6",
+    "html2canvas": "^1.4.1",
+    "jspdf": "^4.2.1",
     "keycloak-js": "^26.2.4",
     "lucide-react": "^1.22.0",
     "motion": "^12.42.2",
