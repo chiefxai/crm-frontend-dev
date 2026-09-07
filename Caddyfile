@@ -1,0 +1,79 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Caddyfile — ChiefVoice CRM
+#
+# Architecture
+# ────────────────
+#   Browser → Caddy (TLS termination, reverse proxy)
+#              ├─ /auth/*     → Keycloak  (OIDC / login UI / token endpoint)
+#              ├─ /api/*      → Node.js backend
+#              └─ /*          → Vite-built SPA (static files)
+#
+# Keycloak handles all login, logout, MFA, and SSO — the SPA never touches
+# passwords. Caddy issues automatic HTTPS certificates via Let's Encrypt.
+# ─────────────────────────────────────────────────────────────────────────────
+
+crm.example.com {
+    # ── SPA static assets ────────────────────────────────────────────────────
+    # Serve the Vite build output. All non-matched routes fall back to
+    # index.html so client-side routing (react-router) works correctly.
+    handle /* {
+        root * /var/www/chiefvoice/dist
+        try_files {path} /index.html
+        file_server
+    }
+
+    # ── Backend API ───────────────────────────────────────────────────────────
+    handle /api/* {
+        reverse_proxy localhost:3000
+    }
+
+    # ── Keycloak (Identity Provider) ──────────────────────────────────────────
+    # Proxied under /auth so the SPA uses VITE_KEYCLOAK_URL=https://crm.example.com/auth
+    # — same origin as the app, no CORS pre-flight for token requests.
+    #
+    # Keycloak must be configured with:
+    #   • Valid Redirect URIs  : https://crm.example.com/*
+    #   • Web Origins          : https://crm.example.com
+    #   • Client Authentication: OFF  (public PKCE client)
+    handle /auth/* {
+        reverse_proxy localhost:8080 {
+            # Preserve the original Host header so Keycloak builds correct
+            # redirect URIs (it uses the Host to construct its own issuer URL).
+            header_up Host {host}
+            # Strip the /auth prefix before forwarding — adjust if your
+            # Keycloak uses a non-root context path (/auth is the default).
+            # If running Keycloak 17+ with no context path, replace with:
+            #   uri strip_prefix /auth
+        }
+    }
+
+    # ── Security headers ──────────────────────────────────────────────────────
+    header {
+        Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
+        X-Content-Type-Options    "nosniff"
+        X-Frame-Options           "SAMEORIGIN"
+        Referrer-Policy           "strict-origin-when-cross-origin"
+        # Allow Keycloak's same-origin iframes (used for SSO session checks)
+        Content-Security-Policy   "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; frame-src 'self'; connect-src 'self';"
+    }
+
+    # ── Logging ───────────────────────────────────────────────────────────────
+    log {
+        output file /var/log/caddy/chiefvoice.log
+        format json
+    }
+}
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Local development (no TLS)
+# Run with: caddy run --config Caddyfile.dev
+# ─────────────────────────────────────────────────────────────────────────────
+# :80 {
+#     handle /api/*  { reverse_proxy localhost:3000 }
+#     handle /auth/* { reverse_proxy localhost:8080 }
+#     handle /*      {
+#         root * ./dist
+#         try_files {path} /index.html
+#         file_server
+#     }
+# }

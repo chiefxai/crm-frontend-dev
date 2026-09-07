@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { apiFetch, clearAuthToken, getAuthToken, getApiBase } from './lib/api';
+import { apiFetch, getAuthToken, getApiBase } from './lib/api';
 import { COST_PER_MINUTE_INR_FALLBACK as COST_PER_MINUTE_INR } from './lib/pricing';
 import { loadFromStorage, saveToStorage } from './lib/storage';
 import { recordToLead, leadToRecordPatch, leadToRecordCreate } from './lib/objectContacts';
@@ -14,17 +14,9 @@ import {
   OrganizationSettings,
   UserRole
 } from './types';
+import { useAuth } from './features/auth/KeycloakProvider';
 
-interface CurrentUser {
-  id: string;
-  email: string;
-  name: string | null;
-  role: UserRole;
-}
-
-// Placeholder shown only until the real org settings arrive from the
-// backend (or during signup, before an org exists at all) — deliberately
-// empty, never a fake seeded company.
+// Placeholder shown only until the real org settings arrive from the backend.
 const EMPTY_ORG_SETTINGS: OrganizationSettings = {
   id: '',
   name: '',
@@ -38,7 +30,6 @@ const EMPTY_ORG_SETTINGS: OrganizationSettings = {
 
 // UI components imports
 import Sidebar from './components/Sidebar';
-import AuthView from './components/AuthView';
 import DashboardView from './components/DashboardView';
 import LeadManagementView from './components/LeadManagementView';
 import WorkflowBuilderView from './components/WorkflowBuilderView';
@@ -64,13 +55,9 @@ import EnquiriesView from './components/EnquiriesView';
 import BillingView from './components/BillingView';
 
 export default function App() {
-  // Authentication & Session state
-  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() =>
-    loadFromStorage<boolean>('chiefx_auth', false)
-  );
-  const [currentUser, setCurrentUser] = useState<CurrentUser | null>(() =>
-    loadFromStorage<CurrentUser | null>('chiefx_user', null)
-  );
+  // Auth state comes from Keycloak — no manual isAuthenticated flag needed.
+  const { user: kcUser, logout } = useAuth();
+
   const [activeTab, setActiveTab] = useState<string>(() =>
     loadFromStorage<string>('chiefx_tab', 'dashboard')
   );
@@ -135,10 +122,9 @@ export default function App() {
   // Twilio/Vobiz call events from server.js/vobizProxy.js/twilioProxy.js.
   const [liveCallBanner, setLiveCallBanner] = useState<{ message: string; startedAt: number } | null>(null);
 
-  // Load database content once authenticated (every backend CRM route now
-  // requires a session — see services/auth.js)
+  // Load database content once Keycloak has authenticated the user.
   useEffect(() => {
-    if (!isAuthenticated) return;
+    if (!kcUser) return;
     setHasLoaded(false);
     const loadBackendData = async () => {
       try {
@@ -195,7 +181,7 @@ export default function App() {
         // phoneCharges/apiKeys entirely, and SettingsView calls
         // .toFixed()/.map() on those unconditionally.
         if (resOrg && Object.keys(resOrg).length > 0) setOrgSettings({ ...EMPTY_ORG_SETTINGS, ...resOrg });
-        if (resMe && resMe.user) setCurrentUser(resMe.user);
+        // User identity comes from Keycloak token — /api/auth/me no longer needed.
         if (Array.isArray(resDialerTasks)) setDialerTasks(resDialerTasks);
 
         // Non-lending org: bridge its real Industry Objects records into
@@ -224,14 +210,11 @@ export default function App() {
       }
     };
     loadBackendData();
-  }, [isAuthenticated]);
+  }, [kcUser]);
 
-  // Live call events — real inbound/outbound calls only, org-scoped server
-  // side (see server.js's broadcastLog + /api/logs-stream). Shows a banner
-  // while a call is in progress and pushes completed calls straight into
-  // `callLogs` state as they finish, without waiting for a page refresh.
+  // Live call events — SSE stream, authenticated via ?token= query param.
   useEffect(() => {
-    if (!isAuthenticated || !hasLoaded) return;
+    if (!kcUser || !hasLoaded) return;
     const token = getAuthToken();
     if (!token) return;
 
@@ -256,35 +239,12 @@ export default function App() {
       // not crashing the app if the tunnel/backend is briefly unreachable.
     };
     return () => source.close();
-  }, [isAuthenticated, hasLoaded]);
+  }, [kcUser, hasLoaded]);
 
-  // Synchronization persistence effects
-  useEffect(() => {
-    saveToStorage('chiefx_auth', isAuthenticated);
-  }, [isAuthenticated]);
-
-  useEffect(() => {
-    saveToStorage('chiefx_user', currentUser);
-  }, [currentUser]);
-
+  // Persist active tab across reloads
   useEffect(() => {
     saveToStorage('chiefx_tab', activeTab);
   }, [activeTab]);
-
-  // apiFetch (lib/api.ts) dispatches this the moment any request comes back
-  // 401 — force the user back to the login screen right away instead of
-  // letting them keep working on a dead session where every save silently
-  // no-ops (see the comment in apiFetch for the incident this fixes).
-  useEffect(() => {
-    const handleUnauthorized = () => {
-      setIsAuthenticated(false);
-      setCurrentUser(null);
-      saveToStorage('chiefx_auth', false);
-      saveToStorage('chiefx_user', null);
-    };
-    window.addEventListener('chiefx:unauthorized', handleUnauthorized);
-    return () => window.removeEventListener('chiefx:unauthorized', handleUnauthorized);
-  }, []);
 
   // If a non-lending org somehow lands on a lending-only screen (e.g. a
   // stale activeTab restored from a previous session, or the org's
@@ -460,13 +420,6 @@ export default function App() {
     }
   }, [orgSettings, hasLoaded]);
 
-  // Handle Onboarding Completion
-  const handleAuthSuccess = (org: OrganizationSettings) => {
-    setOrgSettings({ ...EMPTY_ORG_SETTINGS, ...org });
-    setIsAuthenticated(true);
-    setActiveTab('dashboard');
-  };
-
   // Switch workspace content
   const renderTabContent = () => {
     switch (activeTab) {
@@ -542,7 +495,7 @@ export default function App() {
             loans={loans}
             setLoans={setLoans}
             leads={leads}
-            currentUserLabel={currentUser?.name || currentUser?.email || 'Unknown user'}
+            currentUserLabel={kcUser?.name || kcUser?.email || 'Unknown user'}
           />
         );
       case 'objects':
@@ -589,18 +542,13 @@ export default function App() {
     }
   };
 
-  // Onboarding Gate Routing
-  if (!isAuthenticated) {
-    return <AuthView onAuthSuccess={handleAuthSuccess} currentOrg={orgSettings} />;
-  }
-
   return (
     <div className="flex h-screen w-screen overflow-hidden bg-slate-50/50">
       {/* Sidebar Rail */}
       <Sidebar
         activeTab={activeTab}
         setActiveTab={setActiveTab}
-        userRole={currentUser?.role ?? null}
+        userRole={(kcUser?.role as UserRole) ?? null}
         organizationName={orgSettings.name}
         industry={orgSettings.industry}
       />
@@ -628,25 +576,19 @@ export default function App() {
             <div className="flex items-center space-x-2 bg-slate-50 border border-slate-100 px-3 py-1 rounded-xl">
               <span className="h-2 w-2 rounded-full bg-emerald-500"></span>
               <span className="text-xs font-semibold text-slate-700">
-                {currentUser?.name || currentUser?.email || 'Loading…'}
+                {kcUser?.name || kcUser?.email || 'Loading…'}
               </span>
-              {currentUser?.role && (
+              {kcUser?.role && (
                 <span className="text-[9px] font-mono bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded">
-                  {currentUser.role}
+                  {kcUser.role}
                 </span>
               )}
             </div>
             <button
-              onClick={() => {
-                clearAuthToken();
-                setIsAuthenticated(false);
-                setCurrentUser(null);
-                saveToStorage('chiefx_auth', false);
-                saveToStorage('chiefx_user', null);
-              }}
+              onClick={logout}
               className="text-xs text-rose-500 hover:text-rose-600 font-semibold hover:underline cursor-pointer"
             >
-              Disconnect
+              Sign Out
             </button>
           </div>
         </header>

@@ -4,6 +4,7 @@ import App from './App.tsx';
 import AdminApp from './AdminApp.tsx';
 import { FeatureFlagProvider } from './features/feature-flags/FeatureFlagContext.tsx';
 import { ThemeProvider } from './shared/theme/ThemeContext.tsx';
+import { KeycloakProvider } from './features/auth/KeycloakProvider.tsx';
 import './index.css';
 
 // Global API Fetch Interceptor for separate deployment support
@@ -25,9 +26,11 @@ const isAdminRoute = window.location.pathname.startsWith('/admin');
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <ThemeProvider>
-      <FeatureFlagProvider>
-        {isAdminRoute ? <AdminApp /> : <App />}
-      </FeatureFlagProvider>
+      <KeycloakProvider>
+        <FeatureFlagProvider>
+          {isAdminRoute ? <AdminApp /> : <App />}
+        </FeatureFlagProvider>
+      </KeycloakProvider>
     </ThemeProvider>
   </StrictMode>,
 );

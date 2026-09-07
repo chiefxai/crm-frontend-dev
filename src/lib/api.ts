@@ -1,74 +1,69 @@
-// Thin fetch wrapper that attaches the Supabase-issued session token
-// (stored at signup/login) to every backend request. In dev-mode
-// fallback (no Supabase configured on the backend) the token is a
-// placeholder and the backend ignores auth entirely — see
-// services/auth.js. Once Supabase is configured, this token is what
-// backend/services/auth.js verifies to resolve the request's org.
+// API fetch layer — token management now delegated to Keycloak.
+// The old setAuthToken / getAuthToken / clearAuthToken helpers that read
+// from sessionStorage are removed; the Keycloak adapter owns the token
+// lifecycle (PKCE, refresh, expiry). apiFetch calls getKeycloakToken()
+// which calls keycloak.updateToken(10) before every request, so the
+// Bearer is always fresh and the app never silently fails with a 401.
 
-const TOKEN_KEY = 'chiefx_auth_token';
+import keycloak from '../features/auth/keycloak';
 
-// sessionStorage, not localStorage — it's per-tab. localStorage is shared
-// across every tab of the same browser, so logging into a second org in
-// another tab silently overwrote the token for tabs already open on a
-// different org, making them authenticate (and display data) as the wrong
-// organization.
+// ── Token access ─────────────────────────────────────────────────────────────
+
+/**
+ * Returns a valid (auto-refreshed) Keycloak access token.
+ * Triggers a re-login if the session has expired server-side.
+ */
+async function getKeycloakToken(): Promise<string | null> {
+  if (!keycloak.authenticated) return null;
+  try {
+    await keycloak.updateToken(10);
+  } catch {
+    keycloak.login();
+    return null;
+  }
+  return keycloak.token ?? null;
+}
+
+// Kept for places that need a synchronous URL (EventSource, <audio src>).
+// Use the token already in memory — caller is responsible for ensuring it
+// is fresh before constructing the URL (e.g. call getKeycloakToken() first).
 export function getAuthToken(): string | null {
-  return sessionStorage.getItem(TOKEN_KEY);
+  return keycloak.token ?? null;
 }
 
-export function setAuthToken(token: string): void {
-  sessionStorage.setItem(TOKEN_KEY, token);
-}
+// No-ops preserved for any code that still imports them — actual cleanup is
+// done by keycloak.logout() / KeycloakProvider.logout().
+export function setAuthToken(_token: string): void { /* noop — Keycloak manages tokens */ }
+export function clearAuthToken(): void             { /* noop — use logout() instead   */ }
 
-export function clearAuthToken(): void {
-  sessionStorage.removeItem(TOKEN_KEY);
-}
+// ── Base URL ─────────────────────────────────────────────────────────────────
 
-// The backend origin, when the frontend is deployed separately from it
-// (e.g. crm.elvoryx.in vs api.elvoryx.in) — empty string when they share
-// an origin (local dev via Vite's proxy). Needed anywhere a browser API
-// takes a URL directly rather than going through apiFetch/window.fetch —
-// EventSource and <audio src> don't go through the app's fetch
-// interceptor (main.tsx), so a plain "/api/..." path resolves against
-// the CURRENT page's origin, not the backend, and silently 404s once the
-// two are split across domains.
 export function getApiBase(): string {
   return (import.meta as any).env.VITE_API_URL || '';
 }
 
-// Vobiz-hosted recordings (media.vobiz.ai) require X-Auth-ID/X-Auth-Token
-// headers the browser can't attach to a plain <audio src> — the backend's
-// /api/vobiz/recording/:callLogId route proxies them instead, authenticated
-// via ?token= (the same query-param fallback used for EventSource, since
-// <audio> can't set an Authorization header either). Non-Vobiz recordings
-// (e.g. older Supabase-hosted ones) are already public — use the URL as-is.
+// ── Recording URL helper ─────────────────────────────────────────────────────
+
 export function getPlayableRecordingUrl(callLogId: string, recordingUrl: string): string {
   if (!recordingUrl.includes('media.vobiz.ai')) return recordingUrl;
-  const apiBase = getApiBase();
-  const token = getAuthToken();
-  return `${apiBase}/api/vobiz/recording/${callLogId}${token ? `?token=${encodeURIComponent(token)}` : ''}`;
+  const token = keycloak.token;
+  return `${getApiBase()}/api/vobiz/recording/${callLogId}${token ? `?token=${encodeURIComponent(token)}` : ''}`;
 }
 
+// ── apiFetch ─────────────────────────────────────────────────────────────────
+
 export async function apiFetch(url: string, options: RequestInit = {}): Promise<Response> {
-  const token = getAuthToken();
+  const token = await getKeycloakToken();
   const headers = new Headers(options.headers || {});
   if (token) headers.set('Authorization', `Bearer ${token}`);
-  // FormData bodies (file uploads) need the browser to set their own
-  // multipart boundary in Content-Type — forcing application/json here
-  // would break the upload.
   if (options.body && !headers.has('Content-Type') && !(options.body instanceof FormData)) {
     headers.set('Content-Type', 'application/json');
   }
   const res = await fetch(url, { ...options, headers });
-  // A stale/expired token used to fail silently: every *-sync effect in
-  // App.tsx only .catch()es network errors, never checks response.ok, so a
-  // 401 here looked like a successful save while the write never reached
-  // the DB — the user would see their new data locally, then lose it on
-  // the next real reload. Force an immediate logout instead, so a dead
-  // session can't keep "succeeding" at writes that are actually no-ops.
+  // 401 with a valid token means the backend rejected it (revoked session,
+  // realm change, etc.) — force a fresh login rather than silently failing.
   if (res.status === 401 && token) {
-    clearAuthToken();
-    window.dispatchEvent(new CustomEvent('chiefx:unauthorized'));
+    keycloak.login();
   }
   return res;
 }
