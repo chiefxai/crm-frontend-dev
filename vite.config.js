@@ -23,9 +23,9 @@ export default defineConfig(({ mode }) => {
     // forwards /api calls to it during local development.
     proxy: {
       '/api': {
-        target: env.VITE_API_URL || 'http://localhost:3000',
+        target: 'http://localhost:3000',
         changeOrigin: true,
-        secure: true,
+        secure: false,
       },
     },
   },
