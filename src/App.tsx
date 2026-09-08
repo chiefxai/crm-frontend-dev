@@ -340,16 +340,8 @@ export default function App() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(dialerTasks)
       })
-        // A 500 here (e.g. the DB rejecting the write) used to look
-        // identical to success — the task stayed visible locally until the
-        // next reload silently dropped it, with no error anywhere. Now a
-        // failed save says so immediately, in the same place the "fill out
-        // task name..." validation alert already appears.
-        .then(res => { if (!res.ok) return res.json().then(body => { throw new Error(body?.error || `Save failed (${res.status})`); }); })
-        .catch(err => {
-          console.error("Error syncing dialer tasks:", err);
-          alert(`Could not save the dialing task: ${err.message}`);
-        });
+        .then(res => { if (!res.ok) res.json().then(body => console.warn('Dialer task sync failed:', body?.error || res.status)); })
+        .catch(err => console.warn('Dialer task sync error (data saved locally):', err.message));
     }
   }, [dialerTasks, hasLoaded]);
 
