@@ -8,13 +8,10 @@ import { loadFromStorage, saveToStorage } from '../../lib/storage';
 import { subscribe } from './userFlagsStore';
 import { useAuth } from '../auth/KeycloakProvider';
 
-const ADMIN_ROLES = new Set(['Organization Admin', 'Super Admin']);
-
-// Use the DB membership role (from /api/settings/me) as the authoritative source.
-// The JWT role from Keycloak can diverge if the user's KC realm role differs from
-// the role stored in the org membership table (e.g. default KC roles bleeding through).
+// Only platform-level super admins bypass org feature flag restrictions.
+// Org admins are subject to the org's granted features set by the super admin.
 function isAdminRole(role: string): boolean {
-  return ADMIN_ROLES.has(role);
+  return role === 'Super Admin';
 }
 
 interface FeatureFlagContextValue {
@@ -25,22 +22,21 @@ interface FeatureFlagContextValue {
 
 const FeatureFlagContext = createContext<FeatureFlagContextValue | null>(null);
 
-// isAdminUser: org admins and platform admins have no flag restriction.
-// isAdminUser=false: restricted roles see only what's in `granted`; empty grants = nothing flagged.
+// granted: feature keys the user is allowed to see (for org admins = org-level flags; for others = personal grants intersected with org flags)
+// isAdminUser: true only for platform-level super admins who bypass all org restrictions
 function buildFlags(granted: string[], loaded: boolean, isAdminUser: boolean): FeatureFlag[] {
   if (!loaded) {
-    // Still fetching — disable all flagged tabs until we know what the user can see.
     return DEFAULT_FLAGS.map(f => ({ ...f, enabled: false }));
   }
   if (isAdminUser) {
-    // Org admins / super admins: respect stored toggle prefs, fall back to defaults.
+    // Platform super admins: see everything, respect local prefs
     const stored = loadFromStorage<Partial<Record<FeatureFlagKey, boolean>>>('chiefx_feature_flags', {});
     return DEFAULT_FLAGS.map(f => ({
       ...f,
       enabled: stored[f.key] !== undefined ? stored[f.key]! : f.enabled,
     }));
   }
-  // Restricted user: show ONLY explicitly granted flags; anything not in the list is off.
+  // All org users (including org admins): show only what the org-level grants allow
   return DEFAULT_FLAGS.map(f => ({ ...f, enabled: granted.includes(f.key) }));
 }
 

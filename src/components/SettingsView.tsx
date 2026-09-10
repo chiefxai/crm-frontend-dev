@@ -623,7 +623,7 @@ export default function SettingsView({
                                   Feature Access — {member.name}
                                 </p>
                                 <div className="flex flex-wrap gap-2">
-                                  {FEATURE_REGISTRY.filter(f => orgAllowedFlags.length === 0 || orgAllowedFlags.includes(f.key)).map((flag) => {
+                                  {FEATURE_REGISTRY.filter(f => orgAllowedFlags.includes(f.key)).map((flag) => {
                                     const active = editFlagsValue.includes(flag.key);
                                     return (
                                       <button
@@ -715,7 +715,7 @@ export default function SettingsView({
                             <p className="text-[10px] text-slate-400 mb-2">No features available — super admin has not granted any features to this org.</p>
                           )}
                           <div className="flex flex-wrap gap-2">
-                            {FEATURE_REGISTRY.filter(f => orgAllowedFlags.length === 0 || orgAllowedFlags.includes(f.key)).map((flag) => {
+                            {FEATURE_REGISTRY.filter(f => orgAllowedFlags.includes(f.key)).map((flag) => {
                               const active = newStaffFeatures.includes(flag.key);
                               return (
                                 <button key={flag.key} type="button" onClick={() => toggleFeature(flag.key)}
