@@ -16,6 +16,7 @@ function isAdminRole(role: string): boolean {
 
 interface FeatureFlagContextValue {
   flags: FeatureFlag[];
+  orgFlags: string[];
   isEnabled: (key: FeatureFlagKey) => boolean;
   setFlag: (key: FeatureFlagKey, enabled: boolean) => void;
 }
@@ -47,18 +48,18 @@ export function FeatureFlagProvider({ children }: { children: React.ReactNode })
   const jwtIsAdmin = isAdminRole(user?.role ?? '');
 
   const [flags, setFlags] = useState<FeatureFlag[]>(() => buildFlags([], false, jwtIsAdmin));
+  const [orgFlags, setOrgFlags] = useState<string[]>([]);
 
   // Re-build whenever JWT role changes (e.g. user switch) — reset to loading state.
   useEffect(() => {
     setFlags(buildFlags([], false, jwtIsAdmin));
   }, [jwtIsAdmin]);
 
-  // Subscribe to the store — when userFlagsStore fetches (triggered from App.tsx),
-  // use the DB membership role as the authoritative admin check.
   useEffect(() => {
-    const unsub = subscribe((granted, loaded, dbRole) => {
+    const unsub = subscribe((granted, loaded, dbRole, org) => {
       const adminByDb = isAdminRole(dbRole);
       setFlags(buildFlags(granted, loaded, adminByDb));
+      setOrgFlags(org);
     });
     return unsub;
   }, []);
@@ -78,7 +79,7 @@ export function FeatureFlagProvider({ children }: { children: React.ReactNode })
   }, []);
 
   return (
-    <FeatureFlagContext.Provider value={{ flags, isEnabled, setFlag }}>
+    <FeatureFlagContext.Provider value={{ flags, orgFlags, isEnabled, setFlag }}>
       {children}
     </FeatureFlagContext.Provider>
   );

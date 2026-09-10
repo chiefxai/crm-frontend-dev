@@ -15,13 +15,14 @@
 import { apiFetch } from '../../lib/api';
 
 let _granted: string[] = [];
+let _orgFlags: string[] = [];
 let _role: string = '';
 let _loaded = false;
 let _inFlight: Promise<string[]> | null = null;
 
 // Subscribers — FeatureFlagContext registers one to react to the fetch result.
-// Passes (granted, loaded, role) so context can use the DB role for admin checks.
-type Listener = (granted: string[], loaded: boolean, role: string) => void;
+// Passes (granted, loaded, role, orgFlags) so context can use the DB role for admin checks.
+type Listener = (granted: string[], loaded: boolean, role: string, orgFlags: string[]) => void;
 const _listeners: Set<Listener> = new Set();
 
 export function subscribe(fn: Listener) {
@@ -32,7 +33,7 @@ export function subscribe(fn: Listener) {
 }
 
 function notify() {
-  _listeners.forEach(fn => fn(_granted, _loaded, _role));
+  _listeners.forEach(fn => fn(_granted, _loaded, _role, _orgFlags));
 }
 
 export async function fetchUserFlags(): Promise<string[]> {
@@ -44,6 +45,7 @@ export async function fetchUserFlags(): Promise<string[]> {
       if (res.ok) {
         const data = await res.json();
         _granted = Array.isArray(data?.featureFlags) ? data.featureFlags : [];
+        _orgFlags = Array.isArray(data?.orgFeatureFlags) ? data.orgFeatureFlags : _granted;
         _role = data?.role ?? '';
       }
       // Non-ok (403 for platform admins, etc.) — no grants, but still mark loaded
@@ -62,6 +64,7 @@ export async function fetchUserFlags(): Promise<string[]> {
 export function isLoaded(): boolean { return _loaded; }
 
 export function getGrantedFlags(): string[] { return _granted; }
+export function getOrgFlags(): string[] { return _orgFlags; }
 export function hasRestriction(): boolean { return _loaded && _granted.length > 0; }
 
 export function getMembershipRole(): string { return _role; }
@@ -70,8 +73,9 @@ export function getMembershipRole(): string { return _role; }
 // revert to the loading (all-disabled) state immediately.
 export function resetUserFlags() {
   _granted = [];
+  _orgFlags = [];
   _role = '';
   _loaded = false;
   _inFlight = null;
-  notify(); // push ([], false, '') → loading state in FeatureFlagContext
+  notify();
 }
