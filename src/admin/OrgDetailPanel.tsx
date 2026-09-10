@@ -5,8 +5,7 @@ import { OrgDetail } from './types';
 import { callCostInr, formatInr } from '../lib/pricing';
 import SlideOver from '../components/ui/SlideOver';
 import Modal from '../components/ui/Modal';
-
-interface OrgFlag { key: string; label: string; description: string; enabled: boolean; }
+import { FEATURE_REGISTRY } from '../features/feature-flags/registry';
 
 export default function OrgDetailPanel({ orgId, onClose, onChanged }: { orgId: string; onClose: () => void; onChanged: () => void }) {
   const [detail, setDetail] = useState<OrgDetail | null>(null);
@@ -18,30 +17,31 @@ export default function OrgDetailPanel({ orgId, onClose, onChanged }: { orgId: s
   const [deleteModal, setDeleteModal] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState('');
   const deleteInputRef = useRef<HTMLInputElement>(null);
-  const [flags, setFlags] = useState<OrgFlag[]>([]);
+  const [enabledFlags, setEnabledFlags] = useState<string[]>([]);
   const [flagsBusy, setFlagsBusy] = useState(false);
 
   const loadFlags = () => {
     apiFetch(`/api/platform/organizations/${orgId}/features`)
       .then((r) => r.json())
-      .then((d) => Array.isArray(d) && setFlags(d))
+      .then((d) => d?.featureFlags && setEnabledFlags(d.featureFlags))
       .catch(() => {});
   };
 
   const toggleFlag = async (key: string) => {
-    const current = flags.find((f) => f.key === key);
-    if (!current) return;
-    const updated = flags.map((f) => f.key === key ? { ...f, enabled: !f.enabled } : f);
-    setFlags(updated);
+    const prev = enabledFlags;
+    const updated = enabledFlags.includes(key)
+      ? enabledFlags.filter((k) => k !== key)
+      : [...enabledFlags, key];
+    setEnabledFlags(updated);
     setFlagsBusy(true);
     try {
       await apiFetch(`/api/platform/organizations/${orgId}/features`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ featureFlags: updated.filter((f) => f.enabled).map((f) => f.key) }),
+        body: JSON.stringify({ featureFlags: updated }),
       });
     } catch {
-      setFlags(flags); // revert on error
+      setEnabledFlags(prev);
     } finally {
       setFlagsBusy(false);
     }
@@ -298,34 +298,36 @@ export default function OrgDetailPanel({ orgId, onClose, onChanged }: { orgId: s
                 </div>
               </div>
 
-              {flags.length > 0 && (
-                <div className="bg-white border border-slate-200 rounded-2xl p-5">
-                  <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wide mb-3 flex items-center gap-1.5">
-                    <ToggleRight className="h-3.5 w-3.5" /> Feature Access
-                    {flagsBusy && <Loader2 className="h-3 w-3 animate-spin ml-1 text-slate-400" />}
-                  </h4>
-                  <div className="space-y-2">
-                    {flags.map((f) => (
+              <div className="bg-white border border-slate-200 rounded-2xl p-5">
+                <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wide mb-1 flex items-center gap-1.5">
+                  <ToggleRight className="h-3.5 w-3.5" /> Feature Access
+                  {flagsBusy && <Loader2 className="h-3 w-3 animate-spin ml-1 text-slate-400" />}
+                </h4>
+                <p className="text-[10px] text-slate-400 mb-3">Toggle which app modules this org can access. Org admins can further distribute enabled features to their team.</p>
+                <div className="space-y-2">
+                  {FEATURE_REGISTRY.map((f) => {
+                    const on = enabledFlags.includes(f.key);
+                    return (
                       <div key={f.key} className="flex items-center justify-between gap-3">
                         <div>
-                          <p className="text-xs font-medium text-slate-700">{f.label}</p>
+                          <p className={`text-xs font-medium ${on ? 'text-slate-700' : 'text-slate-400'}`}>{f.label}</p>
                           <p className="text-[10px] text-slate-400">{f.description}</p>
                         </div>
                         <button
                           onClick={() => toggleFlag(f.key)}
                           disabled={flagsBusy}
                           className="shrink-0 disabled:opacity-50"
-                          title={f.enabled ? 'Disable' : 'Enable'}
+                          title={on ? 'Disable' : 'Enable'}
                         >
-                          {f.enabled
+                          {on
                             ? <ToggleRight className="h-5 w-5 text-amber-500" />
                             : <ToggleLeft className="h-5 w-5 text-slate-300" />}
                         </button>
                       </div>
-                    ))}
-                  </div>
+                    );
+                  })}
                 </div>
-              )}
+              </div>
             </div>
           </>
         )}
