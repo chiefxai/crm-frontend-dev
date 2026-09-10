@@ -1,4 +1,6 @@
 import React from 'react';
+import { RefreshCw } from 'lucide-react';
+import { useRefresh } from '../../lib/RefreshContext';
 
 // ── Grid helpers ──────────────────────────────────────────────────────────────
 
@@ -52,9 +54,22 @@ interface PageShellProps {
    *                   their own overflow — use for split-pane layouts like Inbox.
    */
   layout?: 'grid' | 'fill';
+  /** Called when the user clicks the refresh button — reload this page's data */
+  onRefresh?: () => void;
 }
 
-export default function PageShell({ title, subtitle, action, toolbar, children, className = '', layout = 'grid' }: PageShellProps) {
+export default function PageShell({ title, subtitle, action, toolbar, children, className = '', layout = 'grid', onRefresh }: PageShellProps) {
+  const contextRefresh = useRefresh();
+  const refresh = onRefresh ?? contextRefresh;
+  const [spinning, setSpinning] = React.useState(false);
+
+  const handleRefresh = () => {
+    if (!refresh || spinning) return;
+    setSpinning(true);
+    refresh();
+    setTimeout(() => setSpinning(false), 800);
+  };
+
   return (
     <div className={`flex flex-col h-full overflow-hidden ${className}`}>
       {/* ── Page header ── */}
@@ -67,7 +82,18 @@ export default function PageShell({ title, subtitle, action, toolbar, children, 
             <p className="text-xs text-slate-400 dark:text-[var(--text-muted)] mt-0.5 truncate">{subtitle}</p>
           )}
         </div>
-        {action && <div className="shrink-0 flex items-center gap-2">{action}</div>}
+        <div className="shrink-0 flex items-center gap-2">
+          {refresh && (
+            <button
+              onClick={handleRefresh}
+              title="Refresh"
+              className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 dark:hover:bg-[var(--bg-subtle)] transition-colors"
+            >
+              <RefreshCw className={`h-4 w-4 ${spinning ? 'animate-spin' : ''}`} />
+            </button>
+          )}
+          {action && action}
+        </div>
       </div>
 
       {/* ── Optional toolbar (filters / search) ── */}

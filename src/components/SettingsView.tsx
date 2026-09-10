@@ -53,6 +53,35 @@ interface AuditEntry {
   createdAt: string;
 }
 
+function ProviderBadge({ provider }: { provider: string }) {
+  const p = (provider || '').toLowerCase();
+  if (p === 'twilio') {
+    return (
+      <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-bold bg-red-50 text-red-700 border border-red-200">
+        <svg viewBox="0 0 60 60" className="h-3 w-3 shrink-0" fill="none"><circle cx="30" cy="30" r="30" fill="#F22F46"/><circle cx="30" cy="18" r="5" fill="white"/><circle cx="30" cy="42" r="5" fill="white"/><circle cx="18" cy="30" r="5" fill="white"/><circle cx="42" cy="30" r="5" fill="white"/></svg>
+        Twilio
+      </span>
+    );
+  }
+  if (p === 'vobiz.ai' || p === 'vobiz') {
+    return (
+      <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-bold bg-purple-50 text-purple-700 border border-purple-200">
+        <span className="h-3 w-3 rounded bg-gradient-to-br from-purple-500 to-indigo-600 flex items-center justify-center text-white font-black text-[8px] shrink-0">V</span>
+        Vobiz.ai
+      </span>
+    );
+  }
+  if (p === 'telecmi') {
+    return (
+      <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-bold bg-teal-50 text-teal-700 border border-teal-200">
+        <span className="h-3 w-3 rounded bg-gradient-to-br from-teal-500 to-cyan-600 flex items-center justify-center text-white font-black text-[8px] shrink-0">T</span>
+        TeleCMI
+      </span>
+    );
+  }
+  return <span className="text-xs font-mono text-slate-500">{provider}</span>;
+}
+
 export default function SettingsView({
   virtualNumbers,
   setVirtualNumbers,
@@ -445,7 +474,9 @@ export default function SettingsView({
                               </div>
                             </div>
                           </td>
-                          <td className="p-4 px-6 font-mono text-xs">{num.provider}</td>
+                          <td className="p-4 px-6">
+                            <ProviderBadge provider={num.provider} />
+                          </td>
                           <td className="p-4 px-6 text-xs text-slate-500">{num.incomingCallCount} in / {num.outgoingCallCount} out</td>
                           <td className="p-4 px-6 text-right">
                             <div className="flex items-center justify-end gap-3">
@@ -480,19 +511,58 @@ export default function SettingsView({
                   maxWidth="max-w-md"
                 >
                     <div className="space-y-4">
-                      <div className="flex items-center gap-3">
-                        <select
-                          value={connectProvider}
-                          onChange={(e) => setConnectProvider(e.target.value as 'twilio' | 'vobiz' | 'telecmi')}
-                          className="flex-1 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-indigo-500"
-                        >
-                          <option value="twilio">Twilio</option>
-                          <option value="vobiz">Vobiz.ai</option>
-                          <option value="telecmi">TeleCMI</option>
-                        </select>
-                        {(connectProvider === 'twilio' ? twilioChannel : connectProvider === 'vobiz' ? vobizChannel : telecmiChannel) && (
-                          <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200 whitespace-nowrap">Connected</span>
-                        )}
+                      {/* Provider selector — logo cards */}
+                      <div className="grid grid-cols-3 gap-2">
+                        {([
+                          {
+                            id: 'twilio',
+                            label: 'Twilio',
+                            connected: !!twilioChannel,
+                            accent: 'border-red-400 bg-red-50',
+                            logo: (
+                              <svg viewBox="0 0 60 60" className="h-7 w-7" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                <circle cx="30" cy="30" r="30" fill="#F22F46"/>
+                                <circle cx="30" cy="18" r="5" fill="white"/>
+                                <circle cx="30" cy="42" r="5" fill="white"/>
+                                <circle cx="18" cy="30" r="5" fill="white"/>
+                                <circle cx="42" cy="30" r="5" fill="white"/>
+                              </svg>
+                            ),
+                          },
+                          {
+                            id: 'vobiz',
+                            label: 'Vobiz.ai',
+                            connected: !!vobizChannel,
+                            accent: 'border-purple-400 bg-purple-50',
+                            logo: (
+                              <div className="h-7 w-7 rounded-lg bg-gradient-to-br from-purple-500 to-indigo-600 flex items-center justify-center text-white font-black text-sm">V</div>
+                            ),
+                          },
+                          {
+                            id: 'telecmi',
+                            label: 'TeleCMI',
+                            connected: !!telecmiChannel,
+                            accent: 'border-teal-400 bg-teal-50',
+                            logo: (
+                              <div className="h-7 w-7 rounded-lg bg-gradient-to-br from-teal-500 to-cyan-600 flex items-center justify-center text-white font-black text-sm">T</div>
+                            ),
+                          },
+                        ] as const).map(({ id, label, connected, accent, logo }) => (
+                          <button
+                            key={id}
+                            type="button"
+                            onClick={() => setConnectProvider(id)}
+                            className={`flex flex-col items-center gap-1.5 py-3 px-2 rounded-xl border-2 transition-all cursor-pointer ${
+                              connectProvider === id ? accent : 'border-slate-200 bg-white hover:border-slate-300'
+                            }`}
+                          >
+                            {logo}
+                            <span className="text-[10px] font-semibold text-slate-700">{label}</span>
+                            {connected && (
+                              <span className="text-[9px] font-bold text-emerald-600 bg-emerald-100 px-1.5 py-0.5 rounded-full">Connected</span>
+                            )}
+                          </button>
+                        ))}
                       </div>
 
                       {connectProvider === 'telecmi' ? (

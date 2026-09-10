@@ -1,9 +1,10 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { apiFetch, getAuthToken, getApiBase } from './lib/api';
 import { COST_PER_MINUTE_INR_FALLBACK as COST_PER_MINUTE_INR } from './lib/pricing';
 import { loadFromStorage, saveToStorage } from './lib/storage';
 import { recordToLead, leadToRecordPatch, leadToRecordCreate } from './lib/objectContacts';
+import { RefreshProvider } from './lib/RefreshContext';
 import { fetchUserFlags, resetUserFlags, subscribe as subscribeFlags, isLoaded as flagsLoaded } from './features/feature-flags/userFlagsStore';
 import { TAB_TO_FLAG } from './features/feature-flags/registry';
 import {
@@ -352,6 +353,69 @@ export default function App() {
     ]);
   };
 
+  // Fetch all CRM data from the backend and update state.
+  // Exposed as `refreshData` so page-level refresh buttons can call it directly.
+  const refreshData = useCallback(async () => {
+    if (!kcUser) return;
+    try {
+      const [
+        resLeads,
+        resWorkflows,
+        resCampaigns,
+        resCallLogs,
+        resLoans,
+        resNumbers,
+        resTeam,
+        resOrg,
+        resDialerTasks,
+        resBilling
+      ] = await Promise.all([
+        apiFetch('/api/leads').then(r => r.json()).catch(() => null),
+        apiFetch('/api/workflows').then(r => r.json()).catch(() => null),
+        apiFetch('/api/campaigns').then(r => r.json()).catch(() => null),
+        apiFetch('/api/call-logs').then(r => r.json()).catch(() => null),
+        apiFetch('/api/loans').then(r => r.json()).catch(() => null),
+        apiFetch('/api/settings/numbers').then(r => r.json()).catch(() => null),
+        apiFetch('/api/settings/team').then(r => r.json()).catch(() => null),
+        apiFetch('/api/settings/org').then(r => r.json()).catch(() => null),
+        apiFetch('/api/dialer-tasks').then(r => r.json()).catch(() => null),
+        apiFetch('/api/billing').then(r => r.json()).catch(() => null)
+      ]);
+
+      if (Array.isArray(resLeads)) setLeads(resLeads);
+      if (Array.isArray(resWorkflows)) setWorkflows(resWorkflows);
+      if (Array.isArray(resCampaigns)) setCampaigns(resCampaigns);
+      if (Array.isArray(resCallLogs)) setCallLogs(resCallLogs);
+      if (Array.isArray(resLoans)) setLoans(resLoans);
+      if (Array.isArray(resNumbers)) setVirtualNumbers(resNumbers);
+      if (Array.isArray(resTeam)) setTeamMembers(resTeam);
+      if (resBilling && typeof resBilling.costPerMinuteInr === 'number') setCostPerMinuteInr(resBilling.costPerMinuteInr);
+      if (resOrg && Object.keys(resOrg).length > 0) setOrgSettings({ ...EMPTY_ORG_SETTINGS, ...resOrg });
+      if (Array.isArray(resDialerTasks)) setDialerTasks(resDialerTasks);
+
+      const industry = (resOrg && resOrg.industry) || orgSettings.industry;
+      if (industry && industry !== 'lending') {
+        try {
+          const objects = await apiFetch('/api/objects').then(r => r.json());
+          const primary = Array.isArray(objects) ? objects[0] : null;
+          if (primary) {
+            const records = await apiFetch(`/api/objects/${primary.key}/records`).then(r => r.json());
+            setLeads(Array.isArray(records) ? records.map((r: any) => recordToLead(r, primary.stages)) : []);
+            setPrimaryObject({ key: primary.key, stages: primary.stages, fields: primary.fields || [] });
+          }
+        } catch (err) {
+          console.warn("Failed to load Industry Objects records:", err);
+        }
+      } else {
+        setPrimaryObject(null);
+      }
+    } catch (err) {
+      console.warn("Failed to fetch backend data, using local fallbacks:", err);
+    } finally {
+      setHasLoaded(true);
+    }
+  }, [kcUser, orgSettings.industry]);
+
   // Load database content once Keycloak has authenticated the user.
   useEffect(() => {
     if (!kcUser) return;
@@ -360,7 +424,6 @@ export default function App() {
     // org admin never sees data that belonged to a previous browser session.
     const lastUserId = localStorage.getItem('chiefx_last_user_id');
     if (lastUserId !== kcUser.id) {
-      // Different user — clear all CRM state and stale feature-flag cache.
       const CRM_KEYS = [
         'chiefx_leads', 'chiefx_workflows', 'chiefx_campaigns',
         'chiefx_calllogs', 'chiefx_loans', 'chiefx_numbers',
@@ -371,93 +434,14 @@ export default function App() {
       setLeads([]); setWorkflows([]); setCampaigns([]); setCallLogs([]);
       setLoans([]); setVirtualNumbers([]); setTeamMembers([]);
       setOrgSettings(EMPTY_ORG_SETTINGS); setDialerTasks([]); setQuestionFlows([]);
-      // resetUserFlags / setDbRole called unconditionally below
     }
     localStorage.setItem('chiefx_last_user_id', kcUser.id);
 
-    // Always reset and re-fetch flags on every auth cycle so the sidebar reflects
-    // the current DB grants, not a stale in-memory cache from a previous render.
     resetUserFlags();
     setDbRole('');
     fetchUserFlags();
     setHasLoaded(false);
-    const loadBackendData = async () => {
-      try {
-        const [
-          resLeads,
-          resWorkflows,
-          resCampaigns,
-          resCallLogs,
-          resLoans,
-          resNumbers,
-          resTeam,
-          resOrg,
-          resDialerTasks,
-          resBilling
-        ] = await Promise.all([
-          apiFetch('/api/leads').then(r => r.json()).catch(() => null),
-          apiFetch('/api/workflows').then(r => r.json()).catch(() => null),
-          apiFetch('/api/campaigns').then(r => r.json()).catch(() => null),
-          apiFetch('/api/call-logs').then(r => r.json()).catch(() => null),
-          apiFetch('/api/loans').then(r => r.json()).catch(() => null),
-          apiFetch('/api/settings/numbers').then(r => r.json()).catch(() => null),
-          apiFetch('/api/settings/team').then(r => r.json()).catch(() => null),
-          apiFetch('/api/settings/org').then(r => r.json()).catch(() => null),
-          // Falls back to null (not []) on failure so a transient error here
-          // can't be mistaken for "this org genuinely has zero tasks".
-          apiFetch('/api/dialer-tasks').then(r => r.json()).catch(() => null),
-          apiFetch('/api/billing').then(r => r.json()).catch(() => null)
-        ]);
-
-        // Trust the backend's answer even when it's an empty array — that's
-        // a real, correct "this org has none of these yet," not a signal to
-        // keep showing the built-in demo/seed data. The old `.length > 0`
-        // guards meant every brand-new org silently displayed the same
-        // fake seeded leads/calls/etc. forever, looking like real data that
-        // belonged to them. Arrays are only ever swapped out wholesale here
-        // (never merged), so an empty real answer must render as empty.
-        if (Array.isArray(resLeads)) setLeads(resLeads);
-        if (Array.isArray(resWorkflows)) setWorkflows(resWorkflows);
-        if (Array.isArray(resCampaigns)) setCampaigns(resCampaigns);
-        if (Array.isArray(resCallLogs)) setCallLogs(resCallLogs);
-        if (Array.isArray(resLoans)) setLoans(resLoans);
-        if (Array.isArray(resNumbers)) setVirtualNumbers(resNumbers);
-        if (Array.isArray(resTeam)) setTeamMembers(resTeam);
-        if (resBilling && typeof resBilling.costPerMinuteInr === 'number') setCostPerMinuteInr(resBilling.costPerMinuteInr);
-        // Merge over EMPTY_ORG_SETTINGS rather than replacing wholesale —
-        // the backend only returns fields that were ever explicitly set on
-        // this org, so a freshly created/consolidated org can omit e.g.
-        // phoneCharges/apiKeys entirely, and SettingsView calls
-        // .toFixed()/.map() on those unconditionally.
-        if (resOrg && Object.keys(resOrg).length > 0) setOrgSettings({ ...EMPTY_ORG_SETTINGS, ...resOrg });
-        if (Array.isArray(resDialerTasks)) setDialerTasks(resDialerTasks);
-
-        // Non-lending org: bridge its real Industry Objects records into
-        // `leads` instead of leaving it permanently empty (resLeads above
-        // is always [] for these orgs — the leads table is lending-only).
-        const industry = (resOrg && resOrg.industry) || orgSettings.industry;
-        if (industry && industry !== 'lending') {
-          try {
-            const objects = await apiFetch('/api/objects').then(r => r.json());
-            const primary = Array.isArray(objects) ? objects[0] : null;
-            if (primary) {
-              const records = await apiFetch(`/api/objects/${primary.key}/records`).then(r => r.json());
-              setLeads(Array.isArray(records) ? records.map((r: any) => recordToLead(r, primary.stages)) : []);
-              setPrimaryObject({ key: primary.key, stages: primary.stages, fields: primary.fields || [] });
-            }
-          } catch (err) {
-            console.warn("Failed to load Industry Objects records:", err);
-          }
-        } else {
-          setPrimaryObject(null);
-        }
-      } catch (err) {
-        console.warn("Failed to fetch backend data, using local fallbacks:", err);
-      } finally {
-        setHasLoaded(true);
-      }
-    };
-    loadBackendData();
+    refreshData();
   }, [kcUser]);
 
   // Live call events — SSE stream, authenticated via ?token= query param.
@@ -663,11 +647,11 @@ export default function App() {
   // Switch workspace content
   const renderTabContent = () => {
     const flagKey = TAB_TO_FLAG[activeTab];
-    if (flagKey && !isEnabled(flagKey)) {
-      // Still loading flags — show nothing to avoid flash
-      if (!flagsReady) return null;
+    // Only block when flags are fully loaded — render content optimistically
+    // while flags are still in-flight so the page doesn't flash null → content.
+    if (flagKey && !isEnabled(flagKey) && flagsReady) {
       // Flags loaded but this tab is off — check if user has ANY access
-      const hasAnyAccess = !flagsReady || grantedFlags.length > 0 ||
+      const hasAnyAccess = grantedFlags.length > 0 ||
         ['Organization Admin', 'Super Admin'].includes(dbRole);
       return (
         <div className="flex flex-col items-center justify-center h-full py-24 text-center px-6">
@@ -888,7 +872,9 @@ export default function App() {
 
         {/* Selected view — 12-col grid host */}
         <div className="flex-1 overflow-hidden flex flex-col min-h-0">
-          {renderTabContent()}
+          <RefreshProvider onRefresh={refreshData}>
+            {renderTabContent()}
+          </RefreshProvider>
         </div>
       </main>
     </div>
