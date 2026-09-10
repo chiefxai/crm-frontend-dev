@@ -33,6 +33,13 @@ import {
   PhoneForwarded
 } from 'lucide-react';
 import { Lead, CallLog, VirtualNumber, TeamMember } from '../types';
+import PageShell from './ui/PageShell';
+import Widget from './ui/Widget';
+import Modal from './ui/Modal';
+import KpiCard from './ui/KpiCard';
+import SearchInput from './ui/SearchInput';
+import Button from './ui/Button';
+import EmptyState from './ui/EmptyState';
 import { apiFetch, getAuthToken, getApiBase, getPlayableRecordingUrl } from '../lib/api';
 import { callCostInr, formatInr } from '../lib/pricing';
 
@@ -932,9 +939,9 @@ Currently on question ${nextIndex} out of ${selectedTask.questions.length}. Next
       : `📼 ${String(activeTapeResult.leadName).toUpperCase()}_inbound_recording.wav`;
 
     return (
-      <div id="voice-agent-dialer" className="p-6 md:p-8 space-y-6 overflow-y-auto h-screen w-full font-sans bg-slate-50/50 text-slate-800 animate-fadeIn flex flex-col">
+      <div id="voice-agent-dialer" className="p-6 md:p-8 space-y-6 overflow-y-auto h-screen w-full font-sans bg-[var(--bg-subtle)]/50 text-[var(--text-primary)] animate-fadeIn flex flex-col">
         {/* Navigation & Header with Compact Media Player */}
-        <div className="bg-white border border-slate-200/80 rounded-2xl p-5 shadow-sm space-y-4 shrink-0 relative overflow-hidden">
+        <div className="bg-[var(--bg-surface)] border border-[var(--border)]/80 rounded-2xl p-5 shadow-sm space-y-4 shrink-0 relative overflow-hidden">
           <div className="absolute -right-20 -bottom-20 w-80 h-80 bg-blue-500/5 rounded-full blur-3xl pointer-events-none"></div>
           
           <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 relative z-10">
@@ -945,26 +952,26 @@ Currently on question ${nextIndex} out of ${selectedTask.questions.length}. Next
                   setPlayingTapeId(null);
                   setIsTapePlaying(false);
                 }}
-                className="p-2.5 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-xl text-slate-600 hover:text-slate-900 transition-all cursor-pointer flex items-center justify-center gap-2 font-medium"
+                className="p-2.5 bg-[var(--bg-subtle)] hover:bg-[var(--bg-subtle)] border border-[var(--border)] rounded-xl hover:text-[var(--text-primary)] transition-all cursor-pointer flex items-center justify-center gap-2 font-medium" style={{ color: 'var(--text-secondary)' }}
               >
                 <ArrowLeft className="h-4.5 w-4.5" />
                 <span className="text-xs">Back</span>
               </button>
-              <div className="h-8 w-[1px] bg-slate-200 hidden sm:block"></div>
+              <div className="h-8 w-[1px] bg-[var(--bg-subtle)] hidden sm:block"></div>
               <div>
                 <div className="flex items-center gap-2">
                   <span className="text-[9px] font-mono text-blue-600 uppercase tracking-widest font-bold bg-blue-50 border border-blue-200 px-2 py-0.5 rounded-full">Archive Room</span>
                   <span className="text-[9px] font-mono text-emerald-600 uppercase tracking-widest font-bold bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full">{isOutbound ? 'Outbound Dial' : 'Inbound Line'}</span>
                 </div>
-                <h2 className="text-lg font-bold text-slate-900 font-display mt-0.5">{displayTitle}</h2>
-                <p className="text-[11px] text-slate-500">{displaySubtitle}</p>
+                <h2 className="text-lg font-bold text-[var(--text-primary)] font-display mt-0.5">{displayTitle}</h2>
+                <p className="text-[11px] text-[var(--text-muted)]">{displaySubtitle}</p>
               </div>
             </div>
 
             {/* MINIMAL HORIZONTAL RECORDING PLAYER — plays the real uploaded
                 recording via activeTapeResult.recordingUrl; no recording
                 means no playback, not a simulated animation. */}
-            <div className="flex-1 max-w-2xl bg-slate-50 border border-slate-200 rounded-xl p-3 flex items-center gap-4">
+            <div className="flex-1 max-w-2xl bg-[var(--bg-subtle)] border border-[var(--border)] rounded-xl p-3 flex items-center gap-4">
               {playableTapeRecordingUrl && (
                 <audio
                   ref={audioElRef}
@@ -999,36 +1006,36 @@ Currently on question ${nextIndex} out of ${selectedTask.questions.length}. Next
 
               {/* Progress & Label */}
               <div className="flex-1 min-w-0 space-y-1">
-                <div className="flex justify-between items-center text-[10px] font-mono text-slate-500">
+                <div className="flex justify-between items-center text-[10px] font-mono text-[var(--text-muted)]">
                   <span className="truncate font-semibold text-blue-600">{filename}</span>
-                  <span className="shrink-0 text-slate-600 font-medium">
+                  <span className="shrink-0 font-medium" style={{ color: 'var(--text-secondary)' }}>
                     {activeTapeResult.recordingUrl
                       ? `${formatTime(Math.round(((tapeDuration || activeTapeResult.duration) * tapeProgress) / 100))} / ${formatTime(Math.round(tapeDuration || activeTapeResult.duration))}`
                       : 'No recording available'}
                   </span>
                 </div>
-                <div className="relative h-1.5 bg-slate-200 rounded-full overflow-hidden">
+                <div className="relative h-1.5 bg-[var(--bg-subtle)] rounded-full overflow-hidden">
                   <div className="bg-emerald-500 h-1.5 transition-all" style={{ width: `${tapeProgress}%` }}></div>
                 </div>
               </div>
 
               {/* Tape Reels Animation (Compact version) */}
-              <div className="hidden sm:flex items-center space-x-2.5 px-2 bg-slate-100 rounded-lg border border-slate-200 h-8">
-                <div className="h-4 w-4 rounded-full border border-slate-300 bg-white flex items-center justify-center">
+              <div className="hidden sm:flex items-center space-x-2.5 px-2 bg-[var(--bg-subtle)] rounded-lg border border-[var(--border)] h-8">
+                <div className="h-4 w-4 rounded-full border border-[var(--border)] bg-[var(--bg-surface)] flex items-center justify-center">
                   <div className={`h-1.5 w-1.5 rounded-full bg-slate-500 ${isTapePlaying ? 'animate-spin' : ''}`} style={{ borderStyle: 'dashed' }}></div>
                 </div>
-                <div className="h-4 w-4 rounded-full border border-slate-300 bg-white flex items-center justify-center">
+                <div className="h-4 w-4 rounded-full border border-[var(--border)] bg-[var(--bg-surface)] flex items-center justify-center">
                   <div className={`h-1.5 w-1.5 rounded-full bg-slate-500 ${isTapePlaying ? 'animate-spin' : ''}`} style={{ borderStyle: 'dashed' }}></div>
                 </div>
               </div>
 
               {/* Play Speed selector */}
-              <div className="flex border border-slate-200 bg-white rounded-lg overflow-hidden text-[10px] h-8 items-center">
+              <div className="flex border border-[var(--border)] bg-[var(--bg-surface)] rounded-lg overflow-hidden text-[10px] h-8 items-center">
                 {[1, 1.5, 2].map((sp) => (
                   <button
                     key={sp}
                     onClick={() => setTapeSpeed(sp)}
-                    className={`px-2 h-full font-mono font-bold ${tapeSpeed === sp ? 'bg-blue-600 text-white' : 'text-slate-500 hover:bg-slate-50'} cursor-pointer transition-all`}
+                    className={`px-2 h-full font-mono font-bold ${tapeSpeed === sp ? 'bg-blue-600 text-white' : 'text-[var(--text-muted)] hover:bg-[var(--bg-subtle)]'} cursor-pointer transition-all`}
                   >
                     {sp}x
                   </button>
@@ -1038,17 +1045,17 @@ Currently on question ${nextIndex} out of ${selectedTask.questions.length}. Next
 
             {/* Cognitive Metrics */}
             <div className="flex items-center gap-3 shrink-0">
-              <div className="bg-slate-50 border border-slate-200 px-3 py-1.5 rounded-xl text-center">
-                <span className="text-[8px] font-mono text-slate-400 uppercase tracking-wider block">Intent</span>
+              <div className="bg-[var(--bg-subtle)] border border-[var(--border)] px-3 py-1.5 rounded-xl text-center">
+                <span className="text-[8px] font-mono text-[var(--text-muted)] uppercase tracking-wider block">Intent</span>
                 <span className="text-xs font-bold text-blue-600">{activeTapeResult.intent}</span>
               </div>
-              <div className="bg-slate-50 border border-slate-200 px-3 py-1.5 rounded-xl text-center">
-                <span className="text-[8px] font-mono text-slate-400 uppercase tracking-wider block">Sentiment</span>
+              <div className="bg-[var(--bg-subtle)] border border-[var(--border)] px-3 py-1.5 rounded-xl text-center">
+                <span className="text-[8px] font-mono text-[var(--text-muted)] uppercase tracking-wider block">Sentiment</span>
                 <span className="text-xs font-bold text-emerald-600">{activeTapeResult.sentiment}</span>
               </div>
-              <div className="bg-slate-50 border border-slate-200 px-3 py-1.5 rounded-xl text-center">
-                <span className="text-[8px] font-mono text-slate-400 uppercase tracking-wider block">Cost</span>
-                <span className="text-xs font-bold text-slate-700">{formatInr(callCostInr(activeTapeResult.duration))}</span>
+              <div className="bg-[var(--bg-subtle)] border border-[var(--border)] px-3 py-1.5 rounded-xl text-center">
+                <span className="text-[8px] font-mono text-[var(--text-muted)] uppercase tracking-wider block">Cost</span>
+                <span className="text-xs font-bold text-[var(--text-secondary)]">{formatInr(callCostInr(activeTapeResult.duration))}</span>
               </div>
             </div>
           </div>
@@ -1058,13 +1065,13 @@ Currently on question ${nextIndex} out of ${selectedTask.questions.length}. Next
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 flex-1 min-h-0 overflow-hidden">
           
           {/* LEFT: Complete conversation dialogue timeline (FULL PAGE VIEW) */}
-          <div className="lg:col-span-8 bg-white p-6 rounded-2xl border border-slate-200 flex flex-col h-full shadow-sm overflow-hidden">
-            <div className="flex items-center justify-between pb-4 border-b border-slate-100 mb-4 shrink-0">
-              <span className="text-xs font-mono text-slate-700 uppercase tracking-widest font-bold flex items-center gap-2">
+          <div className="lg:col-span-8 bg-[var(--bg-surface)] p-6 rounded-2xl border border-[var(--border)] flex flex-col h-full shadow-sm overflow-hidden">
+            <div className="flex items-center justify-between pb-4 border-b border-[var(--border)] mb-4 shrink-0">
+              <span className="text-xs font-mono text-[var(--text-secondary)] uppercase tracking-widest font-bold flex items-center gap-2">
                 <MessageSquare className="h-4.5 w-4.5 text-blue-500 animate-pulse" />
                 Conversation Dialogue Transcript
               </span>
-              <span className="text-[10px] font-mono text-slate-400">Dual-channel synthesis</span>
+              <span className="text-[10px] font-mono text-[var(--text-muted)]">Dual-channel synthesis</span>
             </div>
 
             <div className="flex-1 overflow-y-auto space-y-5 pr-2">
@@ -1076,16 +1083,16 @@ Currently on question ${nextIndex} out of ${selectedTask.questions.length}. Next
                     : `👤 ${isOutbound && activeTapeLead ? activeTapeLead.name : activeTapeResult.leadName}`;
                   return (
                     <div key={idx} className="flex flex-col" style={{ alignItems: isAI ? 'flex-start' : 'flex-end' }}>
-                      <div className="flex items-center space-x-1.5 mb-1.5 text-[9px] text-slate-400 font-mono">
-                        <span className="font-bold text-slate-600">{speakerLabel}</span>
+                      <div className="flex items-center space-x-1.5 mb-1.5 text-[9px] text-[var(--text-muted)] font-mono">
+                        <span className="font-bold" style={{ color: 'var(--text-secondary)' }}>{speakerLabel}</span>
                         <span>•</span>
                         <span>{line.timestamp}</span>
                       </div>
                       <div
                         className={`max-w-[85%] rounded-2xl px-5 py-3 text-[13px] font-sans leading-relaxed shadow-sm border ${
                           isAI
-                            ? 'bg-blue-50/70 text-slate-800 rounded-tl-none border-blue-100/80'
-                            : 'bg-slate-50 text-slate-700 rounded-tr-none border-slate-200'
+                            ? 'bg-blue-50/70 text-[var(--text-primary)] rounded-tl-none border-blue-100/80'
+                            : 'bg-[var(--bg-subtle)] text-[var(--text-secondary)] rounded-tr-none border-[var(--border)]'
                         }`}
                       >
                         {line.text}
@@ -1094,24 +1101,24 @@ Currently on question ${nextIndex} out of ${selectedTask.questions.length}. Next
                   );
                 })
               ) : (
-                <p className="text-xs text-slate-400 text-center py-12">No conversation script captured.</p>
+                <p className="text-xs text-[var(--text-muted)] text-center py-12">No conversation script captured.</p>
               )}
             </div>
           </div>
 
           {/* RIGHT: Checklist & Extraction Dashboard */}
-          <div className="lg:col-span-4 bg-white p-6 rounded-2xl border border-slate-200 flex flex-col h-full shadow-sm overflow-hidden">
+          <div className="lg:col-span-4 bg-[var(--bg-surface)] p-6 rounded-2xl border border-[var(--border)] flex flex-col h-full shadow-sm overflow-hidden">
             {/* AI Summary Section */}
-            <div className="mb-4 shrink-0 bg-slate-50 border border-slate-200/60 rounded-xl p-4 space-y-1.5">
-              <span className="text-[9px] font-mono text-slate-500 uppercase tracking-widest font-bold block">AI Summarized Intake</span>
-              <p className="text-slate-700 leading-relaxed text-xs italic font-sans">
+            <div className="mb-4 shrink-0 bg-[var(--bg-subtle)] border border-[var(--border)]/60 rounded-xl p-4 space-y-1.5">
+              <span className="text-[9px] font-mono text-[var(--text-muted)] uppercase tracking-widest font-bold block">AI Summarized Intake</span>
+              <p className="text-[var(--text-secondary)] leading-relaxed text-xs italic font-sans">
                 "{activeTapeResult.summary}"
               </p>
             </div>
 
             {isOutbound ? (
               <>
-                <span className="text-xs font-mono text-slate-700 uppercase tracking-widest font-bold pb-3 border-b border-slate-100 mb-4 flex items-center gap-2 shrink-0">
+                <span className="text-xs font-mono text-[var(--text-secondary)] uppercase tracking-widest font-bold pb-3 border-b border-[var(--border)] mb-4 flex items-center gap-2 shrink-0">
                   <Check className="h-4.5 w-4.5 text-emerald-500" />
                   Extracted Campaign Answers
                 </span>
@@ -1120,19 +1127,19 @@ Currently on question ${nextIndex} out of ${selectedTask.questions.length}. Next
                   {selectedTask.questions.map((question, qIdx) => {
                     const answer = activeTapeResult.answers?.[question];
                     return (
-                      <div key={qIdx} className="p-4 bg-slate-50 rounded-xl border border-slate-200 space-y-2.5 transition-all hover:border-slate-300/80">
+                      <div key={qIdx} className="p-4 bg-[var(--bg-subtle)] rounded-xl border border-[var(--border)] space-y-2.5 transition-all hover:border-[var(--border)]/80">
                         <div className="flex items-start gap-2">
-                          <span className="text-[9px] bg-slate-200 px-2 py-0.5 rounded text-slate-600 font-mono shrink-0 font-bold">Q{qIdx + 1}</span>
-                          <p className="font-medium text-xs leading-snug text-slate-700">{question}</p>
+                          <span className="text-[9px] bg-[var(--bg-subtle)] px-2 py-0.5 rounded font-mono shrink-0 font-bold" style={{ color: 'var(--text-secondary)' }}>Q{qIdx + 1}</span>
+                          <p className="font-medium text-xs leading-snug text-[var(--text-secondary)]">{question}</p>
                         </div>
-                        <div className="bg-white border border-slate-200/80 rounded-lg px-3.5 py-3 font-sans text-xs shadow-sm">
+                        <div className="bg-[var(--bg-surface)] border border-[var(--border)]/80 rounded-lg px-3.5 py-3 font-sans text-xs shadow-sm">
                           {answer ? (
                             <div className="text-emerald-600 flex items-start gap-2">
                               <span className="text-emerald-500 font-bold shrink-0 text-sm">✓</span>
-                              <p className="text-slate-800 italic leading-relaxed">"{answer}"</p>
+                              <p className="text-[var(--text-primary)] italic leading-relaxed">"{answer}"</p>
                             </div>
                           ) : (
-                            <span className="text-slate-400 italic">No answer captured.</span>
+                            <span className="text-[var(--text-muted)] italic">No answer captured.</span>
                           )}
                         </div>
                       </div>
@@ -1141,24 +1148,24 @@ Currently on question ${nextIndex} out of ${selectedTask.questions.length}. Next
                 </div>
               </>
             ) : (
-              <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 space-y-3 flex-1 overflow-y-auto">
-                <span className="text-xs font-mono text-slate-700 uppercase tracking-widest font-bold block border-b border-slate-100 pb-2">Inbound Metadata</span>
+              <div className="bg-[var(--bg-subtle)] border border-[var(--border)] rounded-xl p-4 space-y-3 flex-1 overflow-y-auto">
+                <span className="text-xs font-mono text-[var(--text-secondary)] uppercase tracking-widest font-bold block border-b border-[var(--border)] pb-2">Inbound Metadata</span>
                 <div className="space-y-3.5 text-xs">
                   <div>
-                    <span className="text-slate-400 font-medium block">Caller Number</span>
-                    <span className="font-mono font-bold text-slate-700 block mt-0.5">{activeTapeResult.leadName}</span>
+                    <span className="text-[var(--text-muted)] font-medium block">Caller Number</span>
+                    <span className="font-mono font-bold text-[var(--text-secondary)] block mt-0.5">{activeTapeResult.leadName}</span>
                   </div>
                   <div>
-                    <span className="text-slate-400 font-medium block">Status</span>
+                    <span className="text-[var(--text-muted)] font-medium block">Status</span>
                     <span className="font-semibold text-blue-600 block mt-0.5">{activeTapeResult.status}</span>
                   </div>
                   <div>
-                    <span className="text-slate-400 font-medium block">Call Duration</span>
-                    <span className="font-mono text-slate-700 block mt-0.5">{activeTapeResult.duration} seconds</span>
+                    <span className="text-[var(--text-muted)] font-medium block">Call Duration</span>
+                    <span className="font-mono text-[var(--text-secondary)] block mt-0.5">{activeTapeResult.duration} seconds</span>
                   </div>
                   <div>
-                    <span className="text-slate-400 font-medium block">Recording Date</span>
-                    <span className="font-mono text-slate-700 block mt-0.5">{new Date(activeTapeResult.createdAt).toLocaleString()}</span>
+                    <span className="text-[var(--text-muted)] font-medium block">Recording Date</span>
+                    <span className="font-mono text-[var(--text-secondary)] block mt-0.5">{new Date(activeTapeResult.createdAt).toLocaleString()}</span>
                   </div>
                 </div>
               </div>
@@ -1194,23 +1201,19 @@ Currently on question ${nextIndex} out of ${selectedTask.questions.length}. Next
     : 0;
 
   return (
-    <div id="voice-agent-dialer" className="p-8 space-y-6 overflow-y-auto h-screen w-full font-sans bg-slate-50/50">
-      {/* Title Header with Mode Tabs Switcher */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-200/60 pb-5">
-        <div>
-          <h2 className="text-2xl font-bold tracking-tight text-slate-900 font-display">Simulated Calling Center</h2>
-          <p className="text-xs text-slate-500 mt-1">Configure automated workflows, initiate sequential campaigns, or trigger dynamic incoming calls to your virtual phone lines.</p>
-        </div>
-
-        {/* Modern Segmented Pill Control */}
+    <PageShell
+      title="Voice Simulator"
+      subtitle="Configure automated workflows, initiate sequential campaigns, or trigger dynamic incoming calls to your virtual phone lines."
+      layout="fill"
+      action={
         <div className="flex items-center gap-3">
-          <div className="bg-slate-100 p-1 rounded-xl border border-slate-200/80 flex">
+          <div className="bg-[var(--bg-subtle)] p-1 rounded-xl border border-[var(--border)]/80 flex">
             <button
               onClick={() => setDialerMode('outbound')}
               className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-bold transition-all cursor-pointer ${
                 dialerMode === 'outbound'
-                  ? 'bg-white text-blue-600 shadow-sm border border-slate-200/40'
-                  : 'text-slate-500 hover:text-slate-800'
+                  ? 'bg-[var(--bg-surface)] text-blue-600 shadow-sm border border-[var(--border)]/40'
+                  : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'
               }`}
             >
               <PhoneCall className="h-3.5 w-3.5" />
@@ -1220,8 +1223,8 @@ Currently on question ${nextIndex} out of ${selectedTask.questions.length}. Next
               onClick={() => setDialerMode('inbound')}
               className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-bold transition-all cursor-pointer relative ${
                 dialerMode === 'inbound'
-                  ? 'bg-white text-blue-600 shadow-sm border border-slate-200/40'
-                  : 'text-slate-500 hover:text-slate-800'
+                  ? 'bg-[var(--bg-surface)] text-blue-600 shadow-sm border border-[var(--border)]/40'
+                  : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'
               }`}
             >
               <PhoneIncoming className="h-3.5 w-3.5" />
@@ -1243,15 +1246,17 @@ Currently on question ${nextIndex} out of ${selectedTask.questions.length}. Next
             </button>
           )}
         </div>
-      </div>
+      }
+    >
+      <div className="overflow-y-auto flex-1 px-8 pb-8 pt-6 space-y-6">
 
       {dialerMode === 'outbound' ? (
         <>
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         {/* Left Column: Today's Assigned Tasks list - Bento Card */}
-        <div className="lg:col-span-4 bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-4">
-          <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-            <h4 className="text-xs font-bold text-slate-400 uppercase tracking-widest flex items-center">
+        <div className="lg:col-span-4 bg-[var(--bg-surface)] p-6 rounded-2xl border border-[var(--border)] shadow-sm space-y-4">
+          <div className="flex items-center justify-between border-b border-[var(--border)] pb-3">
+            <h4 className="text-xs font-bold text-[var(--text-muted)] uppercase tracking-widest flex items-center">
               <FileSpreadsheet className="h-4.5 w-4.5 mr-1.5 text-blue-600" /> Today's Assigned lists
             </h4>
             <span className="text-[10px] font-mono text-blue-600 bg-blue-50 font-bold px-2 py-0.5 rounded-full">
@@ -1259,7 +1264,7 @@ Currently on question ${nextIndex} out of ${selectedTask.questions.length}. Next
             </span>
           </div>
 
-          <p className="text-xs text-slate-400">Select an active call-list scheduled for today to monitor agent progress.</p>
+          <p className="text-xs text-[var(--text-muted)]">Select an active call-list scheduled for today to monitor agent progress.</p>
 
           <div className="space-y-3 max-h-[300px] overflow-y-auto pr-1">
             {tasks.map((task) => {
@@ -1279,28 +1284,28 @@ Currently on question ${nextIndex} out of ${selectedTask.questions.length}. Next
                   className={`w-full p-4 rounded-xl text-left border transition-all flex flex-col space-y-2.5 ${
                     isActive
                       ? 'border-blue-600 bg-blue-50/25 shadow-sm'
-                      : 'border-slate-100 hover:bg-slate-50'
+                      : 'border-[var(--border)] hover:bg-[var(--bg-subtle)]'
                   }`}
                 >
                   <div className="flex justify-between items-start w-full gap-2">
-                    <span className="text-xs font-bold text-slate-800 line-clamp-1 flex-1">{task.name}</span>
+                    <span className="text-xs font-bold text-[var(--text-primary)] line-clamp-1 flex-1">{task.name}</span>
                     <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded shrink-0 ${
                       task.status === 'Completed'
                         ? 'bg-emerald-50 text-emerald-700'
                         : task.status === 'In Progress'
                         ? 'bg-blue-50 text-blue-700 animate-pulse'
-                        : 'bg-slate-100 text-slate-600'
+                        : 'bg-[var(--bg-subtle)] text-[var(--text-secondary)]'
                     }`}>
                       {task.status}
                     </span>
                   </div>
 
                   <div className="w-full space-y-1">
-                    <div className="flex justify-between text-[10px] text-slate-500">
+                    <div className="flex justify-between text-[10px] text-[var(--text-muted)]">
                       <span>Questions: {task.questions.length}</span>
                       <span>{completed}/{total} Dialed</span>
                     </div>
-                    <div className="w-full bg-slate-100 rounded-full h-1">
+                    <div className="w-full bg-[var(--bg-subtle)] rounded-full h-1">
                       <div className="bg-blue-600 h-1 rounded-full transition-all" style={{ width: `${percent}%` }}></div>
                     </div>
                   </div>
@@ -1310,14 +1315,14 @@ Currently on question ${nextIndex} out of ${selectedTask.questions.length}. Next
           </div>
 
           {/* Quick Stats Bento widget */}
-          <div className="bg-slate-900 text-white rounded-xl p-4 space-y-2 relative overflow-hidden">
+          <div className="theme-panel rounded-xl p-4 space-y-2 relative overflow-hidden border">
             <div className="absolute -right-8 -bottom-8 w-24 h-24 bg-blue-500/10 rounded-full blur-xl"></div>
             <div className="relative z-10 space-y-1">
-              <span className={`text-[9px] font-mono uppercase tracking-wider font-bold ${autoDialOn ? 'text-emerald-400' : 'text-slate-500'}`}>
+              <span className={`text-[9px] font-mono uppercase tracking-wider font-bold ${autoDialOn ? 'text-emerald-500' : ''}`} style={!autoDialOn ? {color:'var(--panel-muted)'} : {}}>
                 Calling Telemetry {autoDialOn && '· LIVE'}
               </span>
-              <p className="text-lg font-bold">Continuous Dialer Mode: {autoDialOn ? 'ON' : 'OFF'}</p>
-              <p className="text-[10px] text-slate-400 leading-normal">
+              <p className="text-lg font-bold" style={{color:'var(--panel-text)'}}>Continuous Dialer Mode: {autoDialOn ? 'ON' : 'OFF'}</p>
+              <p className="text-[10px] leading-normal" style={{color:'var(--panel-muted)'}}>
                 {autoDialOn
                   ? 'Auto-dialing every pending lead in the active list, one after another — hit "Stop Auto-Dial" to pause after the current call.'
                   : 'AI parses voice audio stream, converts caller speech to text in real-time, matching questionnaire patterns instantly. Click "Auto-Dial Next List Target" to work through the whole list without clicking Dial per lead.'}
@@ -1327,29 +1332,25 @@ Currently on question ${nextIndex} out of ${selectedTask.questions.length}. Next
         </div>
 
         {/* Center Main Column: Selected Task Queue Workspace - Bento Card */}
-        <div className="lg:col-span-8 bg-white p-6 rounded-2xl border border-slate-200 shadow-sm flex flex-col justify-between space-y-6">
+        <div className="lg:col-span-8 bg-[var(--bg-surface)] p-6 rounded-2xl border border-[var(--border)] shadow-sm flex flex-col justify-between space-y-6">
           {!selectedTask ? (
-            <div className="flex flex-col items-center justify-center h-full text-center py-16 space-y-3">
-              <FileSpreadsheet className="h-10 w-10 text-slate-300" />
-              <div>
-                <p className="text-sm font-bold text-slate-700">No dialing tasks yet</p>
-                <p className="text-xs text-slate-400 mt-1">Assign a daily dialing task to start calling real leads.</p>
-              </div>
-              <button
-                onClick={openCreateTaskModal}
-                className="flex items-center px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold rounded-xl shadow-md cursor-pointer"
-              >
-                <Plus className="h-4 w-4 mr-1.5" />
-                Assign Dialing Task
-              </button>
-            </div>
+            <EmptyState
+              icon={FileSpreadsheet}
+              heading="No dialing tasks yet"
+              message="Assign a daily dialing task to start calling real leads."
+              action={
+                <Button variant="primary" size="sm" icon={Plus} onClick={openCreateTaskModal}>
+                  Assign Dialing Task
+                </Button>
+              }
+            />
           ) : (
           <div className="space-y-4">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-100 pb-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-[var(--border)] pb-4">
               <div>
                 <span className="text-[9px] font-mono text-blue-600 uppercase tracking-widest font-bold">Active Working List</span>
-                <h3 className="text-lg font-bold text-slate-900 mt-0.5">{selectedTask.name}</h3>
-                <p className="text-xs text-slate-500 mt-1">Checklist questions to ask: <span className="font-semibold text-slate-700">{selectedTask.questions.length} questions sequential</span></p>
+                <h3 className="text-lg font-bold text-[var(--text-primary)] mt-0.5">{selectedTask.name}</h3>
+                <p className="text-xs text-[var(--text-muted)] mt-1">Checklist questions to ask: <span className="font-semibold text-[var(--text-secondary)]">{selectedTask.questions.length} questions sequential</span></p>
               </div>
 
               <div className="flex items-center gap-2">
@@ -1357,8 +1358,9 @@ Currently on question ${nextIndex} out of ${selectedTask.questions.length}. Next
                   onClick={() => setAutoDialOn((v) => !v)}
                   disabled={dialableNumbers.length === 0}
                   className={`flex items-center px-4 py-2 disabled:opacity-50 text-xs font-bold rounded-xl shadow-sm transition-all cursor-pointer ${
-                    autoDialOn ? 'bg-rose-600 hover:bg-rose-500 text-white' : 'bg-slate-900 hover:bg-slate-800 text-white'
+                    autoDialOn ? 'bg-rose-600 hover:bg-rose-500 text-white' : ''
                   }`}
+                  style={!autoDialOn ? {background:'var(--panel-surface)',color:'var(--panel-text)',border:'1px solid var(--panel-border)'} : {}}
                   title={autoDialOn ? 'Stops after the current call finishes' : 'Dials the next pending lead now, then keeps going through the rest of the list automatically'}
                 >
                   <PhoneCall className={`h-3.5 w-3.5 mr-1.5 ${autoDialOn ? '' : 'text-emerald-400'}`} />
@@ -1369,29 +1371,17 @@ Currently on question ${nextIndex} out of ${selectedTask.questions.length}. Next
 
             {/* Micro bento statistics metrics */}
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-              <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-100">
-                <span className="text-[9px] font-mono text-slate-400 uppercase font-bold">Targets Loaded</span>
-                <p className="text-lg font-bold text-slate-800 mt-1">{totalLeadsInTask}</p>
-              </div>
-              <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-100">
-                <span className="text-[9px] font-mono text-slate-400 uppercase font-bold">Recorded Dialed</span>
-                <p className="text-lg font-bold text-slate-800 mt-1">{completedLeadsInTask}</p>
-              </div>
-              <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-100">
-                <span className="text-[9px] font-mono text-slate-400 uppercase font-bold">Skipped/No Answer</span>
-                <p className="text-lg font-bold text-slate-800 mt-1">{skippedLeadsInTask}</p>
-              </div>
-              <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-100">
-                <span className="text-[9px] font-mono text-slate-400 uppercase font-bold">Conversion Rate</span>
-                <p className="text-lg font-bold text-emerald-600 mt-1">{conversionPercent}%</p>
-              </div>
+              <KpiCard colSpan={1} label="Targets Loaded" value={totalLeadsInTask} icon={FileSpreadsheet} iconPosition="right" iconBg="var(--bg-subtle)" iconColor="var(--text-muted)" className="!rounded-xl !min-h-0 !p-3.5" />
+              <KpiCard colSpan={1} label="Recorded Dialed" value={completedLeadsInTask} icon={CheckCircle2} iconPosition="right" iconBg="var(--bg-subtle)" iconColor="var(--text-muted)" className="!rounded-xl !min-h-0 !p-3.5" />
+              <KpiCard colSpan={1} label="Skipped/No Answer" value={skippedLeadsInTask} icon={XCircle} iconPosition="right" iconBg="var(--bg-subtle)" iconColor="var(--text-muted)" className="!rounded-xl !min-h-0 !p-3.5" />
+              <KpiCard colSpan={1} label="Conversion Rate" value={`${conversionPercent}%`} icon={Activity} iconPosition="right" iconBg="var(--bg-subtle)" iconColor="#059669" className="!rounded-xl !min-h-0 !p-3.5" />
             </div>
 
             {/* List Queue Table */}
-            <div className="border border-slate-100 rounded-xl overflow-hidden">
+            <div className="border border-[var(--border)] rounded-xl overflow-hidden">
               <table className="w-full text-left text-xs">
                 <thead>
-                  <tr className="bg-slate-50 border-b border-slate-100 text-slate-400">
+                  <tr className="bg-[var(--bg-subtle)] border-b border-[var(--border)] text-[var(--text-muted)]">
                     <th className="px-4 py-2.5 font-semibold">Lead Contact</th>
                     <th className="px-4 py-2.5 font-semibold">Value</th>
                     <th className="px-4 py-2.5 font-semibold">Survey Status</th>
@@ -1408,14 +1398,14 @@ Currently on question ${nextIndex} out of ${selectedTask.questions.length}. Next
                     const isCallingActive = activeLead?.id === leadId && (callState === 'dialing' || callState === 'connected');
 
                     return (
-                      <tr key={leadId} className={`hover:bg-slate-50/50 transition-colors ${isCallingActive ? 'bg-blue-50/30' : ''}`}>
+                      <tr key={leadId} className={`hover:bg-[var(--bg-subtle)]/50 transition-colors ${isCallingActive ? 'bg-blue-50/30' : ''}`}>
                         <td className="px-4 py-3">
                           <div className="space-y-0.5">
-                            <p className="font-bold text-slate-800">{lead.name}</p>
-                            <p className="text-[10px] text-slate-400 font-mono">{lead.phone}</p>
+                            <p className="font-bold text-[var(--text-primary)]">{lead.name}</p>
+                            <p className="text-[10px] text-[var(--text-muted)] font-mono">{lead.phone}</p>
                           </div>
                         </td>
-                        <td className="px-4 py-3 font-medium text-slate-600">
+                        <td className="px-4 py-3 font-medium" style={{ color: 'var(--text-secondary)' }}>
                           {lead.amountRequested ? `$${lead.amountRequested.toLocaleString()}` : '—'}
                         </td>
                         <td className="px-4 py-3">
@@ -1429,13 +1419,13 @@ Currently on question ${nextIndex} out of ${selectedTask.questions.length}. Next
                               result.status === 'Completed'
                                 ? 'bg-emerald-50 text-emerald-700 border border-emerald-100'
                                 : result.status === 'Skipped'
-                                ? 'bg-slate-100 text-slate-600'
-                                : 'bg-slate-100 text-slate-600'
+                                ? 'bg-[var(--bg-subtle)] text-slate-600'
+                                : 'bg-[var(--bg-subtle)] text-[var(--text-secondary)]'
                             }`}>
                               {result.status}
                             </span>
                           ) : (
-                            <span className="inline-flex items-center gap-1 text-[10px] font-medium text-slate-400 bg-slate-50 px-2 py-0.5 rounded-md">
+                            <span className="inline-flex items-center gap-1 text-[10px] font-medium text-[var(--text-muted)] bg-[var(--bg-subtle)] px-2 py-0.5 rounded-md">
                               Pending Dial
                             </span>
                           )}
@@ -1444,7 +1434,7 @@ Currently on question ${nextIndex} out of ${selectedTask.questions.length}. Next
                             if (!retry || isCallingActive) return null;
                             if (retry.retryStatus === 'exhausted') {
                               return (
-                                <p className="text-[9px] text-slate-400 mt-1">
+                                <p className="text-[9px] text-[var(--text-muted)] mt-1">
                                   Auto-redial gave up after {retry.attemptNumber}/3 attempts
                                 </p>
                               );
@@ -1471,12 +1461,12 @@ Currently on question ${nextIndex} out of ${selectedTask.questions.length}. Next
                                 ? 'text-emerald-600'
                                 : result.sentiment === 'Negative'
                                 ? 'text-rose-600'
-                                : 'text-slate-500'
+                                : 'text-[var(--text-muted)]'
                             }`}>
                               {result.sentiment}
                             </span>
                           ) : (
-                            <span className="text-[10px] text-slate-400">—</span>
+                            <span className="text-[10px] text-[var(--text-muted)]">—</span>
                           )}
                         </td>
                         <td className="px-4 py-3 text-right">
@@ -1486,7 +1476,7 @@ Currently on question ${nextIndex} out of ${selectedTask.questions.length}. Next
                                 <button
                                   onClick={() => handleSkipLead(leadId)}
                                   disabled={callState === 'dialing' || callState === 'connected'}
-                                  className="text-[10px] font-semibold text-slate-400 hover:text-slate-600 px-2 py-1 rounded hover:bg-slate-100 cursor-pointer"
+                                  className="text-[10px] font-semibold text-[var(--text-muted)] hover:text-slate-600 px-2 py-1 rounded hover:bg-[var(--bg-subtle)] cursor-pointer"
                                 >
                                   Skip
                                 </button>
@@ -1504,7 +1494,7 @@ Currently on question ${nextIndex} out of ${selectedTask.questions.length}. Next
                             ) : result.status === 'Completed' ? (
                               <button
                                 onClick={() => handleOpenTapePlayer(leadId)}
-                                className="text-[10px] font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 px-2.5 py-1 rounded-lg transition-all flex items-center gap-1 cursor-pointer"
+                                className="text-[10px] font-bold text-[var(--text-secondary)] bg-[var(--bg-subtle)] hover:bg-[var(--bg-subtle)] px-2.5 py-1 rounded-lg transition-all flex items-center gap-1 cursor-pointer"
                               >
                                 <Headphones className="h-3.5 w-3.5 text-blue-600" /> Play Recording
                               </button>
@@ -1535,7 +1525,7 @@ Currently on question ${nextIndex} out of ${selectedTask.questions.length}. Next
       {/* Two columns workspace: Live Active Telephone Screen AND Call Cassette Tape Transcript History Player */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
         {/* Active Telephone Simulator Frame */}
-        <div className="lg:col-span-6 bg-gradient-to-br from-slate-900 via-slate-950 to-blue-950 text-white rounded-2xl p-6 border border-slate-800 shadow-xl space-y-5">
+        <div className="lg:col-span-6 theme-panel rounded-2xl p-6 border shadow-xl space-y-5">
           <div className="flex justify-between items-center border-b border-white/5 pb-3">
             <div className="flex items-center space-x-2">
               <Disc className={`h-4.5 w-4.5 text-blue-400 ${callState === 'connected' ? 'animate-spin' : ''}`} />
@@ -1547,7 +1537,7 @@ Currently on question ${nextIndex} out of ${selectedTask.questions.length}. Next
                 🔴 REC AUDIO ACTIVE
               </span>
             ) : (
-              <span className="text-[10px] font-mono text-slate-500 uppercase tracking-widest font-bold">Line Standing By</span>
+              <span className="text-[10px] font-mono text-[var(--text-muted)] uppercase tracking-widest font-bold">Line Standing By</span>
             )}
           </div>
 
@@ -1556,12 +1546,12 @@ Currently on question ${nextIndex} out of ${selectedTask.questions.length}. Next
               {/* Active Call details */}
               <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center bg-white/5 p-4 rounded-xl border border-white/5 gap-2">
                 <div>
-                  <h5 className="text-xs text-slate-400 font-mono">CALLEE TARGET</h5>
+                  <h5 className="text-xs text-[var(--text-muted)] font-mono">CALLEE TARGET</h5>
                   <p className="text-sm font-bold text-slate-100 font-display mt-0.5">{activeLead.name}</p>
                   <p className="text-[10px] text-blue-300 font-mono mt-0.5">{activeLead.phone}{activeLead.amountRequested ? ` • value $${activeLead.amountRequested.toLocaleString()}` : ''}</p>
                 </div>
                 <div className="text-right shrink-0">
-                  <h5 className="text-xs text-slate-400 font-mono">DIAL TIMER</h5>
+                  <h5 className="text-xs text-[var(--text-muted)] font-mono">DIAL TIMER</h5>
                   <p className="text-md font-mono font-bold text-slate-100 mt-0.5">
                     {callState === 'connected' ? formatTime(duration) : '00:00'}
                   </p>
@@ -1569,8 +1559,8 @@ Currently on question ${nextIndex} out of ${selectedTask.questions.length}. Next
               </div>
 
               {/* Questionnaire Progress checklist inside phone hud */}
-              <div className="bg-slate-900/40 border border-white/5 rounded-xl p-4 space-y-2.5">
-                <span className="text-[9px] font-mono text-slate-400 uppercase font-bold tracking-wider block">Questionnaire Steps asked by AI:</span>
+              <div className="theme-panel-surface border rounded-xl p-4 space-y-2.5" style={{borderColor:'var(--panel-border)'}}>
+                <span className="text-[9px] font-mono text-[var(--text-muted)] uppercase font-bold tracking-wider block">Questionnaire Steps asked by AI:</span>
                 <div className="space-y-1.5 text-[11px]">
                   {selectedTask.questions.map((q, idx) => {
                     const isAsked = idx < activeQuestionIndex;
@@ -1587,7 +1577,7 @@ Currently on question ${nextIndex} out of ${selectedTask.questions.length}. Next
                             {idx + 1}
                           </span>
                         ) : (
-                          <span className="h-4 w-4 rounded-full border border-slate-700 flex items-center justify-center text-[10px] text-slate-500 shrink-0 mt-0.5">
+                          <span className="h-4 w-4 rounded-full border border-slate-700 flex items-center justify-center text-[10px] text-[var(--text-muted)] shrink-0 mt-0.5">
                             {idx + 1}
                           </span>
                         )}
@@ -1605,13 +1595,13 @@ Currently on question ${nextIndex} out of ${selectedTask.questions.length}. Next
                     <div className="h-12 w-12 bg-blue-600/10 border border-blue-500/20 rounded-full flex items-center justify-center text-blue-400 mx-auto">
                       <PhoneCall className="h-6 w-6" />
                     </div>
-                    <p className="text-xs text-slate-400">Selected target ready for outbound dial. Initiate line now.</p>
+                    <p className="text-xs text-[var(--text-muted)]">Selected target ready for outbound dial. Initiate line now.</p>
                     {dialableNumbers.length > 0 ? (
                       <div className="flex flex-col items-center gap-2">
                         <select
                           value={selectedOutboundNumber}
                           onChange={(e) => setSelectedOutboundNumber(e.target.value)}
-                          className="bg-slate-900 border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-slate-200 focus:outline-none"
+                          className="rounded-lg px-3 py-1.5 text-xs focus:outline-none" style={{background:'var(--panel-surface)',border:'1px solid var(--panel-border)',color:'var(--panel-text)'}}
                         >
                           {dialableNumbers.map((n) => (
                             <option key={n.number} value={n.number}>
@@ -1662,7 +1652,7 @@ Currently on question ${nextIndex} out of ${selectedTask.questions.length}. Next
                       <ThumbsUp className="h-6 w-6" />
                     </div>
                     <p className="text-xs text-slate-200 font-semibold">Call successfully finished & saved to tape recorder!</p>
-                    <p className="text-[10px] text-slate-400">Speech transcript has been parsed and answers extracted.</p>
+                    <p className="text-[10px] text-[var(--text-muted)]">Speech transcript has been parsed and answers extracted.</p>
                     <button
                       onClick={() => setCallState('idle')}
                       className="px-4 py-1.5 bg-white/10 hover:bg-white/15 text-xs rounded-lg cursor-pointer text-white"
@@ -1674,16 +1664,16 @@ Currently on question ${nextIndex} out of ${selectedTask.questions.length}. Next
               </div>
             </div>
           ) : (
-            <div className="flex flex-col items-center justify-center h-48 text-slate-500 space-y-2">
-              <PhoneCall className="h-8 w-8 text-slate-600 animate-pulse" />
-              <p className="text-xs text-slate-400">No active connection. Choose a target from the list above and click "Dial" to start.</p>
+            <div className="flex flex-col items-center justify-center h-48 text-[var(--text-muted)] space-y-2">
+              <PhoneCall className="h-8 w-8 animate-pulse" style={{ color: 'var(--text-secondary)' }} />
+              <p className="text-xs text-[var(--text-muted)]">No active connection. Choose a target from the list above and click "Dial" to start.</p>
             </div>
           )}
         </div>
 
         {/* Live Active Transcript / Simulation Speech Feed */}
-        <div className="lg:col-span-6 bg-slate-950 rounded-2xl border border-slate-900 shadow-xl flex flex-col h-[400px] text-white">
-          <div className="p-4 border-b border-slate-900 bg-slate-900/40 flex items-center justify-between">
+        <div className="lg:col-span-6 theme-panel rounded-2xl border shadow-xl flex flex-col h-[400px]">
+          <div className="p-4 border-b theme-panel-surface flex items-center justify-between" style={{borderColor:'var(--panel-border)'}}>
             <span className="text-xs font-mono text-blue-400 uppercase tracking-widest flex items-center">
               <MessageSquare className="h-4.5 w-4.5 mr-2" /> Active Dialogue feed
             </span>
@@ -1700,7 +1690,7 @@ Currently on question ${nextIndex} out of ${selectedTask.questions.length}. Next
                 const isAI = line.speaker === 'AI';
                 return (
                   <div key={idx} className={`flex flex-col ${isAI ? 'items-start' : 'items-end'}`}>
-                    <span className="text-[9px] text-slate-500 font-mono mb-1">{line.speaker} • {line.timestamp}</span>
+                    <span className="text-[9px] text-[var(--text-muted)] font-mono mb-1">{line.speaker} • {line.timestamp}</span>
                     <div
                       className={`rounded-2xl px-4 py-2 text-xs font-sans leading-relaxed ${
                         isAI
@@ -1714,15 +1704,15 @@ Currently on question ${nextIndex} out of ${selectedTask.questions.length}. Next
                 );
               })
             ) : (
-              <div className="flex flex-col items-center justify-center h-full text-slate-500 space-y-2">
+              <div className="flex flex-col items-center justify-center h-full text-[var(--text-muted)] space-y-2">
                 <Mic className="h-8 w-8 text-slate-600 animate-pulse" />
-                <p className="text-xs text-slate-400">Awaiting telephone call connection to parse audio waves...</p>
+                <p className="text-xs text-[var(--text-muted)]">Awaiting telephone call connection to parse audio waves...</p>
               </div>
             )}
 
             {isAiResponding && (
               <div className="flex flex-col items-start">
-                <span className="text-[9px] text-slate-500 font-mono mb-1">AI {agentDisplayName} • Thinking</span>
+                <span className="text-[9px] text-[var(--text-muted)] font-mono mb-1">AI {agentDisplayName} • Thinking</span>
                 <div className="bg-blue-950/50 border border-blue-900/40 text-blue-300 rounded-2xl rounded-tl-none px-4 py-2 flex items-center space-x-2 text-xs">
                   <RefreshCw className="h-3.5 w-3.5 animate-spin" />
                   <span>AI Agent {agentDisplayName} is evaluating customer utterance...</span>
@@ -1734,7 +1724,7 @@ Currently on question ${nextIndex} out of ${selectedTask.questions.length}. Next
 
           {/* Caller Interactive Speech Simulation pad */}
           {callState === 'connected' && (
-            <div className="p-3 border-t border-slate-900 bg-slate-900/30 space-y-2.5">
+            <div className="p-3 border-t theme-panel-surface space-y-2.5" style={{borderColor:'var(--panel-border)'}}>
               {/* Quick simulation helper response chips */}
               <div className="flex flex-wrap gap-1.5">
                 {getSuggestionsForActiveQuestion().map((suggestion, sIdx) => (
@@ -1764,7 +1754,7 @@ Currently on question ${nextIndex} out of ${selectedTask.questions.length}. Next
                   value={customerUtterance}
                   onChange={(e) => setCustomerUtterance(e.target.value)}
                   placeholder="Type customer reply here..."
-                  className="flex-1 bg-slate-900 border border-slate-800 rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                  className="flex-1 rounded-xl px-3.5 py-2.5 text-xs placeholder-slate-500 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500" style={{background:'var(--panel-surface)',border:'1px solid var(--panel-border)',color:'var(--panel-text)'}}
                 />
                 <button
                   type="submit"
@@ -1783,9 +1773,9 @@ Currently on question ${nextIndex} out of ${selectedTask.questions.length}. Next
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
           {/* LEFT COLUMN: Active Inbound Virtual Numbers */}
           <div className="lg:col-span-4 space-y-6">
-            <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-4">
-              <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-                <h4 className="text-xs font-bold text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
+            <div className="bg-[var(--bg-surface)] p-6 rounded-2xl border border-[var(--border)] shadow-sm space-y-4">
+              <div className="flex items-center justify-between border-b border-[var(--border)] pb-3">
+                <h4 className="text-xs font-bold text-[var(--text-muted)] uppercase tracking-widest flex items-center gap-1.5">
                   <PhoneForwarded className="h-4.5 w-4.5 text-blue-600 animate-pulse" /> Active Inbound Numbers
                 </h4>
                 <span className="text-[10px] font-mono text-blue-600 bg-blue-50 font-bold px-2 py-0.5 rounded-full">
@@ -1797,37 +1787,37 @@ Currently on question ${nextIndex} out of ${selectedTask.questions.length}. Next
                 {activeVirtualNumbers.map((vNum) => (
                   <div
                     key={vNum.id}
-                    className="w-full p-4 rounded-xl text-left border border-slate-100 flex flex-col space-y-2"
+                    className="w-full p-4 rounded-xl text-left border border-[var(--border)] flex flex-col space-y-2"
                   >
                     <div className="flex justify-between items-start w-full gap-2">
-                      <span className="text-xs font-bold text-slate-800 font-mono">{vNum.number}</span>
+                      <span className="text-xs font-bold text-[var(--text-primary)] font-mono">{vNum.number}</span>
                       <span className="text-[8px] font-mono font-bold bg-emerald-50 text-emerald-700 px-1.5 py-0.5 rounded border border-emerald-200 flex items-center gap-1">
                         <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
                         {vNum.status}
                       </span>
                     </div>
-                    <div className="text-[11px] text-slate-500 font-medium truncate">{vNum.friendlyName}</div>
-                    <div className="flex justify-between text-[9px] font-mono text-slate-400 border-t border-slate-50 pt-1.5">
+                    <div className="text-[11px] text-[var(--text-muted)] font-medium truncate">{vNum.friendlyName}</div>
+                    <div className="flex justify-between text-[9px] font-mono text-[var(--text-muted)] border-t border-[var(--border)] pt-1.5">
                       <span>Inbound Logs: {vNum.incomingCallCount}</span>
                       <span>Carrier: {vNum.provider}</span>
                     </div>
                   </div>
                 ))}
                 {activeVirtualNumbers.length === 0 && (
-                  <div className="text-center py-8 border border-dashed border-slate-200 rounded-xl bg-slate-50/50 space-y-2">
+                  <div className="text-center py-8 border border-dashed border-[var(--border)] rounded-xl bg-[var(--bg-subtle)]/50 space-y-2">
                     <PhoneForwarded className="h-6 w-6 text-slate-300 mx-auto" />
-                    <p className="text-[11px] text-slate-400">No virtual numbers connected yet. Add one under Settings to start receiving real inbound calls.</p>
+                    <p className="text-[11px] text-[var(--text-muted)]">No virtual numbers connected yet. Add one under Settings to start receiving real inbound calls.</p>
                   </div>
                 )}
               </div>
             </div>
 
-            <div className="p-4 bg-slate-900 text-white rounded-2xl relative overflow-hidden shrink-0">
+            <div className="theme-panel p-4 rounded-2xl border relative overflow-hidden shrink-0">
               <div className="absolute right-0 bottom-0 w-32 h-32 bg-blue-500/10 rounded-full blur-2xl"></div>
               <div className="relative z-10 flex items-center space-x-3 text-xs leading-normal">
                 <Sparkles className="h-5 w-5 text-emerald-400 shrink-0" />
-                <p className="text-[11px] text-slate-300">
-                  Real calls to any connected number above are answered live by <strong>{agentDisplayName}</strong>, transcribed, and logged here automatically — nothing on this tab is simulated.
+                <p className="text-[11px]" style={{color:'var(--panel-muted)'}}>
+                  Real calls to any connected number above are answered live by <strong style={{color:'var(--panel-text)'}}>{agentDisplayName}</strong>, transcribed, and logged here automatically — nothing on this tab is simulated.
                 </p>
               </div>
             </div>
@@ -1835,25 +1825,25 @@ Currently on question ${nextIndex} out of ${selectedTask.questions.length}. Next
 
           {/* RIGHT COLUMN: Real Inbound Call History */}
           <div className="lg:col-span-8 flex flex-col h-full space-y-6">
-            <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm flex flex-col justify-between h-full min-h-[580px] space-y-6">
+            <div className="bg-[var(--bg-surface)] p-6 rounded-2xl border border-[var(--border)] shadow-sm flex flex-col justify-between h-full min-h-[580px] space-y-6">
               <div className="space-y-4">
                 {/* Stats banner */}
-                <div className="grid grid-cols-3 gap-4 border-b border-slate-100 pb-5">
-                  <div className="p-3 bg-slate-50 border border-slate-200/50 rounded-xl space-y-1 text-center">
-                    <span className="text-[8px] font-mono text-slate-400 uppercase tracking-widest block">Inbound Volume</span>
-                    <p className="text-xl font-bold text-slate-800">{realInboundCallLogs.length}</p>
+                <div className="grid grid-cols-3 gap-4 border-b border-[var(--border)] pb-5">
+                  <div className="p-3 bg-[var(--bg-subtle)] border border-[var(--border)]/50 rounded-xl space-y-1 text-center">
+                    <span className="text-[8px] font-mono text-[var(--text-muted)] uppercase tracking-widest block">Inbound Volume</span>
+                    <p className="text-xl font-bold text-[var(--text-primary)]">{realInboundCallLogs.length}</p>
                   </div>
-                  <div className="p-3 bg-slate-50 border border-slate-200/50 rounded-xl space-y-1 text-center">
-                    <span className="text-[8px] font-mono text-slate-400 uppercase tracking-widest block">Average Duration</span>
-                    <p className="text-xl font-bold text-slate-800">
+                  <div className="p-3 bg-[var(--bg-subtle)] border border-[var(--border)]/50 rounded-xl space-y-1 text-center">
+                    <span className="text-[8px] font-mono text-[var(--text-muted)] uppercase tracking-widest block">Average Duration</span>
+                    <p className="text-xl font-bold text-[var(--text-primary)]">
                       {realInboundCallLogs.length > 0
                         ? Math.round(realInboundCallLogs.reduce((acc, l) => acc + l.duration, 0) / realInboundCallLogs.length)
                         : 0}s
                     </p>
                   </div>
-                  <div className="p-3 bg-slate-50 border border-slate-200/50 rounded-xl space-y-1 text-center">
-                    <span className="text-[8px] font-mono text-slate-400 uppercase tracking-widest block">Positive Rate</span>
-                    <p className="text-xl font-bold text-slate-800">
+                  <div className="p-3 bg-[var(--bg-subtle)] border border-[var(--border)]/50 rounded-xl space-y-1 text-center">
+                    <span className="text-[8px] font-mono text-[var(--text-muted)] uppercase tracking-widest block">Positive Rate</span>
+                    <p className="text-xl font-bold text-[var(--text-primary)]">
                       {realInboundCallLogs.length > 0
                         ? Math.round((realInboundCallLogs.filter(l => l.sentiment === 'Positive').length / realInboundCallLogs.length) * 100)
                         : 0}%
@@ -1863,10 +1853,10 @@ Currently on question ${nextIndex} out of ${selectedTask.questions.length}. Next
 
                 <div className="flex items-center justify-between">
                   <div>
-                    <h3 className="text-sm font-bold text-slate-900 uppercase tracking-widest flex items-center gap-1.5">
+                    <h3 className="text-sm font-bold text-[var(--text-primary)] uppercase tracking-widest flex items-center gap-1.5">
                       <History className="h-4.5 w-4.5 text-blue-600" /> Inbound Dialogue History
                     </h3>
-                    <p className="text-xs text-slate-400 mt-0.5">Real recorded calls answered on your virtual numbers, with AI-extracted summaries and full transcripts.</p>
+                    <p className="text-xs text-[var(--text-muted)] mt-0.5">Real recorded calls answered on your virtual numbers, with AI-extracted summaries and full transcripts.</p>
                   </div>
                 </div>
 
@@ -1875,16 +1865,16 @@ Currently on question ${nextIndex} out of ${selectedTask.questions.length}. Next
                   {realInboundCallLogs.map((log) => (
                     <div
                       key={log.id}
-                      className="p-4 border border-slate-100 rounded-xl bg-slate-50/50 hover:bg-slate-50 transition-all flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4"
+                      className="p-4 border border-[var(--border)] rounded-xl bg-[var(--bg-subtle)]/50 hover:bg-[var(--bg-subtle)] transition-all flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4"
                     >
                       <div className="space-y-1.5 max-w-lg">
                         <div className="flex flex-wrap items-center gap-2">
-                          <span className="text-xs font-bold text-slate-800 font-mono">{log.leadName}</span>
-                          <span className="text-[9px] font-mono text-slate-400">•</span>
-                          <span className="text-[9px] font-mono text-slate-400">{new Date(log.createdAt).toLocaleString()}</span>
+                          <span className="text-xs font-bold text-[var(--text-primary)] font-mono">{log.leadName}</span>
+                          <span className="text-[9px] font-mono text-[var(--text-muted)]">•</span>
+                          <span className="text-[9px] font-mono text-[var(--text-muted)]">{new Date(log.createdAt).toLocaleString()}</span>
                         </div>
 
-                        <p className="text-[11px] text-slate-600 italic font-medium leading-relaxed font-sans line-clamp-2">
+                        <p className="text-[11px] italic font-medium leading-relaxed font-sans line-clamp-2" style={{ color: 'var(--text-secondary)' }}>
                           "{log.summary}"
                         </p>
 
@@ -1895,10 +1885,10 @@ Currently on question ${nextIndex} out of ${selectedTask.questions.length}. Next
                           <span className="text-[9px] font-mono text-blue-600 bg-blue-50 border border-blue-200 px-1.5 py-0.5 rounded-full">
                             {log.status}
                           </span>
-                          <span className="text-[9px] font-mono text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded-full">
+                          <span className="text-[9px] font-mono text-[var(--text-muted)] bg-[var(--bg-subtle)] px-1.5 py-0.5 rounded-full">
                             Duration: {log.duration}s
                           </span>
-                          <span className="text-[9px] font-mono text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded-full">
+                          <span className="text-[9px] font-mono text-[var(--text-muted)] bg-[var(--bg-subtle)] px-1.5 py-0.5 rounded-full">
                             {formatInr(callCostInr(log.duration))}
                           </span>
                         </div>
@@ -1907,7 +1897,7 @@ Currently on question ${nextIndex} out of ${selectedTask.questions.length}. Next
                       {/* Tape playback button */}
                       <button
                         onClick={() => handleOpenTapePlayer(log.id, 'inbound')}
-                        className="px-3.5 py-2 bg-white hover:bg-blue-600 hover:text-white text-slate-700 border border-slate-200 hover:border-blue-600 rounded-xl text-xs font-bold shadow-sm cursor-pointer transition-all flex items-center gap-1 shrink-0"
+                        className="px-3.5 py-2 bg-[var(--bg-surface)] hover:bg-blue-600 hover:text-white text-[var(--text-secondary)] border border-[var(--border)] hover:border-blue-600 rounded-xl text-xs font-bold shadow-sm cursor-pointer transition-all flex items-center gap-1 shrink-0"
                       >
                         <Play className="h-3.5 w-3.5 fill-current" />
                         Play Tape
@@ -1916,22 +1906,22 @@ Currently on question ${nextIndex} out of ${selectedTask.questions.length}. Next
                   ))}
 
                   {realInboundCallLogs.length === 0 && (
-                    <div className="text-center py-12 border border-dashed border-slate-200 rounded-xl bg-slate-50/50 space-y-2">
-                      <Inbox className="h-8 w-8 text-slate-400 mx-auto" />
-                      <p className="text-xs text-slate-400 font-medium">No inbound calls logged yet.</p>
-                      <p className="text-[10px] text-slate-400">Real calls to a connected virtual number will appear here automatically as they happen.</p>
+                    <div className="text-center py-12 border border-dashed border-[var(--border)] rounded-xl bg-[var(--bg-subtle)]/50 space-y-2">
+                      <Inbox className="h-8 w-8 text-[var(--text-muted)] mx-auto" />
+                      <p className="text-xs text-[var(--text-muted)] font-medium">No inbound calls logged yet.</p>
+                      <p className="text-[10px] text-[var(--text-muted)]">Real calls to a connected virtual number will appear here automatically as they happen.</p>
                     </div>
                   )}
                 </div>
               </div>
 
               {/* Information badge footer */}
-              <div className="p-4 bg-slate-900 text-white rounded-2xl relative overflow-hidden shrink-0 mt-4">
+              <div className="theme-panel p-4 rounded-2xl border relative overflow-hidden shrink-0 mt-4">
                 <div className="absolute right-0 bottom-0 w-32 h-32 bg-blue-500/10 rounded-full blur-2xl"></div>
                 <div className="relative z-10 flex items-center space-x-3 text-xs leading-normal">
                   <Sparkles className="h-5 w-5 text-emerald-400 shrink-0" />
-                  <p className="text-[11px] text-slate-300">
-                    Our virtual number routing maps inbound SIP audio streaming directly to the <strong>{agentDisplayName} CRM Intelligence engine</strong>, recording and parsing customer responses in real time.
+                  <p className="text-[11px]" style={{color:'var(--panel-muted)'}}>
+                    Our virtual number routing maps inbound SIP audio streaming directly to the <strong style={{color:'var(--panel-text)'}}>{agentDisplayName} CRM Intelligence engine</strong>, recording and parsing customer responses in real time.
                   </p>
                 </div>
               </div>
@@ -1939,45 +1929,38 @@ Currently on question ${nextIndex} out of ${selectedTask.questions.length}. Next
           </div>
         </div>
       )}
+      </div>
       {/* MODAL: Assign New Daily Dialing Task */}
       {showCreateModal && (
-        <div className="fixed inset-0 bg-slate-950/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 overflow-y-auto">
-          <div className="bg-white rounded-3xl border border-slate-200 max-w-2xl w-full p-6 shadow-2xl space-y-6 max-h-[90vh] overflow-y-auto font-sans">
-            <div className="flex justify-between items-start border-b border-slate-100 pb-3">
-              <div>
-                <h3 className="text-lg font-bold text-slate-900 font-display">Assign Daily Outbound Dialing Task</h3>
-                <p className="text-xs text-slate-500 mt-1">Set up list criteria, type specific sequential questions, and activate call audio recording.</p>
-              </div>
-              <button
-                onClick={() => setShowCreateModal(false)}
-                className="text-slate-400 hover:text-slate-600 text-lg font-bold p-1 cursor-pointer"
-              >
-                ✕
-              </button>
-            </div>
-
+        <Modal
+          open
+          onClose={() => setShowCreateModal(false)}
+          title="Assign Daily Outbound Dialing Task"
+          subtitle="Set up list criteria, type specific sequential questions, and activate call audio recording."
+          maxWidth="max-w-3xl"
+        >
             <form onSubmit={handleCreateTask} className="space-y-5">
               {/* Task Name */}
               <div className="space-y-1.5">
-                <label className="text-xs font-bold text-slate-600 block">Task Name / Campaign Theme</label>
+                <label className="text-xs font-bold block" style={{ color: 'var(--text-secondary)' }}>Task Name / Campaign Theme</label>
                 <input
                   type="text"
                   required
                   placeholder="e.g. Daily Pre-Qualification Callback List"
                   value={newTaskName}
                   onChange={(e) => setNewTaskName(e.target.value)}
-                  className="w-full border border-slate-200 rounded-xl px-4 py-2.5 text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                  className="w-full border border-[var(--border)] rounded-xl px-4 py-2.5 text-xs text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
                 />
               </div>
 
               {/* Language + assigned team member */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-slate-600 block">Call Language</label>
+                  <label className="text-xs font-bold block" style={{ color: 'var(--text-secondary)' }}>Call Language</label>
                   <select
                     value={newTaskLanguage}
                     onChange={(e) => setNewTaskLanguage(e.target.value)}
-                    className="w-full border border-slate-200 rounded-xl px-4 py-2.5 text-xs text-slate-800 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                    className="w-full border border-[var(--border)] rounded-xl px-4 py-2.5 text-xs text-[var(--text-primary)] focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
                   >
                     {TASK_LANGUAGE_OPTIONS.map((lang) => (
                       <option key={lang} value={lang}>{lang}</option>
@@ -1990,11 +1973,11 @@ Currently on question ${nextIndex} out of ${selectedTask.questions.length}. Next
                   )}
                 </div>
                 <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-slate-600 block">Assign to Team Member</label>
+                  <label className="text-xs font-bold block" style={{ color: 'var(--text-secondary)' }}>Assign to Team Member</label>
                   <select
                     value={newTaskAssignedMemberId}
                     onChange={(e) => setNewTaskAssignedMemberId(e.target.value)}
-                    className="w-full border border-slate-200 rounded-xl px-4 py-2.5 text-xs text-slate-800 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                    className="w-full border border-[var(--border)] rounded-xl px-4 py-2.5 text-xs text-[var(--text-primary)] focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
                   >
                     <option value="">None — no callback contact shared</option>
                     {teamMembers.map((m) => (
@@ -2006,7 +1989,7 @@ Currently on question ${nextIndex} out of ${selectedTask.questions.length}. Next
 
               {/* Star Health quoting toggle — insurance-only, opt-in per task */}
               {isInsurance && (
-                <div className="flex items-start gap-2 border border-slate-200 rounded-xl px-4 py-2.5">
+                <div className="flex items-start gap-2 border border-[var(--border)] rounded-xl px-4 py-2.5">
                   <input
                     type="checkbox"
                     id="starhealth-enabled"
@@ -2014,8 +1997,8 @@ Currently on question ${nextIndex} out of ${selectedTask.questions.length}. Next
                     onChange={(e) => setNewStarhealthEnabled(e.target.checked)}
                     className="mt-0.5"
                   />
-                  <label htmlFor="starhealth-enabled" className="text-xs text-slate-600">
-                    <span className="font-bold text-slate-700 block">Enable Star Health quoting</span>
+                  <label htmlFor="starhealth-enabled" className="text-xs" style={{ color: 'var(--text-secondary)' }}>
+                    <span className="font-bold text-[var(--text-secondary)] block">Enable Star Health quoting</span>
                     During this task's calls, the AI will collect quote details (pincode, family, ages, pre-existing disease) and read back a live Star Health quote, or send it afterward if it isn't ready during the call.
                   </label>
                 </div>
@@ -2023,8 +2006,8 @@ Currently on question ${nextIndex} out of ${selectedTask.questions.length}. Next
 
               {/* Define Questions sequential flow */}
               <div className="space-y-2">
-                <label className="text-xs font-bold text-slate-600 block">Questions Questionnaire (Sequential Flow)</label>
-                <p className="text-[11px] text-slate-400 leading-normal">
+                <label className="text-xs font-bold block" style={{ color: 'var(--text-secondary)' }}>Questions Questionnaire (Sequential Flow)</label>
+                <p className="text-[11px] text-[var(--text-muted)] leading-normal">
                   Our virtual voice assistant, {agentDisplayName}, will ask these questions one by one. It automatically processes the caller speech, records the timeline, and advances to the next question.
                 </p>
 
@@ -2035,7 +2018,7 @@ Currently on question ${nextIndex} out of ${selectedTask.questions.length}. Next
                       const sourceTask = tasks.find((t) => t.id === e.target.value);
                       if (sourceTask) setNewQuestions([...sourceTask.questions]);
                     }}
-                    className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-xs text-slate-600 focus:outline-none focus:border-blue-500"
+                    className="w-full bg-[var(--bg-surface)] border border-[var(--border)] rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-blue-500" style={{ color: 'var(--text-secondary)' }}
                   >
                     <option value="">Copy questions from an existing task…</option>
                     {tasks.map((t) => (
@@ -2055,11 +2038,11 @@ Currently on question ${nextIndex} out of ${selectedTask.questions.length}. Next
                 )}
 
                 {/* Question List */}
-                <div className="space-y-2 max-h-32 overflow-y-auto bg-slate-50 p-3 rounded-xl border border-slate-200">
+                <div className="space-y-2 max-h-32 overflow-y-auto bg-[var(--bg-subtle)] p-3 rounded-xl border border-[var(--border)]">
                   {newQuestions.map((q, idx) => (
-                    <div key={idx} className="flex items-center justify-between gap-2 bg-white px-3 py-1.5 rounded-lg border border-slate-100">
-                      <span className="text-[10px] font-mono text-slate-400 shrink-0">Q{idx + 1}:</span>
-                      <p className="text-xs text-slate-700 truncate flex-1 font-medium">{q}</p>
+                    <div key={idx} className="flex items-center justify-between gap-2 bg-[var(--bg-surface)] px-3 py-1.5 rounded-lg border border-[var(--border)]">
+                      <span className="text-[10px] font-mono text-[var(--text-muted)] shrink-0">Q{idx + 1}:</span>
+                      <p className="text-xs text-[var(--text-secondary)] truncate flex-1 font-medium">{q}</p>
                       <button
                         type="button"
                         onClick={() => handleRemoveQuestion(idx)}
@@ -2070,7 +2053,7 @@ Currently on question ${nextIndex} out of ${selectedTask.questions.length}. Next
                     </div>
                   ))}
                   {newQuestions.length === 0 && (
-                    <p className="text-xs text-slate-400 italic text-center py-2">No questions defined yet. Please add at least one question below.</p>
+                    <p className="text-xs text-[var(--text-muted)] italic text-center py-2">No questions defined yet. Please add at least one question below.</p>
                   )}
                 </div>
 
@@ -2081,12 +2064,12 @@ Currently on question ${nextIndex} out of ${selectedTask.questions.length}. Next
                     placeholder="Type a new survey question (e.g., Do you currently rent or own?)"
                     value={tempQuestionInput}
                     onChange={(e) => setTempQuestionInput(e.target.value)}
-                    className="flex-1 border border-slate-200 rounded-xl px-3.5 py-2 text-xs text-slate-800"
+                    className="flex-1 border border-[var(--border)] rounded-xl px-3.5 py-2 text-xs text-[var(--text-primary)]"
                   />
                   <button
                     type="button"
                     onClick={handleAddQuestion}
-                    className="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold rounded-xl cursor-pointer shrink-0"
+                    className="px-4 py-2 text-xs font-bold rounded-xl cursor-pointer shrink-0" style={{background:'var(--panel-bg)',color:'var(--panel-text)',border:'1px solid var(--panel-border)'}}
                   >
                     Add Question
                   </button>
@@ -2096,7 +2079,7 @@ Currently on question ${nextIndex} out of ${selectedTask.questions.length}. Next
               {/* Select Leads checklist */}
               <div className="space-y-2">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                  <label className="text-xs font-bold text-slate-600 block">Select Target Numbers / Leads ({selectedFormLeadIds.length} chosen)</label>
+                  <label className="text-xs font-bold block" style={{ color: 'var(--text-secondary)' }}>Select Target Numbers / Leads ({selectedFormLeadIds.length} chosen)</label>
                   <div className="flex items-center space-x-2">
                     <button
                       type="button"
@@ -2111,11 +2094,11 @@ Currently on question ${nextIndex} out of ${selectedTask.questions.length}. Next
                     >
                       Select All Filtered
                     </button>
-                    <span className="text-slate-300 text-xs">|</span>
+                    <span className="text-xs" style={{ color: 'var(--text-muted)' }}>|</span>
                     <button
                       type="button"
                       onClick={() => setSelectedFormLeadIds([])}
-                      className="text-[10px] text-slate-500 font-semibold hover:underline cursor-pointer"
+                      className="text-[10px] text-[var(--text-muted)] font-semibold hover:underline cursor-pointer"
                     >
                       Deselect All
                     </button>
@@ -2123,15 +2106,13 @@ Currently on question ${nextIndex} out of ${selectedTask.questions.length}. Next
                 </div>
 
                 {/* Search filter for task creation */}
-                <input
-                  type="text"
-                  placeholder="Filter contacts by name, phone or source (e.g., CSV Bulk Upload)..."
+                <SearchInput
                   value={modalLeadSearch}
-                  onChange={(e) => setModalLeadSearch(e.target.value)}
-                  className="w-full border border-slate-200 rounded-xl px-3 py-1.5 text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                  onChange={setModalLeadSearch}
+                  placeholder="Filter contacts by name, phone or source (e.g., CSV Bulk Upload)..."
                 />
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 max-h-36 overflow-y-auto bg-slate-50 p-3 rounded-xl border border-slate-200">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 max-h-36 overflow-y-auto bg-[var(--bg-subtle)] p-3 rounded-xl border border-[var(--border)]">
                   {leadsDatabase
                     .filter((lead) => {
                       const query = modalLeadSearch.toLowerCase();
@@ -2147,15 +2128,15 @@ Currently on question ${nextIndex} out of ${selectedTask.questions.length}. Next
                           className={`p-2.5 rounded-xl text-left border transition-all flex items-center justify-between cursor-pointer ${
                             isChecked
                               ? 'border-blue-600 bg-blue-50/45 shadow-sm'
-                              : 'border-white bg-white hover:bg-slate-100'
+                              : 'border-white bg-[var(--bg-surface)] hover:bg-[var(--bg-subtle)]'
                           }`}
                         >
                           <div className="space-y-0.5 truncate max-w-[180px]">
-                            <p className="text-xs font-bold text-slate-800 truncate">{lead.name}</p>
-                            <p className="text-[10px] text-slate-400 font-mono truncate">{lead.phone} • {lead.source}</p>
+                            <p className="text-xs font-bold text-[var(--text-primary)] truncate">{lead.name}</p>
+                            <p className="text-[10px] text-[var(--text-muted)] font-mono truncate">{lead.phone} • {lead.source}</p>
                           </div>
                           <div className={`h-4.5 w-4.5 rounded-full border flex items-center justify-center shrink-0 ${
-                            isChecked ? 'border-blue-600 bg-blue-600 text-white' : 'border-slate-300 bg-white'
+                            isChecked ? 'border-blue-600 bg-blue-600 text-white' : 'border-[var(--border)] bg-[var(--bg-surface)]'
                           }`}>
                             {isChecked && <Check className="h-3 w-3" />}
                           </div>
@@ -2166,17 +2147,17 @@ Currently on question ${nextIndex} out of ${selectedTask.questions.length}. Next
                     const query = modalLeadSearch.toLowerCase();
                     return lead.name.toLowerCase().includes(query) || lead.phone.includes(query) || lead.source.toLowerCase().includes(query);
                   }).length === 0 && (
-                    <p className="text-xs text-slate-400 italic text-center col-span-2 py-4">No contacts match the filter query.</p>
+                    <p className="text-xs text-[var(--text-muted)] italic text-center col-span-2 py-4">No contacts match the filter query.</p>
                   )}
                 </div>
               </div>
 
               {/* Submit Buttons */}
-              <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-100">
+              <div className="flex items-center justify-end gap-3 pt-3 border-t border-[var(--border)]">
                 <button
                   type="button"
                   onClick={() => setShowCreateModal(false)}
-                  className="px-4 py-2 text-xs font-bold text-slate-500 hover:text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-xl cursor-pointer"
+                  className="px-4 py-2 text-xs font-bold text-[var(--text-muted)] hover:text-[var(--text-secondary)] bg-[var(--bg-subtle)] hover:bg-[var(--bg-subtle)] rounded-xl cursor-pointer"
                 >
                   Cancel
                 </button>
@@ -2188,10 +2169,9 @@ Currently on question ${nextIndex} out of ${selectedTask.questions.length}. Next
                 </button>
               </div>
             </form>
-          </div>
-        </div>
+        </Modal>
       )}
 
-    </div>
+    </PageShell>
   );
 }

@@ -1,8 +1,10 @@
-import React, { useEffect, useState } from 'react';
-import { X, Loader2, Building2, Users, PhoneCall, ScrollText, Pencil, Ban, PlayCircle, Trash2 } from 'lucide-react';
+import React, { useEffect, useRef, useState } from 'react';
+import { Loader2, Building2, Users, PhoneCall, ScrollText, Pencil, Ban, PlayCircle, Trash2, AlertTriangle } from 'lucide-react';
 import { apiFetch } from '../lib/api';
 import { OrgDetail } from './types';
 import { callCostInr, formatInr } from '../lib/pricing';
+import SlideOver from '../components/ui/SlideOver';
+import Modal from '../components/ui/Modal';
 
 export default function OrgDetailPanel({ orgId, onClose, onChanged }: { orgId: string; onClose: () => void; onChanged: () => void }) {
   const [detail, setDetail] = useState<OrgDetail | null>(null);
@@ -11,6 +13,9 @@ export default function OrgDetailPanel({ orgId, onClose, onChanged }: { orgId: s
   const [editForm, setEditForm] = useState({ name: '', workspaceName: '', industry: '', subscriptionPlan: '', aiMinutesLimit: '' });
   const [busy, setBusy] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [deleteModal, setDeleteModal] = useState(false);
+  const [deleteConfirm, setDeleteConfirm] = useState('');
+  const deleteInputRef = useRef<HTMLInputElement>(null);
 
   const load = () => {
     setLoading(true);
@@ -75,10 +80,15 @@ export default function OrgDetailPanel({ orgId, onClose, onChanged }: { orgId: s
     }
   };
 
+  const openDeleteModal = () => {
+    setDeleteConfirm('');
+    setDeleteModal(true);
+    setTimeout(() => deleteInputRef.current?.focus(), 50);
+  };
+
   const handleDelete = async () => {
-    if (!detail) return;
-    const typed = window.prompt(`This permanently deletes "${detail.name}" and ALL of its data (calls, leads, team, everything). This cannot be undone.\n\nType the organization name exactly to confirm:`);
-    if (typed !== detail.name) return;
+    if (!detail || deleteConfirm !== detail.name) return;
+    setDeleteModal(false);
     setBusy(true);
     setActionError(null);
     try {
@@ -93,10 +103,11 @@ export default function OrgDetailPanel({ orgId, onClose, onChanged }: { orgId: s
   };
 
   return (
-    <div className="fixed inset-0 bg-black/40 flex justify-end z-50" onClick={onClose}>
-      <div className="w-full max-w-2xl bg-slate-50 h-full overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+    <>
+    <SlideOver open onClose={onClose}>
+      <div className="-mx-6 -my-5 flex flex-col min-h-full">
         {loading || !detail ? (
-          <div className="flex items-center justify-center h-full text-slate-400"><Loader2 className="h-5 w-5 animate-spin mr-2" /> Loading…</div>
+          <div className="flex items-center justify-center h-64 text-slate-400"><Loader2 className="h-5 w-5 animate-spin mr-2" /> Loading…</div>
         ) : (
           <>
             <div className="bg-white border-b border-slate-200 p-6 sticky top-0 z-10">
@@ -110,7 +121,6 @@ export default function OrgDetailPanel({ orgId, onClose, onChanged }: { orgId: s
                   </div>
                   <p className="text-xs text-slate-400 font-mono mt-1">{detail.workspaceName} · {detail.industry}</p>
                 </div>
-                <button onClick={onClose} className="text-slate-400 hover:text-slate-700"><X className="h-5 w-5" /></button>
               </div>
 
               <div className="flex items-center gap-2 mt-4">
@@ -132,7 +142,7 @@ export default function OrgDetailPanel({ orgId, onClose, onChanged }: { orgId: s
                   {detail.status === 'Suspended' ? 'Reactivate' : 'Suspend'}
                 </button>
                 <button
-                  onClick={handleDelete}
+                  onClick={openDeleteModal}
                   disabled={busy}
                   className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg bg-rose-50 text-rose-700 hover:bg-rose-100 disabled:opacity-50 ml-auto"
                 >
@@ -261,6 +271,52 @@ export default function OrgDetailPanel({ orgId, onClose, onChanged }: { orgId: s
           </>
         )}
       </div>
-    </div>
+    </SlideOver>
+
+    {/* Delete confirmation modal */}
+    {deleteModal && detail && (
+      <Modal open onClose={() => setDeleteModal(false)} maxWidth="max-w-md" zIndex="z-[400]">
+        <div>
+          <div className="flex items-center gap-3 mb-4">
+            <div className="h-10 w-10 rounded-xl bg-rose-100 flex items-center justify-center shrink-0">
+              <AlertTriangle className="h-5 w-5 text-rose-600" />
+            </div>
+            <div>
+              <h3 className="font-bold text-slate-900 text-sm">Delete organization</h3>
+              <p className="text-slate-500 text-xs mt-0.5">This permanently deletes all data and cannot be undone.</p>
+            </div>
+          </div>
+
+          <p className="text-xs text-slate-600 mb-3">
+            Type <strong className="font-mono text-slate-900">{detail.name}</strong> to confirm:
+          </p>
+          <input
+            ref={deleteInputRef}
+            value={deleteConfirm}
+            onChange={(e) => setDeleteConfirm(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && handleDelete()}
+            placeholder={detail.name}
+            className="w-full text-sm border border-slate-300 rounded-xl px-3 py-2 mb-4 focus:outline-none focus:ring-2 focus:ring-rose-500"
+          />
+
+          <div className="flex gap-2 justify-end">
+            <button
+              onClick={() => setDeleteModal(false)}
+              className="px-4 py-2 text-xs font-semibold rounded-xl bg-slate-100 text-slate-700 hover:bg-slate-200"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={handleDelete}
+              disabled={deleteConfirm !== detail.name}
+              className="px-4 py-2 text-xs font-semibold rounded-xl bg-rose-600 text-white hover:bg-rose-700 disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              Delete permanently
+            </button>
+          </div>
+        </div>
+      </Modal>
+    )}
+    </>
   );
 }

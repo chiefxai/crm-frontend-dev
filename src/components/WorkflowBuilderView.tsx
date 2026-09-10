@@ -18,6 +18,8 @@ import {
 } from 'lucide-react';
 import { Workflow, WorkflowNode, WorkflowEdge, NodeType, Lead } from '../types';
 import { apiFetch } from '../lib/api';
+import PageShell from './ui/PageShell';
+import Widget from './ui/Widget';
 
 interface WorkflowBuilderViewProps {
   workflows: Workflow[];
@@ -199,13 +201,11 @@ export default function WorkflowBuilderView({
   };
 
   return (
-    <div id="workflow-builder-view" className="p-8 space-y-6 overflow-y-auto h-screen w-full font-sans">
-      {/* Title Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-2xl font-bold font-display tracking-tight text-slate-800">AI Calling Workflow Builder</h2>
-          <p className="text-sm text-slate-500 mt-1">Design logical decision loops, write voice prompts, and trigger smart actions dynamically.</p>
-        </div>
+    <PageShell
+      title="AI Calling Workflow Builder"
+      subtitle="Design logical decision loops, write voice prompts, and trigger smart actions dynamically."
+      layout="fill"
+      action={
         <div className="flex items-center space-x-2">
           {workflows.map((w) => (
             <button
@@ -224,10 +224,12 @@ export default function WorkflowBuilderView({
             </button>
           ))}
         </div>
-      </div>
+      }
+    >
+      <div className="overflow-y-auto flex-1 px-8 pb-8 pt-6 space-y-6">
 
       {/* Manual run panel */}
-      <div className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm">
+      <Widget title="Run Workflow" icon={Play} accent="#6366f1" padding="md">
         <div className="flex items-center gap-3 flex-wrap">
           <Play className="h-4 w-4 text-indigo-600 shrink-0" />
           <span className="text-sm font-semibold text-slate-700">Run "{activeWorkflow?.name}" on a lead</span>
@@ -267,17 +269,14 @@ export default function WorkflowBuilderView({
             </div>
           </div>
         )}
-      </div>
+      </Widget>
 
       {/* Main Builder Split Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         {/* Left column: Visual Template Selector */}
         <div className="space-y-6">
-          <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm space-y-4">
-            <h4 className="text-xs font-bold text-slate-400 uppercase tracking-widest flex items-center">
-              <Compass className="h-4 w-4 mr-1 text-indigo-500" /> Prebuilt Flow Templates
-            </h4>
-            <p className="text-xs text-slate-400">Instantly reload proven loan communication algorithms to your workspace.</p>
+          <Widget title="Prebuilt Flow Templates" icon={Compass} accent="#6366f1" padding="md">
+            <p className="text-xs text-slate-400 mb-3">Instantly reload proven loan communication algorithms to your workspace.</p>
             <div className="space-y-3">
               {templates.map((temp, idx) => (
                 <div key={idx} className="p-4 bg-slate-50 border border-slate-100 rounded-xl space-y-2">
@@ -295,14 +294,10 @@ export default function WorkflowBuilderView({
                 </div>
               ))}
             </div>
-          </div>
+          </Widget>
 
-          {/* Node actions palette */}
-          <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm space-y-4">
-            <h4 className="text-xs font-bold text-slate-400 uppercase tracking-widest flex items-center">
-              <Layers className="h-4 w-4 mr-1 text-indigo-500" /> Toolbox Actions
-            </h4>
-            <p className="text-xs text-slate-400">Inject additional operational nodes into the currently active loop.</p>
+          <Widget title="Toolbox Actions" icon={Layers} accent="#6366f1" padding="md">
+            <p className="text-xs text-slate-400 mb-3">Inject additional operational nodes into the currently active loop.</p>
             <div className="grid grid-cols-2 gap-2">
               <button
                 onClick={() => handleAddNewNode('call')}
@@ -317,7 +312,7 @@ export default function WorkflowBuilderView({
                 <HelpCircle className="h-4 w-4 mr-2 text-indigo-500" /> Add Question
               </button>
             </div>
-          </div>
+          </Widget>
         </div>
 
         {/* Center column: Visual Pipeline Canvas */}
@@ -401,18 +396,19 @@ export default function WorkflowBuilderView({
           </div>
 
           {/* Right panel: Node Inspector sidebar */}
-          <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm flex flex-col h-full min-h-[50vh]">
-            <div className="border-b border-slate-100 pb-4 mb-4 flex items-center justify-between">
-              <h4 className="text-xs font-bold text-slate-400 uppercase tracking-widest">Node Inspector</h4>
-              {selectedNode && (
-                <span className="text-[10px] font-mono text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded font-bold">
-                  {selectedNode.id}
-                </span>
-              )}
-            </div>
-
+          <Widget
+            title="Node Inspector"
+            icon={Settings}
+            accent="#6366f1"
+            padding="md"
+            action={selectedNode ? (
+              <span className="text-[10px] font-mono text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded font-bold">
+                {selectedNode.id}
+              </span>
+            ) : undefined}
+          >
             {selectedNode ? (
-              <div className="flex-1 flex flex-col justify-between space-y-4">
+              <div className="flex flex-col justify-between space-y-4 h-full">
                 <div className="space-y-4 flex-1">
                   <div>
                     <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Step Label</label>
@@ -446,8 +442,6 @@ export default function WorkflowBuilderView({
                         onChange={(e) => setEditingQuestion(e.target.value)}
                         className="w-full bg-slate-50 border border-slate-100 rounded-lg px-3 py-2 text-xs text-slate-700 focus:outline-none focus:border-indigo-500"
                       />
-
-                      {/* Display simulated branches */}
                       <div className="mt-4 space-y-2">
                         <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Conditional Branches</label>
                         <div className="space-y-1.5">
@@ -487,9 +481,10 @@ export default function WorkflowBuilderView({
             ) : (
               <p className="text-xs text-slate-400 italic text-center my-auto">Select any node on the left canvas to configure its trigger prompts and behaviors.</p>
             )}
-          </div>
+          </Widget>
         </div>
       </div>
-    </div>
+      </div>
+    </PageShell>
   );
 }

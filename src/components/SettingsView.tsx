@@ -13,13 +13,22 @@ import {
   Activity,
   UserPlus,
   DollarSign,
-  Briefcase
+  Briefcase,
+  Loader2,
+  Flag,
+  Hash,
+  ScrollText,
+  Plus,
+  X,
 } from 'lucide-react';
 import { apiFetch } from '../lib/api';
 import { VirtualNumber, TeamMember, OrganizationSettings, UserRole } from '../types';
 import { COST_PER_MINUTE_INR_FALLBACK, formatInr } from '../lib/pricing';
 import FeatureFlagsPanel from '../features/feature-flags/FeatureFlagsPanel';
-import { Flag } from 'lucide-react';
+import { FEATURE_REGISTRY } from '../features/feature-flags/registry';
+import PageShell from './ui/PageShell';
+import Widget from './ui/Widget';
+import Modal from './ui/Modal';
 
 interface SettingsViewProps {
   virtualNumbers: VirtualNumber[];
@@ -29,6 +38,9 @@ interface SettingsViewProps {
   orgSettings: OrganizationSettings;
   setOrgSettings: React.Dispatch<React.SetStateAction<OrganizationSettings>>;
   costPerMinuteInr?: number;
+  activeSubTab?: 'numbers' | 'team' | 'billing' | 'api' | 'features';
+  setActiveSubTab?: (sub: string) => void;
+  currentUserEmail?: string;
 }
 
 interface AuditEntry {
@@ -48,10 +60,21 @@ export default function SettingsView({
   setTeamMembers,
   orgSettings,
   setOrgSettings,
-  costPerMinuteInr = COST_PER_MINUTE_INR_FALLBACK
+  costPerMinuteInr = COST_PER_MINUTE_INR_FALLBACK,
+  activeSubTab: activeSubTabProp,
+  setActiveSubTab: setActiveSubTabProp,
+  currentUserEmail,
 }: SettingsViewProps) {
-  const [subTab, setSubTab] = useState<'numbers' | 'team' | 'billing' | 'api' | 'features'>('numbers');
+  // Use prop-controlled sub-tab when provided (driven by sidebar), fall back to internal state.
+  const [_internalSubTab, _setInternalSubTab] = useState<'numbers' | 'team' | 'billing' | 'api' | 'features'>('numbers');
+  const subTab = (activeSubTabProp as 'numbers' | 'team' | 'billing' | 'api' | 'features') || _internalSubTab;
+  const setSubTab = (v: 'numbers' | 'team' | 'billing' | 'api' | 'features') => {
+    _setInternalSubTab(v);
+    setActiveSubTabProp?.(v);
+  };
 
+  const [showProviderForm, setShowProviderForm] = useState(false);
+  const [showAddStaff, setShowAddStaff] = useState(false);
   const [auditLogs, setAuditLogs] = useState<AuditEntry[]>([]);
   useEffect(() => {
     if (subTab !== 'api') return;
@@ -111,17 +134,22 @@ export default function SettingsView({
     e.preventDefault();
     if (!twilioSid.trim() || !twilioToken.trim() || !twilioPhone.trim()) return;
     setSavingTwilio(true);
-    const res = await apiFetch('/api/channels/twilio', {
-      method: 'POST',
-      body: JSON.stringify({ accountSid: twilioSid.trim(), authToken: twilioToken.trim(), phoneNumber: twilioPhone.trim() })
-    });
-    setSavingTwilio(false);
-    if (res.ok) {
-      upsertVirtualNumber(twilioPhone.trim(), twilioLabel.trim() || 'Twilio Line', 'Twilio');
-      setTwilioSid(''); setTwilioToken(''); setTwilioPhone(''); setTwilioLabel('');
-      loadChannels();
-    } else {
-      alert((await res.json()).error || 'Failed to connect Twilio account');
+    try {
+      const res = await apiFetch('/api/channels/twilio', {
+        method: 'POST',
+        body: JSON.stringify({ accountSid: twilioSid.trim(), authToken: twilioToken.trim(), phoneNumber: twilioPhone.trim() })
+      });
+      if (res.ok) {
+        upsertVirtualNumber(twilioPhone.trim(), twilioLabel.trim() || 'Twilio Line', 'Twilio');
+        setTwilioSid(''); setTwilioToken(''); setTwilioPhone(''); setTwilioLabel('');
+        loadChannels();
+      } else {
+        alert((await res.json()).error || 'Failed to connect Twilio account');
+      }
+    } catch {
+      alert('Network error — check your connection.');
+    } finally {
+      setSavingTwilio(false);
     }
   };
 
@@ -134,17 +162,22 @@ export default function SettingsView({
     e.preventDefault();
     if (!vobizAuthId.trim() || !vobizToken.trim() || !vobizPhone.trim()) return;
     setSavingVobiz(true);
-    const res = await apiFetch('/api/channels/vobiz', {
-      method: 'POST',
-      body: JSON.stringify({ authId: vobizAuthId.trim(), authToken: vobizToken.trim(), phoneNumber: vobizPhone.trim() })
-    });
-    setSavingVobiz(false);
-    if (res.ok) {
-      upsertVirtualNumber(vobizPhone.trim(), vobizLabel.trim() || 'Vobiz.ai Line', 'Vobiz.ai');
-      setVobizAuthId(''); setVobizToken(''); setVobizPhone(''); setVobizLabel('');
-      loadChannels();
-    } else {
-      alert((await res.json()).error || 'Failed to connect Vobiz.ai account');
+    try {
+      const res = await apiFetch('/api/channels/vobiz', {
+        method: 'POST',
+        body: JSON.stringify({ authId: vobizAuthId.trim(), authToken: vobizToken.trim(), phoneNumber: vobizPhone.trim() })
+      });
+      if (res.ok) {
+        upsertVirtualNumber(vobizPhone.trim(), vobizLabel.trim() || 'Vobiz.ai Line', 'Vobiz.ai');
+        setVobizAuthId(''); setVobizToken(''); setVobizPhone(''); setVobizLabel('');
+        loadChannels();
+      } else {
+        alert((await res.json()).error || 'Failed to connect Vobiz.ai account');
+      }
+    } catch {
+      alert('Network error — check your connection.');
+    } finally {
+      setSavingVobiz(false);
     }
   };
 
@@ -172,11 +205,57 @@ export default function SettingsView({
   const twilioChannel = connectedChannels.find((c) => c.type === 'twilio');
   const vobizChannel = connectedChannels.find((c) => c.type === 'vobiz');
 
+  // Org-level allowed feature flags (set by super admin at org creation)
+  const [orgAllowedFlags, setOrgAllowedFlags] = useState<string[]>([]);
+  useEffect(() => {
+    if (subTab !== 'team') return;
+    apiFetch('/api/settings/org')
+      .then(r => r.json())
+      .then(data => { if (Array.isArray(data?.featureFlags)) setOrgAllowedFlags(data.featureFlags); })
+      .catch(() => {});
+  }, [subTab]);
+
   // Team Member states
   const [newStaffName, setNewStaffName] = useState('');
   const [newStaffEmail, setNewStaffEmail] = useState('');
   const [newStaffPhone, setNewStaffPhone] = useState('');
   const [newStaffRole, setNewStaffRole] = useState<UserRole>('Loan Agent');
+  const [newStaffFeatures, setNewStaffFeatures] = useState<string[]>([]);
+  const [addingStaff, setAddingStaff] = useState(false);
+  const [staffAddMsg, setStaffAddMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
+  // Feature flag editing for existing team members
+  const [editFlagsFor, setEditFlagsFor] = useState<string | null>(null); // member id
+  const [editFlagsValue, setEditFlagsValue] = useState<string[]>([]);
+  const [savingFlags, setSavingFlags] = useState(false);
+
+  const openFlagEditor = (member: TeamMember) => {
+    setEditFlagsFor(member.id);
+    setEditFlagsValue(member.featureFlags || []);
+  };
+
+  const handleSaveFlags = async (memberId: string) => {
+    setSavingFlags(true);
+    try {
+      const res = await apiFetch(`/api/settings/team/${memberId}/flags`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ featureFlags: editFlagsValue }),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        alert(body.error || 'Failed to update feature flags');
+        return;
+      }
+      const updated = await res.json();
+      setTeamMembers(prev => prev.map(m => m.id === memberId ? { ...m, featureFlags: updated.featureFlags || editFlagsValue } : m));
+      setEditFlagsFor(null);
+    } catch {
+      alert('Could not reach the server');
+    } finally {
+      setSavingFlags(false);
+    }
+  };
 
   // Delete virtual line — calls the dedicated DELETE route directly instead
   // of relying on the whole-array /api/settings/numbers/sync effect, since
@@ -200,28 +279,67 @@ export default function SettingsView({
   };
 
   // Add Staff Member
-  const handleAddStaff = (e: React.FormEvent) => {
+  const handleAddStaff = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newStaffName || !newStaffEmail) return;
-
-    const added: TeamMember = {
-      id: `T-${200 + teamMembers.length + 1}`,
-      name: newStaffName,
-      email: newStaffEmail,
-      phone: newStaffPhone || undefined,
-      role: newStaffRole,
-      status: 'Active',
-      performanceScore: 90,
-      assignedLeadsCount: 0
-    };
-
-    setTeamMembers([...teamMembers, added]);
-    setNewStaffName('');
-    setNewStaffEmail('');
-    setNewStaffPhone('');
+    setAddingStaff(true);
+    setStaffAddMsg(null);
+    try {
+      const res = await apiFetch('/api/settings/team', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: newStaffName,
+          email: newStaffEmail,
+          phone: newStaffPhone || undefined,
+          role: newStaffRole,
+          featureFlags: newStaffFeatures,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setStaffAddMsg({ type: 'error', text: data.error || 'Failed to add member' });
+        return;
+      }
+      setTeamMembers((prev) => [...prev, data]);
+      setNewStaffName('');
+      setNewStaffEmail('');
+      setNewStaffPhone('');
+      setNewStaffFeatures([]);
+      setStaffAddMsg({
+        type: 'success',
+        text: data.credsSent
+          ? `${newStaffName} added — credentials sent to ${newStaffEmail}`
+          : `${newStaffName} added successfully`,
+      });
+    } catch {
+      setStaffAddMsg({ type: 'error', text: 'Could not reach the server' });
+    } finally {
+      setAddingStaff(false);
+    }
   };
 
-  // Deactivate Staff member
+  const toggleFeature = (key: string) =>
+    setNewStaffFeatures((prev) =>
+      prev.includes(key) ? prev.filter((k) => k !== key) : [...prev, key]
+    );
+
+  // Remove staff member permanently
+  const handleRemoveStaff = async (staffId: string, name: string, memberEmail: string, memberRole: string) => {
+    const isSelf = currentUserEmail && memberEmail.toLowerCase() === currentUserEmail.toLowerCase();
+    if (isSelf && memberRole === 'Organization Admin') {
+      alert(
+        `You cannot remove yourself as Org Admin.\n\nTo leave: first reassign the "Organization Admin" role to another team member, then ask them to remove your account.`
+      );
+      return;
+    }
+    if (!window.confirm(`Remove ${name} from the team? This cannot be undone.`)) return;
+    setTeamMembers((prev) => prev.filter((m) => m.id !== staffId));
+    apiFetch(`/api/settings/team/${staffId}`, { method: 'DELETE' })
+      .catch((err) => console.error('Failed to remove staff member:', err));
+  };
+
+  // Deactivate Staff member — optimistic local update + immediate PATCH to backend
   const handleToggleStaffStatus = (staffId: string) => {
     const updated = teamMembers.map((m) => {
       if (m.id === staffId) {
@@ -233,288 +351,399 @@ export default function SettingsView({
       return m;
     });
     setTeamMembers(updated);
+    const member = updated.find(m => m.id === staffId);
+    if (member) {
+      apiFetch(`/api/settings/team/${staffId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: member.status }),
+      }).catch(err => console.error('Failed to update staff status:', err));
+    }
   };
 
   return (
-    <div id="administration-settings-view" className="p-8 space-y-6 overflow-y-auto h-screen w-full font-sans">
-      {/* Title Header */}
-      <div>
-        <h2 className="text-2xl font-bold font-display tracking-tight text-slate-800">Administration Settings</h2>
-        <p className="text-sm text-slate-500 mt-1">Configure virtual telephone lines, distribute agent permissions, audit invoice logs, and view security records.</p>
-      </div>
+    <PageShell title="Administration" subtitle="Configure virtual telephone lines, distribute agent permissions, and manage security settings.">
+      <div className="col-span-12 space-y-6">
 
-      {/* Settings Rail Layout */}
-      <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
-        {/* Navigation Sidebar Rail */}
-        <div className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm flex flex-col space-y-1.5 self-start">
-          <button
-            onClick={() => setSubTab('numbers')}
-            className={`w-full flex items-center px-4 py-2.5 rounded-xl text-xs font-bold uppercase tracking-wider transition-all cursor-pointer ${
-              subTab === 'numbers' ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-500 hover:bg-slate-50'
-            }`}
-          >
-            <Phone className="h-4 w-4 mr-3" /> Virtual Numbers
-          </button>
-          <button
-            onClick={() => setSubTab('team')}
-            className={`w-full flex items-center px-4 py-2.5 rounded-xl text-xs font-bold uppercase tracking-wider transition-all cursor-pointer ${
-              subTab === 'team' ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-500 hover:bg-slate-50'
-            }`}
-          >
-            <Users className="h-4 w-4 mr-3" /> Staff & Teams
-          </button>
-          <button
-            onClick={() => setSubTab('billing')}
-            className={`w-full flex items-center px-4 py-2.5 rounded-xl text-xs font-bold uppercase tracking-wider transition-all cursor-pointer ${
-              subTab === 'billing' ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-500 hover:bg-slate-50'
-            }`}
-          >
-            <CreditCard className="h-4 w-4 mr-3" /> Billing & Usage
-          </button>
-          <button
-            onClick={() => setSubTab('api')}
-            className={`w-full flex items-center px-4 py-2.5 rounded-xl text-xs font-bold uppercase tracking-wider transition-all cursor-pointer ${
-              subTab === 'api' ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-500 hover:bg-slate-50'
-            }`}
-          >
-            <Key className="h-4 w-4 mr-3" /> API Credentials
-          </button>
-          <button
-            onClick={() => setSubTab('features')}
-            className={`w-full flex items-center px-4 py-2.5 rounded-xl text-xs font-bold uppercase tracking-wider transition-all cursor-pointer ${
-              subTab === 'features' ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-500 hover:bg-slate-50'
-            }`}
-          >
-            <Flag className="h-4 w-4 mr-3" /> Feature Flags
-          </button>
-        </div>
-
-        {/* Content Box */}
-        <div className="lg:col-span-3 space-y-6">
           {/* Subtab: Virtual numbers */}
           {subTab === 'numbers' && (
             <div className="space-y-6">
-              {/* Own telephony account connection — one provider at a time */}
-              <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm">
-                <div className="mb-3 flex items-center justify-between">
-                  <h4 className="text-sm font-bold text-slate-800 font-display">Your Calling Provider Account</h4>
-                  {(connectProvider === 'twilio' ? twilioChannel : vobizChannel) && (
-                    <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full">Connected</span>
-                  )}
-                </div>
-                <p className="text-xs text-slate-400 mb-3">Connect your own account so calls use your credentials, not a shared default.</p>
-
-                <select
-                  value={connectProvider}
-                  onChange={(e) => setConnectProvider(e.target.value as 'twilio' | 'vobiz')}
-                  className="w-full bg-slate-50 border border-slate-100 rounded-lg px-3 py-2 text-xs focus:outline-none mb-3"
-                >
-                  <option value="twilio">Twilio</option>
-                  <option value="vobiz">Vobiz.ai</option>
-                </select>
-
-                {connectProvider === 'twilio' ? (
-                  <form onSubmit={handleConnectTwilio} className="space-y-2">
-                    {twilioChannel && (
-                      <div className="flex items-center justify-between mb-1">
-                        <p className="text-[11px] text-emerald-600">Connected: {twilioChannel.externalId}</p>
-                        <button
-                          type="button"
-                          onClick={() => handleDisconnectChannel('twilio')}
-                          disabled={disconnectingChannel === 'twilio'}
-                          className="text-[10px] font-semibold text-rose-500 hover:text-rose-600 disabled:opacity-50 cursor-pointer"
-                        >
-                          {disconnectingChannel === 'twilio' ? 'Disconnecting…' : 'Disconnect'}
-                        </button>
-                      </div>
-                    )}
-                    <input type="text" value={twilioSid} onChange={(e) => setTwilioSid(e.target.value)} placeholder="Account SID" className="w-full bg-slate-50 border border-slate-100 rounded-lg px-3 py-2 text-xs focus:outline-none" />
-                    <input type="password" value={twilioToken} onChange={(e) => setTwilioToken(e.target.value)} placeholder="Auth Token" className="w-full bg-slate-50 border border-slate-100 rounded-lg px-3 py-2 text-xs focus:outline-none" />
-                    <input type="text" value={twilioPhone} onChange={(e) => setTwilioPhone(e.target.value)} placeholder="+1 (800) 000-0000" className="w-full bg-slate-50 border border-slate-100 rounded-lg px-3 py-2 text-xs focus:outline-none" />
-                    <input type="text" value={twilioLabel} onChange={(e) => setTwilioLabel(e.target.value)} placeholder="Friendly name (e.g. Sales Line)" className="w-full bg-slate-50 border border-slate-100 rounded-lg px-3 py-2 text-xs focus:outline-none" />
-                    <button type="submit" disabled={savingTwilio} className="w-full bg-emerald-600 hover:bg-emerald-500 disabled:opacity-60 text-white text-xs font-semibold rounded-lg px-4 py-2 transition-all cursor-pointer">
-                      {savingTwilio ? 'Connecting…' : twilioChannel ? 'Update Twilio Account' : 'Connect Twilio Account'}
-                    </button>
-                  </form>
+              <Widget
+                title="Virtual Numbers"
+                subtitle="Telephone lines connected to this organization's AI calling infrastructure."
+                icon={Hash}
+                accent="#6366f1"
+                padding="none"
+                scrollable
+                action={
+                  <button
+                    onClick={() => setShowProviderForm(true)}
+                    className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white transition-all cursor-pointer"
+                  >
+                    <Plus className="h-3.5 w-3.5" /> Add Provider
+                  </button>
+                }
+              >
+                {virtualNumbers.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-16 text-center">
+                    <div className="h-12 w-12 rounded-2xl bg-indigo-50 flex items-center justify-center mb-3">
+                      <Phone className="h-5 w-5 text-indigo-400" />
+                    </div>
+                    <p className="text-sm font-medium text-slate-600">No virtual numbers yet</p>
+                    <p className="text-xs text-slate-400 mt-1 max-w-xs">Click "Add Provider" to connect your Twilio or Vobiz.ai account and provision your first virtual line.</p>
+                  </div>
                 ) : (
-                  <form onSubmit={handleConnectVobiz} className="space-y-2">
-                    {vobizChannel && (
-                      <div className="flex items-center justify-between mb-1">
-                        <p className="text-[11px] text-emerald-600">Connected: {vobizChannel.externalId}</p>
-                        <button
-                          type="button"
-                          onClick={() => handleDisconnectChannel('vobiz')}
-                          disabled={disconnectingChannel === 'vobiz'}
-                          className="text-[10px] font-semibold text-rose-500 hover:text-rose-600 disabled:opacity-50 cursor-pointer"
-                        >
-                          {disconnectingChannel === 'vobiz' ? 'Disconnecting…' : 'Disconnect'}
-                        </button>
-                      </div>
-                    )}
-                    <input type="text" value={vobizAuthId} onChange={(e) => setVobizAuthId(e.target.value)} placeholder="Auth ID" className="w-full bg-slate-50 border border-slate-100 rounded-lg px-3 py-2 text-xs focus:outline-none" />
-                    <input type="password" value={vobizToken} onChange={(e) => setVobizToken(e.target.value)} placeholder="Auth Token" className="w-full bg-slate-50 border border-slate-100 rounded-lg px-3 py-2 text-xs focus:outline-none" />
-                    <input type="text" value={vobizPhone} onChange={(e) => setVobizPhone(e.target.value)} placeholder="+1 (800) 000-0000" className="w-full bg-slate-50 border border-slate-100 rounded-lg px-3 py-2 text-xs focus:outline-none" />
-                    <input type="text" value={vobizLabel} onChange={(e) => setVobizLabel(e.target.value)} placeholder="Friendly name (e.g. Sales Line)" className="w-full bg-slate-50 border border-slate-100 rounded-lg px-3 py-2 text-xs focus:outline-none" />
-                    <button type="submit" disabled={savingVobiz} className="w-full bg-purple-600 hover:bg-purple-500 disabled:opacity-60 text-white text-xs font-semibold rounded-lg px-4 py-2 transition-all cursor-pointer">
-                      {savingVobiz ? 'Connecting…' : vobizChannel ? 'Update Vobiz.ai Account' : 'Connect Vobiz.ai Account'}
-                    </button>
-                  </form>
+                  <table className="w-full text-left">
+                    <thead className="sticky top-0 z-10" style={{ background: 'var(--bg-surface)' }}>
+                      <tr className="border-b border-slate-100 text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                        <th className="p-4 px-6">Telephone Number</th>
+                        <th className="p-4 px-6">Gateway Provider</th>
+                        <th className="p-4 px-6">Dial Load (In / Out)</th>
+                        <th className="p-4 px-6 text-right">Status</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 text-sm text-slate-700">
+                      {virtualNumbers.map((num) => (
+                        <tr key={num.id} className="hover:bg-[var(--bg-subtle)]">
+                          <td className="p-4 px-6">
+                            <div className="flex items-center gap-2.5">
+                              <div className="h-7 w-7 rounded-lg bg-indigo-50 flex items-center justify-center shrink-0">
+                                <Phone className="h-3.5 w-3.5 text-indigo-400" />
+                              </div>
+                              <div>
+                                <p className="font-semibold text-slate-800">{num.number}</p>
+                                {num.friendlyName && <p className="text-xs text-slate-400 mt-0.5">{num.friendlyName}</p>}
+                              </div>
+                            </div>
+                          </td>
+                          <td className="p-4 px-6 font-mono text-xs">{num.provider}</td>
+                          <td className="p-4 px-6 text-xs text-slate-500">{num.incomingCallCount} in / {num.outgoingCallCount} out</td>
+                          <td className="p-4 px-6 text-right">
+                            <div className="flex items-center justify-end gap-3">
+                              {num.status === 'Active' ? (
+                                <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" /> Active
+                                </span>
+                              ) : (
+                                <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-500 border border-slate-200">
+                                  <span className="h-1.5 w-1.5 rounded-full bg-slate-400" /> Inactive
+                                </span>
+                              )}
+                              <button onClick={() => handleDeleteNumber(num.id)} className="text-rose-400 hover:text-rose-600 p-1.5 rounded-lg hover:bg-rose-50 transition-colors" title="Delete number">
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
                 )}
-                <p className="text-[10px] text-slate-400 mt-3">Have more than one number on this account? Submit this form again with the additional number — it'll be added alongside the first, without needing a separate "provision" step.</p>
-              </div>
+              </Widget>
 
-              {/* Numbers list */}
-              <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
-                <table className="w-full text-left">
-                  <thead>
-                    <tr className="bg-slate-50/75 border-b border-slate-100 text-[10px] font-bold text-slate-400 uppercase tracking-widest">
-                      <th className="p-4 px-6">Telephone Number</th>
-                      <th className="p-4 px-6">Gateway Provider</th>
-                      <th className="p-4 px-6">Dial Load (In/Out)</th>
-                      <th className="p-4 px-6 text-right">Channel Status</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100 text-sm text-slate-700">
-                    {virtualNumbers.map((num) => (
-                      <tr key={num.id} className="hover:bg-slate-50/40">
-                        <td className="p-4 px-6">
-                          <div>
-                            <p className="font-semibold text-slate-800">{num.number}</p>
-                            <p className="text-[10px] text-slate-400 mt-0.5">{num.friendlyName}</p>
-                          </div>
-                        </td>
-                        <td className="p-4 px-6 font-mono text-xs">{num.provider}</td>
-                        <td className="p-4 px-6 text-xs text-slate-500">
-                          {num.incomingCallCount} Incoming / {num.outgoingCallCount} Outbound
-                        </td>
-                        <td className="p-4 px-6 text-right">
-                          <div className="flex items-center justify-end space-x-3">
-                            <span className={`h-2.5 w-2.5 rounded-full ${num.status === 'Active' ? 'bg-emerald-500 animate-pulse' : 'bg-slate-300'}`}></span>
-                            <button
-                              onClick={() => handleDeleteNumber(num.id)}
-                              className="text-rose-500 hover:text-rose-600 p-1 rounded hover:bg-rose-50"
-                            >
-                              <Trash2 className="h-4 w-4" />
+              {/* Add Provider overlay modal */}
+              {showProviderForm && (
+                <Modal
+                  open
+                  onClose={() => setShowProviderForm(false)}
+                  title="Connect Calling Provider"
+                  subtitle="Connect your account so calls use your credentials."
+                  maxWidth="max-w-md"
+                >
+                    <div className="space-y-4">
+                      <div className="flex items-center gap-3">
+                        <select
+                          value={connectProvider}
+                          onChange={(e) => setConnectProvider(e.target.value as 'twilio' | 'vobiz')}
+                          className="flex-1 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-indigo-500"
+                        >
+                          <option value="twilio">Twilio</option>
+                          <option value="vobiz">Vobiz.ai</option>
+                        </select>
+                        {(connectProvider === 'twilio' ? twilioChannel : vobizChannel) && (
+                          <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200 whitespace-nowrap">Connected</span>
+                        )}
+                      </div>
+
+                      {connectProvider === 'twilio' ? (
+                        <form onSubmit={(e) => { handleConnectTwilio(e); setShowProviderForm(false); }} className="space-y-2.5">
+                          {twilioChannel && (
+                            <div className="flex items-center justify-between text-[11px] text-emerald-600 bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-2">
+                              <span>Currently: {twilioChannel.externalId}</span>
+                              <button type="button" onClick={() => handleDisconnectChannel('twilio')} disabled={disconnectingChannel === 'twilio'} className="text-rose-500 hover:text-rose-600 font-semibold disabled:opacity-50 cursor-pointer">
+                                {disconnectingChannel === 'twilio' ? 'Disconnecting…' : 'Disconnect'}
+                              </button>
+                            </div>
+                          )}
+                          <input type="text" value={twilioSid} onChange={(e) => setTwilioSid(e.target.value)} placeholder="Account SID" className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-indigo-500" />
+                          <input type="password" value={twilioToken} onChange={(e) => setTwilioToken(e.target.value)} placeholder="Auth Token" className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-indigo-500" />
+                          <input type="text" value={twilioPhone} onChange={(e) => setTwilioPhone(e.target.value)} placeholder="+1 (800) 000-0000" className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-indigo-500" />
+                          <input type="text" value={twilioLabel} onChange={(e) => setTwilioLabel(e.target.value)} placeholder="Friendly name (e.g. Sales Line)" className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-indigo-500" />
+                          <div className="flex items-center justify-between pt-1">
+                            <p className="text-[10px] text-slate-400">Submit again to add another number.</p>
+                            <button type="submit" disabled={savingTwilio} className="bg-emerald-600 hover:bg-emerald-500 disabled:opacity-60 text-white text-xs font-semibold rounded-lg px-5 py-2 transition-all cursor-pointer">
+                              {savingTwilio ? 'Connecting…' : twilioChannel ? 'Update' : 'Connect Twilio'}
                             </button>
                           </div>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+                        </form>
+                      ) : (
+                        <form onSubmit={(e) => { handleConnectVobiz(e); setShowProviderForm(false); }} className="space-y-2.5">
+                          {vobizChannel && (
+                            <div className="flex items-center justify-between text-[11px] text-emerald-600 bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-2">
+                              <span>Currently: {vobizChannel.externalId}</span>
+                              <button type="button" onClick={() => handleDisconnectChannel('vobiz')} disabled={disconnectingChannel === 'vobiz'} className="text-rose-500 hover:text-rose-600 font-semibold disabled:opacity-50 cursor-pointer">
+                                {disconnectingChannel === 'vobiz' ? 'Disconnecting…' : 'Disconnect'}
+                              </button>
+                            </div>
+                          )}
+                          <input type="text" value={vobizAuthId} onChange={(e) => setVobizAuthId(e.target.value)} placeholder="Auth ID" className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-purple-500" />
+                          <input type="password" value={vobizToken} onChange={(e) => setVobizToken(e.target.value)} placeholder="Auth Token" className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-purple-500" />
+                          <input type="text" value={vobizPhone} onChange={(e) => setVobizPhone(e.target.value)} placeholder="+1 (800) 000-0000" className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-purple-500" />
+                          <input type="text" value={vobizLabel} onChange={(e) => setVobizLabel(e.target.value)} placeholder="Friendly name (e.g. Sales Line)" className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-purple-500" />
+                          <div className="flex justify-end pt-1">
+                            <button type="submit" disabled={savingVobiz} className="bg-purple-600 hover:bg-purple-500 disabled:opacity-60 text-white text-xs font-semibold rounded-lg px-5 py-2 transition-all cursor-pointer">
+                              {savingVobiz ? 'Connecting…' : vobizChannel ? 'Update' : 'Connect Vobiz.ai'}
+                            </button>
+                          </div>
+                        </form>
+                      )}
+                    </div>
+                </Modal>
+              )}
             </div>
           )}
 
           {/* Subtab: Team matrix */}
           {subTab === 'team' && (
             <div className="space-y-6">
-              {/* Add staff form */}
-              <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm">
-                <div className="mb-4">
-                  <h4 className="text-sm font-bold text-slate-800 font-display">Add Associate Team Member</h4>
-                  <p className="text-xs text-slate-400 mt-1">Assign appropriate workflow role profiles and credit credentials to new staff.</p>
+              {staffAddMsg && (
+                <div className={`px-4 py-2.5 rounded-lg text-xs font-medium ${staffAddMsg.type === 'success' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-rose-50 text-rose-700 border border-rose-200'}`}>
+                  {staffAddMsg.text}
                 </div>
-                <form onSubmit={handleAddStaff} className="grid grid-cols-1 md:grid-cols-5 gap-3">
-                  <input
-                    type="text"
-                    required
-                    value={newStaffName}
-                    onChange={(e) => setNewStaffName(e.target.value)}
-                    placeholder="Full Name"
-                    className="bg-slate-50 border border-slate-100 rounded-lg px-3 py-2 text-xs focus:outline-none"
-                  />
-                  <input
-                    type="email"
-                    required
-                    value={newStaffEmail}
-                    onChange={(e) => setNewStaffEmail(e.target.value)}
-                    placeholder="name@chiefxai.com"
-                    className="bg-slate-50 border border-slate-100 rounded-lg px-3 py-2 text-xs focus:outline-none"
-                  />
-                  <input
-                    type="tel"
-                    value={newStaffPhone}
-                    onChange={(e) => setNewStaffPhone(e.target.value)}
-                    placeholder="+91 98765 43210"
-                    className="bg-slate-50 border border-slate-100 rounded-lg px-3 py-2 text-xs focus:outline-none"
-                  />
-                  <select
-                    value={newStaffRole}
-                    onChange={(e: any) => setNewStaffRole(e.target.value)}
-                    className="bg-slate-50 border border-slate-100 rounded-lg px-3 py-2 text-xs focus:outline-none"
-                  >
-                    <option value="Sales Manager">Sales Manager</option>
-                    <option value="Loan Agent">Loan Agent</option>
-                    <option value="Collection Agent">Collection Agent</option>
-                    <option value="AI Agent Manager">AI Agent Manager</option>
-                  </select>
-                  <button
-                    type="submit"
-                    className="bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold rounded-lg px-4 py-2 transition-all cursor-pointer flex items-center justify-center"
-                  >
-                    <UserPlus className="h-4 w-4 mr-1.5" /> Enlist Member
-                  </button>
-                </form>
-              </div>
+              )}
 
               {/* Team list */}
-              <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
+              <Widget
+                title="Team Matrix"
+                subtitle="All team members and their access levels."
+                icon={Users}
+                accent="#6366f1"
+                padding="none"
+                scrollable
+                action={
+                  <button
+                    onClick={() => setShowAddStaff(true)}
+                    className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white transition-all cursor-pointer"
+                  >
+                    <Plus className="h-3.5 w-3.5" /> Add Member
+                  </button>
+                }
+              >
                 <table className="w-full text-left">
-                  <thead>
-                    <tr className="bg-slate-50/75 border-b border-slate-100 text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                  <thead className="sticky top-0 z-10" style={{ background: 'var(--bg-surface)' }}>
+                    <tr className="border-b border-slate-100 text-[10px] font-bold text-slate-400 uppercase tracking-widest">
                       <th className="p-4 px-6">Enlisted Representative</th>
                       <th className="p-4 px-6">Administrative Role</th>
-                      <th className="p-4 px-6">Quality Rating</th>
+                      <th className="p-4 px-6">Feature Access</th>
                       <th className="p-4 px-6 text-right">CRM Status</th>
+                      <th className="p-4 px-6 text-right">Actions</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100 text-sm text-slate-700">
                     {teamMembers.map((member) => (
-                      <tr key={member.id} className="hover:bg-slate-50/40">
-                        <td className="p-4 px-6">
-                          <div>
-                            <p className="font-semibold text-slate-800">{member.name}</p>
-                            <p className="text-[10px] text-slate-400 mt-0.5">{member.email}</p>
-                            {member.phone && (
-                              <p className="text-[10px] text-slate-400 mt-0.5">{member.phone}</p>
+                      <React.Fragment key={member.id}>
+                        <tr className="hover:bg-[var(--bg-subtle)]">
+                          <td className="p-4 px-6">
+                            <div>
+                              <p className="font-semibold text-slate-800">{member.name}</p>
+                              <p className="text-[10px] text-slate-400 mt-0.5">{member.email}</p>
+                              {member.phone && (
+                                <p className="text-[10px] text-slate-400 mt-0.5">{member.phone}</p>
+                              )}
+                            </div>
+                          </td>
+                          <td className="p-4 px-6">
+                            <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-indigo-50 text-indigo-700">
+                              {member.role}
+                            </span>
+                          </td>
+                          <td className="p-4 px-6">
+                            {member.role === 'Organization Admin' || member.role === 'Super Admin' ? (
+                              <span className="flex items-center gap-1.5 text-[10px] font-semibold text-emerald-600">
+                                <Flag className="h-3 w-3" />
+                                Full Access
+                              </span>
+                            ) : (
+                              <button
+                                onClick={() => editFlagsFor === member.id ? setEditFlagsFor(null) : openFlagEditor(member)}
+                                className="flex items-center gap-1.5 text-[10px] font-semibold text-indigo-600 hover:text-indigo-800 transition-colors"
+                              >
+                                <Flag className="h-3 w-3" />
+                                {(member.featureFlags || []).length} granted
+                              </button>
                             )}
-                          </div>
-                        </td>
-                        <td className="p-4 px-6">
-                          <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-indigo-50 text-indigo-700">
-                            {member.role}
-                          </span>
-                        </td>
-                        <td className="p-4 px-6">
-                          <span className="font-bold text-slate-700 font-mono">{member.performanceScore} / 100</span>
-                        </td>
-                        <td className="p-4 px-6 text-right">
-                          <button
-                            onClick={() => handleToggleStaffStatus(member.id)}
-                            className={`px-3 py-1 text-[10px] font-bold rounded-lg transition-all ${
-                              member.status === 'Active'
-                                ? 'bg-emerald-50 hover:bg-rose-50 text-emerald-700 hover:text-rose-700 border border-emerald-200 hover:border-rose-200'
-                                : 'bg-slate-100 hover:bg-emerald-50 text-slate-600 hover:text-emerald-700 border border-slate-200'
-                            }`}
-                          >
-                            {member.status === 'Active' ? 'Deactivate' : 'Reactivate'}
-                          </button>
-                        </td>
-                      </tr>
+                          </td>
+                          <td className="p-4 px-6 text-right">
+                            <button
+                              onClick={() => handleToggleStaffStatus(member.id)}
+                              className={`px-3 py-1 text-[10px] font-bold rounded-lg transition-all ${
+                                member.status === 'Active'
+                                  ? 'bg-emerald-50 hover:bg-rose-50 text-emerald-700 hover:text-rose-700 border border-emerald-200 hover:border-rose-200'
+                                  : 'bg-slate-100 hover:bg-emerald-50 text-slate-600 hover:text-emerald-700 border border-slate-200'
+                              }`}
+                            >
+                              {member.status === 'Active' ? 'Deactivate' : 'Reactivate'}
+                            </button>
+                          </td>
+                          <td className="p-4 px-6 text-right">
+                            {(() => {
+                              const isSelf = currentUserEmail && member.email.toLowerCase() === currentUserEmail.toLowerCase();
+                              const isSelfAdmin = isSelf && member.role === 'Organization Admin';
+                              return (
+                                <button
+                                  onClick={() => handleRemoveStaff(member.id, member.name, member.email, member.role)}
+                                  title={isSelfAdmin ? 'Hand over Org Admin role first, then ask the new admin to remove your account' : undefined}
+                                  className={`px-3 py-1 text-[10px] font-bold rounded-lg transition-all border ${
+                                    isSelfAdmin
+                                      ? 'bg-slate-50 text-slate-300 border-slate-200 cursor-not-allowed'
+                                      : 'bg-rose-50 hover:bg-rose-100 text-rose-600 hover:text-rose-700 border-rose-200'
+                                  }`}
+                                >
+                                  {isSelfAdmin ? 'Cannot Remove' : 'Remove'}
+                                </button>
+                              );
+                            })()}
+                          </td>
+                        </tr>
+                        {editFlagsFor === member.id && (
+                          <tr>
+                            <td colSpan={5} className="px-6 pb-4 pt-0 bg-indigo-50/40">
+                              <div className="border border-indigo-100 rounded-xl p-4 bg-white space-y-3">
+                                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                                  Feature Access — {member.name}
+                                </p>
+                                <div className="flex flex-wrap gap-2">
+                                  {FEATURE_REGISTRY.filter(f => orgAllowedFlags.length === 0 || orgAllowedFlags.includes(f.key)).map((flag) => {
+                                    const active = editFlagsValue.includes(flag.key);
+                                    return (
+                                      <button
+                                        key={flag.key}
+                                        type="button"
+                                        onClick={() =>
+                                          setEditFlagsValue(prev =>
+                                            prev.includes(flag.key)
+                                              ? prev.filter(k => k !== flag.key)
+                                              : [...prev, flag.key]
+                                          )
+                                        }
+                                        className={`px-3 py-1 rounded-full text-[11px] font-semibold border transition-all ${
+                                          active
+                                            ? 'bg-indigo-600 text-white border-indigo-600'
+                                            : 'bg-white text-slate-500 border-slate-200 hover:border-indigo-400 hover:text-indigo-600'
+                                        }`}
+                                      >
+                                        {flag.label}
+                                      </button>
+                                    );
+                                  })}
+                                </div>
+                                <div className="flex items-center gap-2 justify-end pt-1">
+                                  <button
+                                    type="button"
+                                    onClick={() => setEditFlagsFor(null)}
+                                    className="text-xs text-slate-400 hover:text-slate-600 font-medium px-3 py-1.5 cursor-pointer"
+                                  >
+                                    Cancel
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleSaveFlags(member.id)}
+                                    disabled={savingFlags}
+                                    className="bg-indigo-600 hover:bg-indigo-500 disabled:opacity-60 text-white text-xs font-semibold rounded-lg px-4 py-1.5 transition-all cursor-pointer flex items-center gap-1.5"
+                                  >
+                                    {savingFlags ? <Loader2 className="h-3 w-3 animate-spin" /> : null}
+                                    Save Access
+                                  </button>
+                                </div>
+                              </div>
+                            </td>
+                          </tr>
+                        )}
+                      </React.Fragment>
                     ))}
                   </tbody>
                 </table>
-              </div>
+              </Widget>
+
+              {/* Add Member overlay modal */}
+              {showAddStaff && (
+                <Modal
+                  open
+                  onClose={() => setShowAddStaff(false)}
+                  title="Add Team Member"
+                  subtitle="A Keycloak account is created automatically and credentials are emailed to the new member."
+                  maxWidth="max-w-lg"
+                >
+                    <form onSubmit={(e) => { handleAddStaff(e); if (!staffAddMsg || staffAddMsg.type === 'success') setShowAddStaff(false); }} className="space-y-3">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                          <div className="space-y-1">
+                            <label className="text-[10px] font-bold text-slate-400 uppercase">Full Name</label>
+                            <input type="text" required value={newStaffName} onChange={(e) => setNewStaffName(e.target.value)} placeholder="Jane Smith" className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-indigo-500" />
+                          </div>
+                          <div className="space-y-1">
+                            <label className="text-[10px] font-bold text-slate-400 uppercase">Email</label>
+                            <input type="email" required value={newStaffEmail} onChange={(e) => setNewStaffEmail(e.target.value)} placeholder="jane@company.com" className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-indigo-500" />
+                          </div>
+                          <div className="space-y-1">
+                            <label className="text-[10px] font-bold text-slate-400 uppercase">Phone</label>
+                            <input type="tel" value={newStaffPhone} onChange={(e) => setNewStaffPhone(e.target.value)} placeholder="+91 98765 43210" className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-indigo-500" />
+                          </div>
+                          <div className="space-y-1">
+                            <label className="text-[10px] font-bold text-slate-400 uppercase">Role</label>
+                            <select value={newStaffRole} onChange={(e: any) => setNewStaffRole(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-indigo-500">
+                              <option value="Sales Manager">Sales Manager</option>
+                              <option value="Loan Agent">Loan Agent</option>
+                              <option value="Collection Agent">Collection Agent</option>
+                              <option value="AI Agent Manager">AI Agent Manager</option>
+                            </select>
+                          </div>
+                        </div>
+
+                        <div className="border border-slate-100 rounded-xl p-4 bg-slate-50">
+                          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-3">Grant Feature Access</p>
+                          {orgAllowedFlags.length === 0 && (
+                            <p className="text-[10px] text-slate-400 mb-2">No features available — super admin has not granted any features to this org.</p>
+                          )}
+                          <div className="flex flex-wrap gap-2">
+                            {FEATURE_REGISTRY.filter(f => orgAllowedFlags.length === 0 || orgAllowedFlags.includes(f.key)).map((flag) => {
+                              const active = newStaffFeatures.includes(flag.key);
+                              return (
+                                <button key={flag.key} type="button" onClick={() => toggleFeature(flag.key)}
+                                  className={`px-3 py-1 rounded-full text-[11px] font-semibold border transition-all ${active ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-slate-500 border-slate-200 hover:border-indigo-400 hover:text-indigo-600'}`}>
+                                  {flag.label}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+
+                        <div className="flex items-center justify-end gap-3 pt-1">
+                          <button type="button" onClick={() => setShowAddStaff(false)} className="text-xs text-slate-400 hover:text-slate-600 font-medium px-3 py-2 cursor-pointer">Cancel</button>
+                          <button type="submit" disabled={addingStaff} className="bg-indigo-600 hover:bg-indigo-500 disabled:opacity-60 text-white text-xs font-semibold rounded-lg px-5 py-2 transition-all cursor-pointer flex items-center gap-2">
+                            {addingStaff ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <UserPlus className="h-3.5 w-3.5" />}
+                            {addingStaff ? 'Adding…' : 'Add Member'}
+                          </button>
+                        </div>
+                      </form>
+                </Modal>
+              )}
             </div>
           )}
 
           {/* Subtab: Billing info */}
           {subTab === 'billing' && (
             <div className="space-y-6">
-              {/* Usage */}
-              <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm space-y-4">
-                <h4 className="text-sm font-bold text-slate-800 font-display">AI Voice Usage This Period</h4>
+              <Widget title="AI Voice Usage This Period" icon={CreditCard} accent="#10b981" padding="md">
                 <div className="grid grid-cols-3 gap-4 pt-2">
                   <div className="bg-slate-50 p-4 rounded-xl text-center">
                     <span className="text-[10px] text-slate-400 uppercase tracking-wider block">Minutes Consumed</span>
@@ -529,19 +758,14 @@ export default function SettingsView({
                     <strong className="text-md text-slate-800 font-mono">${orgSettings.phoneCharges.toFixed(2)}</strong>
                   </div>
                 </div>
-              </div>
+              </Widget>
             </div>
           )}
 
           {/* Subtab: API details & Audit Logs */}
           {subTab === 'api' && (
             <div className="space-y-6">
-              {/* Credentials */}
-              <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm space-y-4">
-                <div className="mb-4">
-                  <h4 className="text-sm font-bold text-slate-800 font-display">Third-Party Gateway API Credentials</h4>
-                  <p className="text-xs text-slate-400 mt-1">Configure active server tokens utilized by automated calling triggers and OCR engines.</p>
-                </div>
+              <Widget title="Third-Party Gateway API Credentials" subtitle="Configure active server tokens utilized by automated calling triggers and OCR engines." icon={Key} accent="#6366f1" padding="md">
                 <div className="space-y-3.5">
                   {orgSettings.apiKeys.map((k, idx) => (
                     <div key={idx} className="p-4 bg-slate-50 rounded-xl border border-slate-100 flex items-center justify-between text-xs">
@@ -553,35 +777,42 @@ export default function SettingsView({
                     </div>
                   ))}
                 </div>
-              </div>
+              </Widget>
 
               {/* Security audit logs */}
-              <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
-                <div className="p-5 border-b border-slate-100 flex items-center justify-between">
-                  <h4 className="text-sm font-bold text-slate-800 font-display flex items-center">
-                    <Shield className="h-4.5 w-4.5 mr-2 text-indigo-500" /> Administrative Audit Trail
-                  </h4>
-                  <span className="text-[10px] font-mono text-slate-400">Total events logged: {auditLogs.length}</span>
-                </div>
-
-                <div className="divide-y divide-slate-100 text-xs text-slate-600 font-mono">
-                  {auditLogs.length === 0 ? (
-                    <div className="p-6 text-center text-slate-400">No admin actions recorded yet.</div>
-                  ) : (
-                    auditLogs.map((log) => (
-                      <div key={log.id} className="p-4 px-6 flex items-center justify-between hover:bg-slate-50/40">
-                        <div className="space-y-0.5">
-                          <p className="font-medium text-slate-700">{log.action}</p>
-                          <p className="text-[10px] text-slate-400">Actor: {log.actorEmail || '—'}</p>
-                        </div>
-                        <div className="text-right">
-                          <p className="text-[9px] text-slate-400 mt-1">{new Date(log.createdAt).toLocaleTimeString()}</p>
-                        </div>
-                      </div>
-                    ))
-                  )}
-                </div>
-              </div>
+              <Widget
+                title="Administrative Audit Trail"
+                icon={ScrollText}
+                accent="#6366f1"
+                padding="none"
+                scrollable
+                action={
+                  <span className="text-[10px] font-mono text-slate-400">Total events: {auditLogs.length}</span>
+                }
+              >
+                {auditLogs.length === 0 ? (
+                  <div className="p-6 text-center text-slate-400 text-xs">No admin actions recorded yet.</div>
+                ) : (
+                  <table className="w-full text-left">
+                    <thead className="sticky top-0 z-10" style={{ background: 'var(--bg-surface)' }}>
+                      <tr className="border-b border-slate-100 text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                        <th className="p-4 px-6">Action</th>
+                        <th className="p-4 px-6">Actor</th>
+                        <th className="p-4 px-6 text-right">Time</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 text-xs text-slate-600 font-mono">
+                      {auditLogs.map((log) => (
+                        <tr key={log.id} className="hover:bg-[var(--bg-subtle)]">
+                          <td className="p-4 px-6 font-medium text-slate-700">{log.action}</td>
+                          <td className="p-4 px-6 text-slate-400">{log.actorEmail || '—'}</td>
+                          <td className="p-4 px-6 text-right text-[9px] text-slate-400">{new Date(log.createdAt).toLocaleTimeString()}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
+              </Widget>
             </div>
           )}
 
@@ -592,8 +823,7 @@ export default function SettingsView({
             </div>
           )}
 
-        </div>
       </div>
-    </div>
+    </PageShell>
   );
 }

@@ -11,10 +11,14 @@ import {
   ResponsiveContainer
 } from 'recharts';
 import { PhoneIncoming, PhoneOutgoing, Clock, DollarSign, Smile, CheckCircle2, ListChecks, FileDown, ChevronDown, ChevronRight, Download } from 'lucide-react';
-import PageHeader from './PageHeader';
+import PageShell from './ui/PageShell';
+import Button from './ui/Button';
+import Widget from './ui/Widget';
+import KpiCard from './ui/KpiCard';
 import { CallLog } from '../types';
 import { callCostInr, formatInr, COST_PER_MINUTE_INR_FALLBACK } from '../lib/pricing';
 import PrintableReport from './PrintableReport';
+import FilterBar from './ui/FilterBar';
 
 // Colors chosen to match this app's existing conventions (blue = primary/
 // AI accent used throughout, amber = the paired categorical hue) rather
@@ -238,88 +242,75 @@ export default function ReportsView({ callLogs, dialerTasks, leads, costPerMinut
   }
 
   return (
-    <div className="font-sans h-full overflow-y-auto bg-slate-50/50">
-      <PageHeader
-        title="Reports"
-        subtitle="Call analytics — day, month, or year, incoming or outgoing, overall or per task."
-      />
-
-      <div className="px-8 pb-12 space-y-6">
-        {/* Filters */}
-        <div className="bg-white border border-slate-200 rounded-2xl p-4 flex flex-wrap items-end gap-4">
-          <div>
-            <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Direction</label>
-            <select
-              value={direction}
-              onChange={(e) => setDirection(e.target.value as DirectionFilter)}
-              className="bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-blue-500"
-            >
-              <option value="all">All calls</option>
-              <option value="inbound">Incoming only</option>
-              <option value="outbound">Outgoing only</option>
-            </select>
-          </div>
-          <div>
-            <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Group by</label>
-            <select
-              value={granularity}
-              onChange={(e) => setGranularity(e.target.value as Granularity)}
-              className="bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-blue-500"
-            >
-              <option value="day">Day</option>
-              <option value="month">Month</option>
-              <option value="year">Year</option>
-            </select>
-          </div>
-          <div>
-            <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">From</label>
-            <input
-              type="date"
-              value={fromDate}
-              onChange={(e) => setFromDate(e.target.value)}
-              className="bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-blue-500"
-            />
-          </div>
-          <div>
-            <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">To</label>
-            <input
-              type="date"
-              value={toDate}
-              onChange={(e) => setToDate(e.target.value)}
-              className="bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-blue-500"
-            />
-          </div>
-          <div className="flex gap-2 ml-auto items-end">
-            {[7, 30, 90].map((n) => (
-              <button
-                key={n}
-                onClick={() => { setFromDate(daysAgo(n)); setToDate(daysAgo(0)); }}
-                className="px-3 py-2 text-[11px] font-semibold bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-lg text-slate-600"
-              >
-                Last {n}d
-              </button>
-            ))}
-            <button
-              onClick={() => setShowPreview(true)}
-              className="flex items-center gap-1.5 px-3 py-2 text-[11px] font-semibold bg-blue-600 hover:bg-blue-700 text-white rounded-lg"
-            >
-              <FileDown className="h-3.5 w-3.5" /> Preview & Download PDF
-            </button>
-          </div>
-        </div>
-
+    <PageShell
+      title="Reports"
+      subtitle="Call analytics — day, month, or year, incoming or outgoing, overall or per task."
+      action={
+        <Button icon={FileDown} onClick={() => setShowPreview(true)}>
+          Preview & Download PDF
+        </Button>
+      }
+    >
         {/* Summary stat tiles */}
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
-          <StatTile icon={PhoneIncoming} label="Total Calls" value={String(summary.total)} />
-          <StatTile icon={Clock} label="Total Duration" value={formatDuration(summary.totalDuration)} />
-          <StatTile icon={DollarSign} label="Total Cost" value={formatInr(summary.totalCost)} sub={`at ₹${costPerMinuteInr}/min`} />
-          <StatTile icon={Smile} label="Positive Sentiment" value={`${summary.positivePct}%`} />
-          <StatTile icon={CheckCircle2} label="Completed" value={String(summary.statusCounts['Completed'] || 0)} />
-        </div>
+        <KpiCard colSpan={2} icon={PhoneIncoming} iconBg="#eff6ff" iconColor="#2563eb" label="Total Calls" value={summary.total} />
+        <KpiCard colSpan={2} icon={Clock} iconBg="#f0fdf4" iconColor="#16a34a" label="Total Duration" value={formatDuration(summary.totalDuration)} />
+        <KpiCard colSpan={3} icon={DollarSign} iconBg="#fffbeb" iconColor="#d97706" label="Total Cost" value={formatInr(summary.totalCost)} sub={`at ₹${costPerMinuteInr}/min`} />
+        <KpiCard colSpan={2} icon={Smile} iconBg="#fdf4ff" iconColor="#9333ea" label="Positive Sentiment" value={`${summary.positivePct}%`} />
+        <KpiCard colSpan={3} icon={CheckCircle2} iconBg="#f0fdf4" iconColor="#16a34a" label="Completed" value={summary.statusCounts['Completed'] || 0} />
+
+        {/* Filters */}
+        <Widget colSpan={12} showHeader={false} padding="md">
+          <FilterBar
+            selects={[
+              {
+                key: 'direction',
+                label: 'Direction',
+                value: direction,
+                onChange: (v) => setDirection(v as DirectionFilter),
+                options: [
+                  { label: 'All calls', value: 'all' },
+                  { label: 'Incoming only', value: 'inbound' },
+                  { label: 'Outgoing only', value: 'outbound' },
+                ],
+              },
+              {
+                key: 'granularity',
+                label: 'Group by',
+                value: granularity,
+                onChange: (v) => setGranularity(v as Granularity),
+                options: [
+                  { label: 'Day', value: 'day' },
+                  { label: 'Month', value: 'month' },
+                  { label: 'Year', value: 'year' },
+                ],
+              },
+            ]}
+            dates={[
+              { key: 'from', label: 'From', value: fromDate, onChange: setFromDate },
+              { key: 'to', label: 'To', value: toDate, onChange: setToDate },
+            ]}
+            actions={
+              <>
+                {[7, 30, 90].map((n) => (
+                  <button
+                    key={n}
+                    onClick={() => { setFromDate(daysAgo(n)); setToDate(daysAgo(0)); }}
+                    className="px-3 py-1.5 text-[11px] font-semibold rounded-lg border transition-colors"
+                    style={{ background: 'var(--bg-subtle)', borderColor: 'var(--border)', color: 'var(--text-secondary)' }}
+                    onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'var(--border)'; }}
+                    onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'var(--bg-subtle)'; }}
+                  >
+                    Last {n}d
+                  </button>
+                ))}
+              </>
+            }
+          />
+        </Widget>
 
         {/* Trend chart */}
-        <div className="bg-white border border-slate-200 rounded-2xl p-5">
-          <h3 className="text-sm font-bold text-slate-700 mb-4">Call Volume Over Time</h3>
+        <Widget colSpan={12} title="Call Volume Over Time" padding="none">
+          <div className="p-5">
           {trendData.length === 0 ? (
             <p className="text-xs text-slate-400 py-12 text-center">No calls in this period.</p>
           ) : (
@@ -335,11 +326,11 @@ export default function ReportsView({ callLogs, dialerTasks, leads, costPerMinut
               </BarChart>
             </ResponsiveContainer>
           )}
-        </div>
+          </div>
+        </Widget>
 
         {/* Sentiment breakdown */}
-        <div className="bg-white border border-slate-200 rounded-2xl p-5">
-          <h3 className="text-sm font-bold text-slate-700 mb-4">Sentiment Breakdown</h3>
+        <Widget colSpan={12} title="Sentiment Breakdown" padding="md">
           <div className="flex h-3 rounded-full overflow-hidden bg-slate-100">
             {(['Positive', 'Neutral', 'Negative', 'Unknown'] as const).map((s) => {
               const count = summary.sentimentCounts[s] || 0;
@@ -355,12 +346,11 @@ export default function ReportsView({ callLogs, dialerTasks, leads, costPerMinut
               </div>
             ))}
           </div>
-        </div>
+        </Widget>
 
         {/* Task-wise report */}
-        <div className="bg-white border border-slate-200 rounded-2xl p-5">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-sm font-bold text-slate-700 flex items-center gap-2"><ListChecks className="h-4 w-4" /> Report by Task</h3>
+        <Widget colSpan={12} title="Report by Task" icon={ListChecks} padding="none" scrollable
+          action={
             <div className="flex items-center gap-2">
               <select
                 value={selectedTaskId}
@@ -382,14 +372,16 @@ export default function ReportsView({ callLogs, dialerTasks, leads, costPerMinut
                 </button>
               )}
             </div>
-          </div>
+          }
+        >
+        <div className="p-5">
           {!selectedTask && <p className="text-xs text-slate-400 text-center py-8">Pick a task above to see its per-lead outcomes and conversion rate.</p>}
           {taskReport && (
             <>
               <div className="grid grid-cols-3 gap-4 mb-4">
-                <StatTile icon={PhoneOutgoing} label="Leads in Task" value={String(taskReport.total)} compact />
-                <StatTile icon={CheckCircle2} label="Completed" value={String(taskReport.completed)} compact />
-                <StatTile icon={Smile} label="Conversion Rate" value={`${taskReport.conversionRate}%`} compact />
+                <KpiCard icon={PhoneOutgoing} iconBg="#eff6ff" iconColor="#2563eb" label="Leads in Task" value={taskReport.total} />
+                <KpiCard icon={CheckCircle2} iconBg="#f0fdf4" iconColor="#16a34a" label="Completed" value={taskReport.completed} />
+                <KpiCard icon={Smile} iconBg="#fdf4ff" iconColor="#9333ea" label="Conversion Rate" value={`${taskReport.conversionRate}%`} />
               </div>
               <div className="overflow-x-auto">
                 <table className="w-full text-left text-xs">
@@ -412,7 +404,7 @@ export default function ReportsView({ callLogs, dialerTasks, leads, costPerMinut
                       return (
                         <React.Fragment key={r.leadId}>
                           <tr
-                            className="cursor-pointer hover:bg-slate-50/75"
+                            className="cursor-pointer hover:bg-[var(--bg-subtle)]"
                             onClick={() => toggleLeadExpand(r.leadId, r.phone, r.callId)}
                           >
                             <td className="py-2 pr-2 text-slate-400">
@@ -468,10 +460,10 @@ export default function ReportsView({ callLogs, dialerTasks, leads, costPerMinut
             </>
           )}
         </div>
+        </Widget>
 
         {/* Detailed call list */}
-        <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden">
-          <h3 className="text-sm font-bold text-slate-700 p-5 pb-0">Calls in Period ({filteredCalls.length})</h3>
+        <Widget colSpan={12} title={`Calls in Period (${filteredCalls.length})`} padding="none" scrollable>
           <div className="overflow-x-auto">
             <table className="w-full text-left text-xs mt-3">
               <thead>
@@ -486,7 +478,7 @@ export default function ReportsView({ callLogs, dialerTasks, leads, costPerMinut
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {[...filteredCalls].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()).slice(0, 200).map((c) => (
-                  <tr key={c.id} className="hover:bg-slate-50/50">
+                  <tr key={c.id} className="hover:bg-[var(--bg-subtle)]">
                     <td className="p-3 px-5 font-semibold text-slate-800">{c.leadName}</td>
                     <td className="p-3 px-5 text-slate-500 capitalize">{c.direction || '—'}</td>
                     <td className="p-3 px-5 font-mono">{formatDuration(c.duration)}</td>
@@ -505,8 +497,7 @@ export default function ReportsView({ callLogs, dialerTasks, leads, costPerMinut
               </tbody>
             </table>
           </div>
-        </div>
-      </div>
+        </Widget>
 
       {showPreview && (
         <PrintableReport
@@ -522,23 +513,7 @@ export default function ReportsView({ callLogs, dialerTasks, leads, costPerMinut
           costPerMinuteInr={costPerMinuteInr}
         />
       )}
-    </div>
+    </PageShell>
   );
 }
 
-function StatTile({ icon: Icon, label, value, sub, compact }: { icon: React.ElementType; label: string; value: string; sub?: string; compact?: boolean }) {
-  return (
-    <div className={`bg-white border border-slate-200 rounded-2xl ${compact ? 'p-3' : 'p-4'} flex flex-col justify-between`}>
-      <div className="flex items-center justify-between">
-        <div className="bg-blue-50 text-blue-600 p-1.5 rounded-lg">
-          <Icon className="h-4 w-4" />
-        </div>
-      </div>
-      <div className="mt-3">
-        <p className="text-slate-500 text-[11px] font-medium">{label}</p>
-        <h3 className="text-xl font-bold tracking-tight text-slate-800 mt-0.5">{value}</h3>
-        {sub && <p className="text-[10px] text-slate-400 mt-0.5">{sub}</p>}
-      </div>
-    </div>
-  );
-}

@@ -6,13 +6,11 @@ import {
   Download,
   Edit,
   Trash2,
-  Search,
   FileSpreadsheet,
   Database,
   Check,
   X,
   AlertCircle,
-  Filter,
   DollarSign,
   Phone,
   Mail,
@@ -22,6 +20,11 @@ import {
 } from 'lucide-react';
 import { Lead, CallLog } from '../types';
 import { getPlayableRecordingUrl } from '../lib/api';
+import PageShell from './ui/PageShell';
+import Widget from './ui/Widget';
+import KpiCard from './ui/KpiCard';
+import Modal from './ui/Modal';
+import FilterBar from './ui/FilterBar';
 
 // Real calls come in as raw digit strings (e.g. "919384813556" — country
 // code glued straight onto the 10-digit number, no separators) since
@@ -326,16 +329,11 @@ export default function ContactDirectoryView({
   };
 
   return (
-    <div id="contact-directory-view" className="p-8 space-y-6 overflow-y-auto h-screen w-full font-sans bg-slate-50/50">
-      {/* Title Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div>
-          <h2 className="text-2xl font-bold font-display tracking-tight text-slate-900">Unified Contact Directory</h2>
-          <p className="text-sm text-slate-500 mt-1">
-            Build, edit, and bulk upload your client repository. These contacts automatically stream into the outbound Task Assignment channels.
-          </p>
-        </div>
-        <div className="flex items-center space-x-3 shrink-0">
+    <PageShell
+      title="Unified Contact Directory"
+      subtitle="Build, edit, and bulk upload your client repository. These contacts automatically stream into the outbound Task Assignment channels."
+      action={
+        <div className="flex items-center space-x-3">
           <button
             onClick={() => setIsBulkModalOpen(true)}
             className="flex items-center px-4 py-2 border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-sm font-semibold rounded-xl shadow-sm transition-all cursor-pointer"
@@ -351,102 +349,55 @@ export default function ContactDirectoryView({
             Add Contact
           </button>
         </div>
-      </div>
-
+      }
+    >
       {/* KPI Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs flex items-center space-x-4">
-          <div className="p-3 rounded-xl bg-blue-50 text-blue-600 shrink-0">
-            <Users className="h-5 w-5" />
-          </div>
-          <div>
-            <span className="text-[10px] text-slate-400 uppercase tracking-widest font-bold">Total Contacts</span>
-            <p className="text-xl font-bold font-mono text-slate-800 mt-0.5">{totalContacts}</p>
-          </div>
-        </div>
-
-        <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs flex items-center space-x-4">
-          <div className="p-3 rounded-xl bg-emerald-50 text-emerald-600 shrink-0">
-            <FileSpreadsheet className="h-5 w-5" />
-          </div>
-          <div>
-            <span className="text-[10px] text-slate-400 uppercase tracking-widest font-bold">Bulk Imported</span>
-            <p className="text-xl font-bold font-mono text-slate-800 mt-0.5">{bulkUploadedCount}</p>
-          </div>
-        </div>
-
-        {isLending && (
-          <>
-            <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs flex items-center space-x-4">
-              <div className="p-3 rounded-xl bg-indigo-50 text-indigo-600 shrink-0">
-                <DollarSign className="h-5 w-5" />
-              </div>
-              <div>
-                <span className="text-[10px] text-slate-400 uppercase tracking-widest font-bold">Avg Loan Req.</span>
-                <p className="text-xl font-bold font-mono text-slate-800 mt-0.5">${avgAmountRequested.toLocaleString()}</p>
-              </div>
-            </div>
-
-            <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs flex items-center space-x-4">
-              <div className="p-3 rounded-xl bg-purple-50 text-purple-600 shrink-0">
-                <Sparkles className="h-5 w-5" />
-              </div>
-              <div>
-                <span className="text-[10px] text-slate-400 uppercase tracking-widest font-bold">Prime Credit (700+)</span>
-                <p className="text-xl font-bold font-mono text-slate-800 mt-0.5">{highCreditCount}</p>
-              </div>
-            </div>
-          </>
-        )}
-      </div>
+      <KpiCard colSpan={3} icon={Users} iconBg="#eff6ff" iconColor="#2563eb" label="Total Contacts" value={totalContacts} />
+      <KpiCard colSpan={3} icon={FileSpreadsheet} iconBg="#f0fdf4" iconColor="#16a34a" label="Bulk Imported" value={bulkUploadedCount} />
+      {isLending ? (
+        <>
+          <KpiCard colSpan={3} icon={DollarSign} iconBg="#eef2ff" iconColor="#4f46e5" label="Avg Loan Req." value={`$${avgAmountRequested.toLocaleString()}`} />
+          <KpiCard colSpan={3} icon={Sparkles} iconBg="#faf5ff" iconColor="#9333ea" label="Prime Credit (700+)" value={highCreditCount} />
+        </>
+      ) : (
+        <KpiCard colSpan={6} icon={FileSpreadsheet} iconBg="#f0fdf4" iconColor="#16a34a" label="Manual Entries" value={totalContacts - bulkUploadedCount} />
+      )}
 
       {/* Searching & Filters Grid */}
-      <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div className="relative flex-1">
-          <Search className="absolute left-3.5 top-3 h-4 w-4 text-slate-400" />
-          <input
-            type="text"
-            placeholder="Search contacts by name, email, phone number, employer..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-800 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
-          />
-        </div>
-        <div className="flex items-center space-x-3">
-          <div className="flex items-center space-x-1">
-            <Filter className="h-3.5 w-3.5 text-slate-400" />
-            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Source:</span>
-          </div>
-          <select
-            value={sourceFilter}
-            onChange={(e) => setSourceFilter(e.target.value)}
-            className="bg-slate-50 border border-slate-200 text-slate-700 text-xs rounded-lg px-2.5 py-1.5 focus:outline-none"
-          >
-            {uniqueSources.map((src) => (
-              <option key={src} value={src}>{src}</option>
-            ))}
-          </select>
-
-          <select
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
-            className="bg-slate-50 border border-slate-200 text-slate-700 text-xs rounded-lg px-2.5 py-1.5 focus:outline-none"
-          >
-            <option value="All">All CRM Statuses</option>
-            <option value="New">New</option>
-            <option value="In Progress">In Progress</option>
-            <option value="Qualified">Qualified</option>
-            <option value="Unqualified">Unqualified</option>
-          </select>
-        </div>
-      </div>
+      <Widget showHeader={false} padding="md" colSpan={12}>
+        <FilterBar
+          search={{ value: searchTerm, onChange: setSearchTerm, placeholder: 'Search contacts by name, email, phone number, employer…' }}
+          selects={[
+            {
+              key: 'source',
+              label: 'Source',
+              value: sourceFilter,
+              onChange: setSourceFilter,
+              options: uniqueSources.map((src) => ({ label: src, value: src })),
+            },
+            {
+              key: 'status',
+              label: 'Status',
+              value: statusFilter,
+              onChange: setStatusFilter,
+              options: [
+                { label: 'All CRM Statuses', value: 'All' },
+                { label: 'New', value: 'New' },
+                { label: 'In Progress', value: 'In Progress' },
+                { label: 'Qualified', value: 'Qualified' },
+                { label: 'Unqualified', value: 'Unqualified' },
+              ],
+            },
+          ]}
+        />
+      </Widget>
 
       {/* Main Table View */}
-      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+      <Widget title="All Contacts" icon={Users} accent="#2563eb" padding="none" scrollable colSpan={12}>
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse">
-            <thead>
-              <tr className="bg-slate-50/75 border-b border-slate-200 text-slate-400 text-[10px] font-bold uppercase tracking-wider">
+            <thead className="sticky top-0 z-10" style={{ background: 'var(--bg-surface)' }}>
+              <tr className="bg-slate-50 border-b border-slate-200 text-slate-400 text-[10px] font-bold uppercase tracking-wider">
                 <th className="py-4 px-6">Name / Details</th>
                 <th className="py-4 px-6">Phone Number</th>
                 <th className="py-4 px-6">Email Address</th>
@@ -459,7 +410,7 @@ export default function ContactDirectoryView({
             </thead>
             <tbody className="divide-y divide-slate-100 text-xs text-slate-700">
               {filteredLeads.map((lead) => (
-                <tr key={lead.id} className="hover:bg-slate-50/40 transition-colors">
+                <tr key={lead.id} className="hover:bg-[var(--bg-subtle)] transition-colors">
                   <td className="py-4 px-6">
                     <div className="flex items-center space-x-3">
                       <div className="h-8 w-8 rounded-lg bg-blue-50 text-blue-700 font-bold flex items-center justify-center uppercase">
@@ -536,23 +487,16 @@ export default function ContactDirectoryView({
             </tbody>
           </table>
         </div>
-      </div>
+      </Widget>
 
       {/* MODAL: Add / Edit Single Contact */}
       {isAddModalOpen && (
-        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center z-50 p-4">
-          <div className="w-full max-w-xl bg-white rounded-2xl shadow-xl border border-slate-200 overflow-hidden animate-fadeIn">
-            <div className="px-6 py-4 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
-              <h3 className="text-sm font-bold text-slate-800 font-display">
-                {editingLead ? `Modify Contact: ${editingLead.name}` : 'Originate New Contact Entry'}
-              </h3>
-              <button
-                onClick={() => setIsAddModalOpen(false)}
-                className="p-1 hover:bg-slate-200 rounded-full text-slate-400"
-              >
-                <X className="h-5 w-5" />
-              </button>
-            </div>
+        <Modal
+          open
+          onClose={() => setIsAddModalOpen(false)}
+          title={editingLead ? `Modify Contact: ${editingLead.name}` : 'Originate New Contact Entry'}
+          maxWidth="max-w-xl"
+        >
             {editingLead && (() => {
               const contactCalls = callLogs
                 .filter((log) => log.leadId === editingLead.id)
@@ -735,28 +679,18 @@ export default function ContactDirectoryView({
                 </button>
               </div>
             </form>
-          </div>
-        </div>
+        </Modal>
       )}
 
       {/* MODAL: Bulk Upload Contacts */}
       {isBulkModalOpen && (
-        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center z-50 p-4">
-          <div className="w-full max-w-3xl bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden animate-fadeIn flex flex-col max-h-[85vh]">
-            <div className="px-6 py-4 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
-              <div className="flex items-center space-x-2">
-                <Database className="h-5 w-5 text-blue-600" />
-                <h3 className="text-sm font-bold text-slate-800 font-display">Bulk Upload Contacts Database</h3>
-              </div>
-              <button
-                onClick={() => setIsBulkModalOpen(false)}
-                className="p-1 hover:bg-slate-200 rounded-full text-slate-400"
-              >
-                <X className="h-5 w-5" />
-              </button>
-            </div>
-
-            <div className="p-6 flex-1 overflow-y-auto space-y-6">
+        <Modal
+          open
+          onClose={() => setIsBulkModalOpen(false)}
+          title={<div className="flex items-center space-x-2"><Database className="h-5 w-5 text-blue-600" /><span>Bulk Upload Contacts Database</span></div>}
+          maxWidth="max-w-3xl"
+        >
+            <div className="space-y-6">
               <div className="space-y-4">
                 <div
                   className="border-2 border-dashed border-slate-200 hover:border-blue-400 rounded-2xl p-8 text-center transition-all cursor-pointer bg-slate-50/50"
@@ -818,7 +752,7 @@ export default function ContactDirectoryView({
             </div>
 
             {/* Footer buttons */}
-            <div className="px-6 py-4 bg-slate-50 border-t border-slate-200 flex items-center justify-between shrink-0">
+            <div className="flex items-center justify-between mt-4 pt-4 border-t border-slate-200">
               <span className="text-xs text-slate-500 italic">
                 * Uploaded contacts will be appended to your Outbound CRM Dialer targets list.
               </span>
@@ -843,9 +777,8 @@ export default function ContactDirectoryView({
                 </button>
               </div>
             </div>
-          </div>
-        </div>
+        </Modal>
       )}
-    </div>
+    </PageShell>
   );
 }

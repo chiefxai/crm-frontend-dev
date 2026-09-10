@@ -1,7 +1,10 @@
 import React, { useEffect, useState } from 'react';
 import { ScrollText, Loader2 } from 'lucide-react';
 import { apiFetch } from '../lib/api';
-import PageHeader from './PageHeader';
+import PageShell from './ui/PageShell';
+import Widget from './ui/Widget';
+import DataTable, { Column } from './ui/DataTable';
+import EmptyState from './ui/EmptyState';
 
 interface AuditEntry {
   id: string;
@@ -26,10 +29,27 @@ function describeAction(action: string): string {
     'team.update': 'Updated a team member',
     'org_settings.update': 'Updated organization settings',
     'channel.connect': 'Connected a channel',
-    'object.create': 'Created a custom object'
+    'object.create': 'Created a custom object',
   };
   return labels[action] || action;
 }
+
+const COLUMNS: Column<AuditEntry>[] = [
+  { key: 'action', header: 'Action', cell: r => <span className="font-medium text-slate-700">{describeAction(r.action)}</span> },
+  { key: 'by', header: 'By', cell: r => <span className="text-slate-500">{r.actorEmail || '—'}</span> },
+  {
+    key: 'details', header: 'Details',
+    cell: r => (
+      <span className="text-slate-400 text-xs truncate block max-w-xs" title={JSON.stringify(r.metadata)}>
+        {Object.keys(r.metadata || {}).length ? JSON.stringify(r.metadata) : '—'}
+      </span>
+    ),
+  },
+  {
+    key: 'when', header: 'When', align: 'right',
+    cell: r => <span className="text-slate-400 text-xs whitespace-nowrap">{new Date(r.createdAt).toLocaleString()}</span>,
+  },
+];
 
 export default function AuditLogView() {
   const [entries, setEntries] = useState<AuditEntry[]>([]);
@@ -37,52 +57,21 @@ export default function AuditLogView() {
 
   useEffect(() => {
     apiFetch('/api/audit-log')
-      .then((r) => r.json())
+      .then(r => r.json())
       .then((list: AuditEntry[]) => setEntries(Array.isArray(list) ? list : []))
       .finally(() => setLoading(false));
   }, []);
 
-  if (loading) {
-    return <div className="flex items-center justify-center h-full text-slate-400"><Loader2 className="h-5 w-5 animate-spin mr-2" /> Loading…</div>;
-  }
+  if (loading) return <div className="flex items-center justify-center h-full text-slate-400"><Loader2 className="h-5 w-5 animate-spin mr-2" /> Loading…</div>;
 
   return (
-    <div className="font-sans h-full overflow-y-auto">
-      <PageHeader title="Audit Log" subtitle="Admin actions across this organization — who changed what, and when." />
-
-      <div className="px-8 pb-8">
-        <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden">
-          {entries.length === 0 ? (
-            <div className="p-8 text-center text-sm text-slate-400 flex flex-col items-center gap-2">
-              <ScrollText className="h-8 w-8 text-slate-300" />
-              No admin actions recorded yet.
-            </div>
-          ) : (
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-slate-100 text-left text-[10px] font-bold text-slate-400 uppercase tracking-wide">
-                  <th className="px-5 py-3">Action</th>
-                  <th className="px-5 py-3">By</th>
-                  <th className="px-5 py-3">Details</th>
-                  <th className="px-5 py-3">When</th>
-                </tr>
-              </thead>
-              <tbody>
-                {entries.map((e) => (
-                  <tr key={e.id} className="border-b border-slate-50 last:border-0">
-                    <td className="px-5 py-3 font-medium text-slate-700">{describeAction(e.action)}</td>
-                    <td className="px-5 py-3 text-slate-500">{e.actorEmail || '—'}</td>
-                    <td className="px-5 py-3 text-slate-400 text-xs max-w-xs truncate" title={JSON.stringify(e.metadata)}>
-                      {Object.keys(e.metadata || {}).length ? JSON.stringify(e.metadata) : '—'}
-                    </td>
-                    <td className="px-5 py-3 text-slate-400 text-xs whitespace-nowrap">{new Date(e.createdAt).toLocaleString()}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
-        </div>
-      </div>
-    </div>
+    <PageShell title="Audit Log" subtitle="Admin actions across this organization — who changed what, and when.">
+      <Widget colSpan={12} title="Activity History" subtitle="All admin-level actions are recorded below." icon={ScrollText} accent="#7c3aed" padding="none" scrollable>
+        {entries.length === 0
+          ? <EmptyState icon={ScrollText} heading="No admin actions recorded yet" />
+          : <DataTable bare columns={COLUMNS} rows={entries} rowKey={r => r.id} />
+        }
+      </Widget>
+    </PageShell>
   );
 }

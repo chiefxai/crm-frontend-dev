@@ -21,6 +21,17 @@
   --sidebar-bg:     #ffffff;
   --sidebar-border: #e2e8f0;
   --header-bg:      #ffffff;
+
+  /* Panel tokens — adapts per theme */
+  --panel-bg:       #ffffff;
+  --panel-surface:  #f1f5f9;   /* slate-100 */
+  --panel-border:   #e2e8f0;   /* slate-200 */
+  --panel-text:     #0f172a;   /* slate-900 */
+  --panel-muted:    #475569;   /* slate-600 */
+
+  /* Tooltip */
+  --tooltip-bg:     #1e293b;
+  --tooltip-text:   #f8fafc;
 }
 
 /* ── Dark tokens ────────────────────────────────────────────────── */
@@ -38,6 +49,44 @@
   --sidebar-bg:     #1e293b;
   --sidebar-border: #334155;
   --header-bg:      #1e293b;
+
+  /* Panel tokens in dark mode — go full dark */
+  --panel-bg:       #0f172a;   /* slate-900 */
+  --panel-surface:  #1e293b;   /* slate-800 */
+  --panel-border:   #334155;   /* slate-700 */
+  --panel-text:     #f1f5f9;
+  --panel-muted:    #64748b;
+
+  --tooltip-bg:     #334155;
+  --tooltip-text:   #f8fafc;
+}
+
+/* ── Custom scrollbar ───────────────────────────────────────────── */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
+}
+
+*::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+*::-webkit-scrollbar-thumb {
+  background-color: var(--border);
+  border-radius: 99px;
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background-color: var(--text-muted);
+}
+
+*::-webkit-scrollbar-corner {
+  background: transparent;
 }
 
 /* ── Apply tokens to structural elements ───────────────────────── */
@@ -131,3 +180,32 @@ body {
 .dark .react-flow__minimap {
   background-color: var(--bg-surface) !important;
 }
+
+/* ── Theme-aware panel (dark terminal / control-center style) ─── */
+.theme-panel {
+  background-color: var(--panel-bg);
+  border-color: var(--panel-border);
+  color: var(--panel-text);
+}
+.theme-panel-surface {
+  background-color: var(--panel-surface);
+  border-color: var(--panel-border);
+  color: var(--panel-text);
+}
+
+/* ── Tooltip ────────────────────────────────────────────────────── */
+.theme-tooltip {
+  background-color: var(--tooltip-bg);
+  color: var(--tooltip-text);
+}
+.theme-tooltip-arrow-left {
+  border-right-color: var(--tooltip-bg);
+}
+
+/* ── Notification bell dropdown ─────────────────────────────────── */
+.theme-dropdown {
+  background-color: var(--bg-surface);
+  border-color: var(--border);
+  color: var(--text-primary);
+}
+

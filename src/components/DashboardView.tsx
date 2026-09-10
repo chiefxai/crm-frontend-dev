@@ -2,15 +2,14 @@ import React, { useState, useEffect } from 'react';
 import {
   TrendingUp,
   PhoneCall,
-  Activity,
-  CheckCircle,
-  Lightbulb,
   DollarSign,
   UserCheck,
   RefreshCw,
   Clock,
   Flame,
-  Phone
+  Phone,
+  Activity,
+  Sparkles,
 } from 'lucide-react';
 import {
   AreaChart,
@@ -21,11 +20,17 @@ import {
   Tooltip,
   ResponsiveContainer,
   BarChart,
-  Bar
+  Bar,
 } from 'recharts';
 import { apiFetch } from '../lib/api';
 import { Lead, Loan, Campaign, CallLog, OrganizationSettings } from '../types';
 import { COST_PER_MINUTE_INR_FALLBACK, formatInr } from '../lib/pricing';
+import PageShell from './ui/PageShell';
+import Widget from './ui/Widget';
+import Button from './ui/Button';
+import DataTable, { Column } from './ui/DataTable';
+import EmptyState from './ui/EmptyState';
+import KpiCard from './ui/KpiCard';
 
 interface DashboardViewProps {
   leads: Lead[];
@@ -64,46 +69,36 @@ interface DashboardMetrics {
   topInterestedClients: InterestedClient[];
 }
 
+const CHART_TOOLTIP = {
+  contentStyle: {
+    background: 'var(--tooltip-bg, #1e293b)',
+    border: 'none',
+    borderRadius: 10,
+    color: 'var(--tooltip-text, #f8fafc)',
+    fontSize: 12,
+  },
+};
+
 export default function DashboardView({
   leads,
   loans,
   campaigns,
   callLogs,
   orgSettings,
-  costPerMinuteInr = COST_PER_MINUTE_INR_FALLBACK
+  costPerMinuteInr = COST_PER_MINUTE_INR_FALLBACK,
 }: DashboardViewProps) {
-  const [insights, setInsights] = useState<string>('');
-  const [insightsDegraded, setInsightsDegraded] = useState<boolean>(false);
-  const [loadingInsights, setLoadingInsights] = useState<boolean>(false);
+  const [insights, setInsights] = useState('');
+  const [insightsDegraded, setInsightsDegraded] = useState(false);
+  const [loadingInsights, setLoadingInsights] = useState(false);
   const [metrics, setMetrics] = useState<DashboardMetrics | null>(null);
 
   useEffect(() => {
     apiFetch('/api/dashboard/metrics')
-      .then((r) => {
-        if (!r.ok) throw new Error(`Dashboard metrics request failed (${r.status})`);
-        return r.json();
-      })
+      .then(r => { if (!r.ok) throw new Error(); return r.json(); })
       .then((data: DashboardMetrics) => setMetrics(data))
-      .catch((err) => console.error('Failed to load dashboard metrics:', err));
+      .catch(err => console.error('Failed to load dashboard metrics:', err));
   }, [leads.length, loans.length, callLogs.length]);
 
-  const activeCampaignsCount = campaigns.filter((c) => c.status === 'Running').length;
-  const isLending = !orgSettings.industry || orgSettings.industry === 'lending';
-  const primaryObject = metrics?.objectMetrics?.[0] || null;
-
-  // Compute live KPIs
-  const totalLeadsCount = leads.length;
-  const activeLoans = loans.filter((l) => l.status !== 'Completed' && l.status !== 'Lead');
-  const outstandingPortfolio = loans.reduce((sum, current) => sum + current.amount, 0);
-
-  const totalCampaignLeads = campaigns.reduce((sum, c) => sum + c.totalLeads, 0);
-  const totalCampaignCalled = campaigns.reduce((sum, c) => sum + c.calledLeads, 0);
-  const totalCampaignSuccess = campaigns.reduce((sum, c) => sum + c.successfulCalls, 0);
-  const aiConversionRate = totalCampaignCalled > 0
-    ? Math.round((totalCampaignSuccess / totalCampaignCalled) * 100)
-    : 0;
-
-  // Retrieve AI Insights from full-stack backend
   const fetchAIInsights = async () => {
     setLoadingInsights(true);
     setInsights('');
@@ -111,7 +106,7 @@ export default function DashboardView({
       const res = await fetch('/api/gemini/insights', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ leads, loans, campaigns, platformMode: orgSettings.industry || 'lending' })
+        body: JSON.stringify({ leads, loans, campaigns, platformMode: orgSettings.industry || 'lending' }),
       });
       const data = await res.json();
       if (data.success) {
@@ -121,137 +116,161 @@ export default function DashboardView({
         setInsights('Could not generate insights at this moment.');
         setInsightsDegraded(false);
       }
-    } catch (err: any) {
-      console.error(err);
+    } catch {
       setInsights('Simulation Server Offline: Defaulting to standard credit metrics.');
     } finally {
       setLoadingInsights(false);
     }
   };
 
-  useEffect(() => {
-    fetchAIInsights();
-  }, [leads.length, loans.length]);
+  useEffect(() => { fetchAIInsights(); }, [leads.length, loans.length]);
+
+  const isLending = !orgSettings.industry || orgSettings.industry === 'lending';
+  const primaryObject = metrics?.objectMetrics?.[0] || null;
+  const activeCampaignsCount = campaigns.filter(c => c.status === 'Running').length;
+  const totalLeadsCount = leads.length;
+  const outstandingPortfolio = loans.reduce((s, l) => s + l.amount, 0);
+  const totalCampaignCalled = campaigns.reduce((s, c) => s + c.calledLeads, 0);
+  const totalCampaignSuccess = campaigns.reduce((s, c) => s + c.successfulCalls, 0);
+  const aiConversionRate = totalCampaignCalled > 0
+    ? Math.round((totalCampaignSuccess / totalCampaignCalled) * 100)
+    : 0;
+  const daysLeft = Math.max(0, Math.round(
+    (new Date(orgSettings.billingPeriodEnd).getTime() - Date.now()) / (1000 * 60 * 60 * 24)
+  ));
+
+  // ── Interested clients table columns ─────────────────────────────────────
+  const clientColumns: Column<InterestedClient>[] = [
+    {
+      key: 'name',
+      header: 'Name',
+      cell: r => <span className="font-semibold text-slate-800 dark:text-[var(--text-primary)]">{r.name}</span>,
+    },
+    {
+      key: 'phone',
+      header: 'Phone',
+      cell: r => r.phone
+        ? <span className="flex items-center gap-1.5 text-slate-500"><Phone className="h-3 w-3" />{r.phone}</span>
+        : <span className="text-slate-300">—</span>,
+    },
+    {
+      key: 'score',
+      header: 'Score',
+      cell: r => r.score != null
+        ? <Badge color="green">{r.score}</Badge>
+        : <span className="text-slate-300">—</span>,
+    },
+    {
+      key: 'amount',
+      header: 'Amount',
+      cell: r => r.amountRequested != null
+        ? <span className="text-slate-600">{formatInr(r.amountRequested)}</span>
+        : <span className="text-slate-300">—</span>,
+    },
+    {
+      key: 'intent',
+      header: 'Intent',
+      cell: r => <span className="text-slate-500">{r.intent || '—'}</span>,
+    },
+    {
+      key: 'summary',
+      header: 'Last Call Summary',
+      cell: r => (
+        <span className="text-slate-500 truncate block max-w-xs" title={r.lastCallSummary || ''}>
+          {r.lastCallSummary || '—'}
+        </span>
+      ),
+    },
+  ];
 
   return (
-    <div id="executive-desk" className="p-8 space-y-8 overflow-y-auto h-screen w-full font-sans bg-slate-50/50">
-      {/* Title Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div>
-          <h2 className="text-2xl font-bold font-display tracking-tight text-slate-900">
-            Executive Strategic Desk
-          </h2>
-          <p className="text-sm text-slate-500 mt-1">
-            {isLending
-              ? 'Real-time credit health, portfolio metrics, and automated dialing conversion stats.'
-              : `Real-time ${primaryObject?.objectLabel || 'pipeline'} metrics and automated dialing conversion stats.`}
-          </p>
-        </div>
-        <button
+    <PageShell
+      title="Executive Strategic Desk"
+      subtitle={
+        isLending
+          ? 'Real-time credit health, portfolio metrics, and automated dialing conversion stats.'
+          : `Real-time ${primaryObject?.objectLabel || 'pipeline'} metrics and automated dialing conversion stats.`
+      }
+      action={
+        <Button
+          icon={RefreshCw}
+          variant="secondary"
+          size="sm"
+          loading={loadingInsights}
           onClick={fetchAIInsights}
-          disabled={loadingInsights}
-          className="flex items-center px-4 py-2 border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-sm font-semibold rounded-xl shadow-sm transition-all cursor-pointer disabled:opacity-50"
         >
-          <RefreshCw className={`h-4 w-4 mr-2 ${loadingInsights ? 'animate-spin' : ''}`} />
           Refresh AI Model
-        </button>
-      </div>
+        </Button>
+      }
+    >
+      {/* ── Row 1: KPI tiles ── */}
 
-      {/* Bento Grid Layout */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-12 gap-6 pb-12">
-        {/* Active Lead Metrics - Bento Stat 1 */}
-        <div className="lg:col-span-3 md:col-span-6 col-span-12 bg-white p-6 rounded-2xl border border-slate-200 shadow-sm flex flex-col justify-between hover:shadow-md transition-all">
-          <div className="flex justify-between items-start">
-            <div className="bg-blue-50 text-blue-600 p-2 rounded-lg">
-              <UserCheck className="h-5 w-5" />
-            </div>
-            <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-blue-50 text-blue-600">+12.5%</span>
-          </div>
-          <div className="mt-4">
-            <p className="text-slate-500 text-sm font-medium">
-              {isLending ? 'Active Loan Leads' : `Total ${primaryObject?.objectLabel || 'Records'}`}
-            </p>
-            <h3 className="text-3xl font-bold tracking-tight text-slate-800 mt-1">
-              {isLending ? totalLeadsCount : (primaryObject?.totalRecords ?? 0)}
-            </h3>
-          </div>
-        </div>
+      <KpiCard
+        colSpan={3}
+        icon={UserCheck}
+        iconBg="#eff6ff"
+        iconColor="#2563eb"
+        label={isLending ? 'Active Loan Leads' : `Total ${primaryObject?.objectLabel || 'Records'}`}
+        value={isLending ? totalLeadsCount : (primaryObject?.totalRecords ?? 0)}
+        badge="+12.5%"
+        badgeColor="green"
+      />
 
-        {/* AI Calling Efficiency - Bento Stat 2 */}
-        <div className="lg:col-span-3 md:col-span-6 col-span-12 bg-white p-6 rounded-2xl border border-slate-200 shadow-sm flex flex-col justify-between hover:shadow-md transition-all">
-          <div className="flex justify-between items-start">
-            <div className="bg-emerald-50 p-2 rounded-lg text-emerald-600">
-              <PhoneCall className="h-5 w-5" />
-            </div>
-            <span className="text-xs text-emerald-600 font-bold bg-emerald-50 px-2 py-0.5 rounded-full">Peak Live</span>
-          </div>
-          <div className="mt-4">
-            <p className="text-slate-500 text-sm font-medium">AI Call Conversion</p>
-            <h3 className="text-3xl font-bold tracking-tight text-slate-800 mt-1">{aiConversionRate}%</h3>
-          </div>
-        </div>
+      <KpiCard
+        colSpan={3}
+        icon={PhoneCall}
+        iconBg="#f0fdf4"
+        iconColor="#16a34a"
+        label="AI Call Conversion"
+        value={`${aiConversionRate}%`}
+        badge="Peak Live"
+        badgeColor="blue"
+      />
 
-        {/* Portfolio Outstanding - Bento Stat 3 */}
-        <div className="lg:col-span-3 md:col-span-6 col-span-12 bg-white p-6 rounded-2xl border border-slate-200 shadow-sm flex flex-col justify-between hover:shadow-md transition-all">
-          <div className="flex justify-between items-start">
-            <div className="bg-amber-50 text-amber-600 p-2 rounded-lg">
-              <DollarSign className="h-5 w-5" />
-            </div>
-            <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-amber-50 text-amber-600">Active</span>
-          </div>
-          <div className="mt-4">
-            {isLending ? (
-              <>
-                <p className="text-slate-500 text-sm font-medium">Outstanding Portfolio</p>
-                <h3 className="text-3xl font-bold tracking-tight text-slate-800 mt-1">
-                  ${(outstandingPortfolio / 1000).toFixed(0)}k
-                </h3>
-              </>
-            ) : (
-              <>
-                <p className="text-slate-500 text-sm font-medium">New This Month</p>
-                <h3 className="text-3xl font-bold tracking-tight text-slate-800 mt-1">
-                  {primaryObject?.recordsTrend?.[primaryObject.recordsTrend.length - 1]?.count ?? 0}
-                </h3>
-              </>
-            )}
-          </div>
-        </div>
+      <KpiCard
+        colSpan={3}
+        icon={DollarSign}
+        iconBg="#fffbeb"
+        iconColor="#d97706"
+        label={isLending ? 'Outstanding Portfolio' : 'New This Month'}
+        value={isLending
+          ? `$${(outstandingPortfolio / 1000).toFixed(0)}k`
+          : (primaryObject?.recordsTrend?.[primaryObject.recordsTrend.length - 1]?.count ?? 0)
+        }
+        badge="Active"
+        badgeColor="amber"
+      />
 
-        {/* AI Usage Card - Bento Stat 4 */}
-        <div className="lg:col-span-3 md:col-span-6 col-span-12 bg-white p-6 rounded-2xl border border-slate-200 shadow-sm flex flex-col justify-between hover:shadow-md transition-all">
-          <div className="flex justify-between items-start">
-            <div className="bg-slate-50 p-2 rounded-lg text-slate-600">
-              <Clock className="h-5 w-5" />
-            </div>
-            <span className="text-xs text-slate-500 font-bold bg-slate-100 px-2 py-0.5 rounded-full">
-              {Math.max(0, Math.round((new Date(orgSettings.billingPeriodEnd).getTime() - Date.now()) / (1000 * 60 * 60 * 24)))}d Left
-            </span>
-          </div>
-          <div className="mt-4 w-full">
-            <p className="text-slate-500 text-sm font-medium">AI Voice Minutes This Period</p>
-            <h3 className="text-2xl font-bold text-slate-800 mt-1">
-              {orgSettings.aiMinutesUsed} <span className="text-xs font-normal text-slate-400">min</span>
-            </h3>
-            <p className="text-xs text-slate-400 mt-1">{formatInr(orgSettings.aiMinutesUsed * costPerMinuteInr)} at ₹{costPerMinuteInr}/min</p>
-          </div>
-        </div>
+      <KpiCard
+        colSpan={3}
+        icon={Clock}
+        iconBg="var(--bg-subtle)"
+        iconColor="var(--text-secondary)"
+        label="AI Voice Minutes This Period"
+        value={`${orgSettings.aiMinutesUsed} min`}
+        sub={`${formatInr(orgSettings.aiMinutesUsed * costPerMinuteInr)} at ₹${costPerMinuteInr}/min`}
+        badge={`${daysLeft}d Left`}
+        badgeColor="neutral"
+      />
 
-        {/* Trend Chart - Bento Large Card 1 */}
-        <div className="lg:col-span-6 col-span-12 bg-white p-6 rounded-2xl border border-slate-200 shadow-sm flex flex-col justify-between hover:shadow-md transition-all">
-          <div className="mb-4">
-            <h4 className="text-md font-bold text-slate-800 font-display">
-              {isLending ? 'Loan Portfolio Growth' : `${primaryObject?.objectLabel || 'Records'} Over Time`}
-            </h4>
-            <p className="text-xs text-slate-400 mt-1">
-              {isLending ? 'Total loan amount disbursed per month, last 6 months.' : 'New records created per month, last 6 months.'}
-            </p>
-          </div>
-          <div className="h-72 w-full">
-            {isLending ? (
-              metrics?.portfolioTrend && metrics.portfolioTrend.some((m) => m.loanCount > 0) ? (
+      {/* ── Row 2: Charts ── */}
+
+      {/* Area chart — portfolio/records trend */}
+      <Widget
+        colSpan={6}
+        title={isLending ? 'Loan Portfolio Growth' : `${primaryObject?.objectLabel || 'Records'} Over Time`}
+        subtitle={isLending ? 'Total loan amount disbursed per month, last 6 months.' : 'New records created per month, last 6 months.'}
+        icon={TrendingUp}
+        accent="#2563eb"
+        padding="md"
+        hover
+      >
+        <div className="h-64 w-full mt-1">
+          {isLending
+            ? metrics?.portfolioTrend?.some(m => m.loanCount > 0)
+              ? (
                 <ResponsiveContainer width="100%" height="100%">
-                  <AreaChart data={metrics.portfolioTrend} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                  <AreaChart data={metrics.portfolioTrend} margin={{ top: 8, right: 8, left: -20, bottom: 0 }}>
                     <defs>
                       <linearGradient id="colorPortfolio" x1="0" y1="0" x2="0" y2="1">
                         <stop offset="5%" stopColor="#2563eb" stopOpacity={0.2} />
@@ -261,211 +280,159 @@ export default function DashboardView({
                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
                     <XAxis dataKey="month" stroke="#94a3b8" fontSize={11} tickLine={false} />
                     <YAxis stroke="#94a3b8" fontSize={11} tickLine={false} axisLine={false} />
-                    <Tooltip contentStyle={{ background: '#0f172a', border: 'none', borderRadius: '10px', color: '#fff' }} />
+                    <Tooltip {...CHART_TOOLTIP} />
                     <Area type="monotone" dataKey="totalDisbursed" name="Total Disbursed" stroke="#2563eb" fillOpacity={1} fill="url(#colorPortfolio)" strokeWidth={2.5} />
                   </AreaChart>
                 </ResponsiveContainer>
-              ) : (
-                <div className="h-full w-full flex items-center justify-center text-sm text-slate-400">
-                  No loan activity in the last 6 months yet.
-                </div>
               )
-            ) : primaryObject && primaryObject.recordsTrend.some((m) => m.count > 0) ? (
-              <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={primaryObject.recordsTrend} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                  <defs>
-                    <linearGradient id="colorRecords" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#2563eb" stopOpacity={0.2} />
-                      <stop offset="95%" stopColor="#2563eb" stopOpacity={0} />
-                    </linearGradient>
-                  </defs>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                  <XAxis dataKey="month" stroke="#94a3b8" fontSize={11} tickLine={false} />
-                  <YAxis stroke="#94a3b8" fontSize={11} tickLine={false} axisLine={false} />
-                  <Tooltip contentStyle={{ background: '#0f172a', border: 'none', borderRadius: '10px', color: '#fff' }} />
-                  <Area type="monotone" dataKey="count" name="New Records" stroke="#2563eb" fillOpacity={1} fill="url(#colorRecords)" strokeWidth={2.5} />
-                </AreaChart>
-              </ResponsiveContainer>
-            ) : (
-              <div className="h-full w-full flex items-center justify-center text-sm text-slate-400">
-                No records yet.
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* Distribution Chart - Bento Large Card 2 */}
-        <div className="lg:col-span-6 col-span-12 bg-white p-6 rounded-2xl border border-slate-200 shadow-sm flex flex-col justify-between hover:shadow-md transition-all">
-          <div className="mb-4">
-            <h4 className="text-md font-bold text-slate-800 font-display">
-              {isLending ? 'Leads by Source' : `${primaryObject?.objectLabel || 'Pipeline'} by Stage`}
-            </h4>
-            <p className="text-xs text-slate-400 mt-1">
-              {isLending ? 'How your leads are actually arriving.' : 'Where records currently sit in the pipeline.'}
-            </p>
-          </div>
-          <div className="h-72 w-full">
-            {isLending ? (
-              metrics?.channelPerformance && metrics.channelPerformance.length > 0 ? (
+              : <EmptyState heading="No loan activity yet" message="Loan data will appear here once disbursals are recorded." />
+            : primaryObject?.recordsTrend?.some(m => m.count > 0)
+              ? (
                 <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={metrics.channelPerformance} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                  <AreaChart data={primaryObject.recordsTrend} margin={{ top: 8, right: 8, left: -20, bottom: 0 }}>
+                    <defs>
+                      <linearGradient id="colorRecords" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#2563eb" stopOpacity={0.2} />
+                        <stop offset="95%" stopColor="#2563eb" stopOpacity={0} />
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                    <XAxis dataKey="month" stroke="#94a3b8" fontSize={11} tickLine={false} />
+                    <YAxis stroke="#94a3b8" fontSize={11} tickLine={false} axisLine={false} />
+                    <Tooltip {...CHART_TOOLTIP} />
+                    <Area type="monotone" dataKey="count" name="New Records" stroke="#2563eb" fillOpacity={1} fill="url(#colorRecords)" strokeWidth={2.5} />
+                  </AreaChart>
+                </ResponsiveContainer>
+              )
+              : <EmptyState heading="No records yet" />
+          }
+        </div>
+      </Widget>
+
+      {/* Bar chart — leads by source / pipeline stage */}
+      <Widget
+        colSpan={6}
+        title={isLending ? 'Leads by Source' : `${primaryObject?.objectLabel || 'Pipeline'} by Stage`}
+        subtitle={isLending ? 'How your leads are actually arriving.' : 'Where records currently sit in the pipeline.'}
+        icon={Activity}
+        accent="#7c3aed"
+        padding="md"
+        hover
+      >
+        <div className="h-64 w-full mt-1">
+          {isLending
+            ? metrics?.channelPerformance && metrics.channelPerformance.length > 0
+              ? (
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={metrics.channelPerformance} margin={{ top: 8, right: 8, left: -20, bottom: 0 }}>
                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
                     <XAxis dataKey="source" stroke="#94a3b8" fontSize={11} tickLine={false} />
                     <YAxis stroke="#94a3b8" fontSize={11} tickLine={false} axisLine={false} />
-                    <Tooltip contentStyle={{ background: '#0f172a', border: 'none', borderRadius: '10px', color: '#fff' }} />
-                    <Bar dataKey="count" name="Leads" fill="#2563eb" radius={[4, 4, 0, 0]} barSize={24} />
+                    <Tooltip {...CHART_TOOLTIP} />
+                    <Bar dataKey="count" name="Leads" fill="#7c3aed" radius={[4, 4, 0, 0]} barSize={22} />
                   </BarChart>
                 </ResponsiveContainer>
-              ) : (
-                <div className="h-full w-full flex items-center justify-center text-sm text-slate-400">
-                  No leads yet.
-                </div>
               )
-            ) : primaryObject && primaryObject.stageDistribution.length > 0 ? (
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={primaryObject.stageDistribution} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                  <XAxis dataKey="stage" stroke="#94a3b8" fontSize={11} tickLine={false} />
-                  <YAxis stroke="#94a3b8" fontSize={11} tickLine={false} axisLine={false} />
-                  <Tooltip contentStyle={{ background: '#0f172a', border: 'none', borderRadius: '10px', color: '#fff' }} />
-                  <Bar dataKey="count" name="Records" fill="#2563eb" radius={[4, 4, 0, 0]} barSize={24} />
-                </BarChart>
-              </ResponsiveContainer>
-            ) : (
-              <div className="h-full w-full flex items-center justify-center text-sm text-slate-400">
-                No pipeline stages configured yet.
-              </div>
-            )}
-          </div>
+              : <EmptyState heading="No leads yet" />
+            : primaryObject?.stageDistribution && primaryObject.stageDistribution.length > 0
+              ? (
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={primaryObject.stageDistribution} margin={{ top: 8, right: 8, left: -20, bottom: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                    <XAxis dataKey="stage" stroke="#94a3b8" fontSize={11} tickLine={false} />
+                    <YAxis stroke="#94a3b8" fontSize={11} tickLine={false} axisLine={false} />
+                    <Tooltip {...CHART_TOOLTIP} />
+                    <Bar dataKey="count" name="Records" fill="#7c3aed" radius={[4, 4, 0, 0]} barSize={22} />
+                  </BarChart>
+                </ResponsiveContainer>
+              )
+              : <EmptyState heading="No pipeline stages configured yet" />
+          }
         </div>
+      </Widget>
 
-        {/* Interested Clients — ranked by sentiment + lead score */}
-        <div className="lg:col-span-12 col-span-12 bg-white p-6 rounded-2xl border border-slate-200 shadow-sm hover:shadow-md transition-all">
-          <div className="flex items-center justify-between mb-4">
-            <div>
-              <h4 className="text-md font-bold text-slate-800 font-display flex items-center gap-2">
-                <span className="bg-rose-50 text-rose-600 p-1.5 rounded-lg">
-                  <Flame className="h-4 w-4" />
-                </span>
-                Interested Clients
-              </h4>
-              <p className="text-xs text-slate-400 mt-1">
-                Leads whose most recent call had positive sentiment — ranked by lead score, call them back first.
-              </p>
-            </div>
-          </div>
-          {metrics?.topInterestedClients && metrics.topInterestedClients.length > 0 ? (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="text-left text-xs text-slate-400 uppercase tracking-wider border-b border-slate-100">
-                    <th className="pb-2 font-medium">Name</th>
-                    <th className="pb-2 font-medium">Phone</th>
-                    <th className="pb-2 font-medium">Score</th>
-                    <th className="pb-2 font-medium">Amount</th>
-                    <th className="pb-2 font-medium">Intent</th>
-                    <th className="pb-2 font-medium">Last Call Summary</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {metrics.topInterestedClients.map((client) => (
-                    <tr key={client.leadId} className="border-b border-slate-50 last:border-0">
-                      <td className="py-2.5 font-semibold text-slate-800">{client.name}</td>
-                      <td className="py-2.5 text-slate-500">
-                        {client.phone ? (
-                          <span className="flex items-center gap-1">
-                            <Phone className="h-3 w-3 text-slate-400" /> {client.phone}
-                          </span>
-                        ) : (
-                          '—'
-                        )}
-                      </td>
-                      <td className="py-2.5">
-                        {client.score != null ? (
-                          <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-600">
-                            {client.score}
-                          </span>
-                        ) : (
-                          '—'
-                        )}
-                      </td>
-                      <td className="py-2.5 text-slate-600">
-                        {client.amountRequested != null ? formatInr(client.amountRequested) : '—'}
-                      </td>
-                      <td className="py-2.5 text-slate-500">{client.intent || '—'}</td>
-                      <td className="py-2.5 text-slate-500 max-w-xs truncate" title={client.lastCallSummary || ''}>
-                        {client.lastCallSummary || '—'}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+      {/* ── Row 3: Interested Clients table ── */}
+      <Widget
+        colSpan={12}
+        title="Interested Clients"
+        subtitle="Leads whose most recent call had positive sentiment — ranked by lead score, call them back first."
+        icon={Flame}
+        accent="#e11d48"
+        padding="none"
+        hover
+        scrollable
+      >
+        <DataTable
+          bare
+          columns={clientColumns}
+          rows={metrics?.topInterestedClients ?? []}
+          rowKey={r => r.leadId}
+          emptyMessage="No positive-sentiment calls yet — interested clients will appear here as calls are analyzed."
+        />
+      </Widget>
+
+      {/* ── Row 4: Gemini Strategic Advisory ── */}
+      <Widget
+        colSpan={12}
+        title="Gemini Strategic Advisory Engine"
+        subtitle="Real-time AI portfolio analysis generated dynamically based on active CRM pipeline leads"
+        icon={Sparkles}
+        accent="#2563eb"
+        action={
+          <span className="flex items-center gap-1.5 text-xs font-medium text-emerald-500">
+            <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
+            Advisor Online
+          </span>
+        }
+        padding="md"
+        className="theme-panel border relative overflow-hidden"
+      >
+        {/* Glow */}
+        <div className="absolute -bottom-12 -right-12 w-64 h-64 bg-blue-600/10 rounded-full blur-3xl pointer-events-none" />
+
+        <div className="relative z-10 space-y-5">
+          {/* AI insights body */}
+          {loadingInsights ? (
+            <div className="space-y-2.5 py-2">
+              <div className="h-3.5 rounded-md animate-pulse w-3/4" style={{ background: 'var(--panel-surface)' }} />
+              <div className="h-3.5 rounded-md animate-pulse w-5/6" style={{ background: 'var(--panel-surface)' }} />
+              <div className="h-3.5 rounded-md animate-pulse w-1/2" style={{ background: 'var(--panel-surface)' }} />
             </div>
           ) : (
-            <div className="py-8 text-center text-sm text-slate-400">
-              No positive-sentiment calls yet — interested clients will show up here as calls are analyzed.
+            <div
+              className="leading-relaxed font-mono text-xs p-5 rounded-xl"
+              style={{ color: 'var(--panel-muted)', background: 'var(--panel-surface)', border: '1px solid var(--panel-border)' }}
+            >
+              {insights && insightsDegraded && (
+                <div className="mb-3 flex items-center gap-1.5 text-amber-500 bg-amber-50 border border-amber-200 rounded px-2 py-1 font-sans font-semibold not-italic text-xs">
+                  ⚠ Estimated — AI analysis temporarily unavailable, showing a generic brief
+                </div>
+              )}
+              <span style={{ color: 'var(--panel-text)' }}>
+                {insights || 'Strategic advice database is empty. Click "Refresh AI Model" to prompt the advisor.'}
+              </span>
             </div>
           )}
-        </div>
 
-        {/* Gemini Strategic Advisory Desk (Styled exactly like Bento AI Calling Monitor) */}
-        <div className="lg:col-span-12 col-span-12 bg-slate-900 text-white rounded-2xl p-6 border border-slate-800 shadow-xl relative overflow-hidden">
-          {/* Background Gradient Glowing Ball */}
-          <div className="absolute -bottom-12 -right-12 w-64 h-64 bg-blue-600/10 rounded-full blur-3xl"></div>
-
-          <div className="relative z-10 flex flex-col h-full">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-white/5 pb-4 mb-4">
-              <div>
-                <h4 className="text-lg font-bold text-slate-100 font-display">Gemini Strategic Advisory Engine</h4>
-                <p className="text-slate-400 text-xs">
-                  Real-time AI portfolio analysis generated dynamically based on active CRM pipeline leads
-                </p>
-              </div>
-              <div className="flex items-center gap-2 shrink-0">
-                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-                <span className="text-xs font-medium text-emerald-400">Advisor Online</span>
-              </div>
+          {/* Live metrics row */}
+          <div className="grid grid-cols-3 gap-4 pt-4" style={{ borderTop: '1px solid var(--panel-border)' }}>
+            <div className="rounded-xl p-3" style={{ background: 'var(--panel-surface)' }}>
+              <p className="text-[10px] uppercase tracking-wider font-mono" style={{ color: 'var(--panel-muted)' }}>Calls Today</p>
+              <p className="text-lg font-bold mt-1" style={{ color: 'var(--panel-text)' }}>{metrics?.callsToday ?? 0}</p>
             </div>
-
-            {loadingInsights ? (
-              <div className="space-y-3 py-4">
-                <div className="h-4 bg-slate-800 rounded-md animate-pulse w-3/4"></div>
-                <div className="h-4 bg-slate-800 rounded-md animate-pulse w-5/6"></div>
-                <div className="h-4 bg-slate-800 rounded-md animate-pulse w-1/2"></div>
-              </div>
-            ) : (
-              <div className="text-sm text-slate-300 leading-relaxed font-sans whitespace-pre-line bg-white/5 p-5 rounded-xl border border-white/5 font-mono text-xs">
-                {insights && insightsDegraded && (
-                  <div title="Gemini was unavailable — this brief is a generic placeholder, not a real analysis of your data" className="mb-3 flex items-center gap-1 text-amber-400 bg-amber-500/10 border border-amber-500/30 rounded px-2 py-1 font-sans font-semibold not-italic">
-                    ⚠ Estimated — AI analysis temporarily unavailable, showing a generic brief
-                  </div>
-                )}
-                {insights || 'Strategic advice database is empty. Click "Refresh AI Model" to prompt the advisor.'}
-              </div>
-            )}
-
-            {/* Real live calling metrics */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-6 pt-4 border-t border-white/5">
-              <div className="bg-white/5 rounded-xl p-3">
-                <p className="text-[10px] text-slate-400 uppercase tracking-wider font-mono">Calls Today</p>
-                <p className="text-lg font-bold text-slate-100 mt-1">{metrics?.callsToday ?? 0}</p>
-              </div>
-              <div className="bg-white/5 rounded-xl p-3">
-                <p className="text-[10px] text-slate-400 uppercase tracking-wider font-mono">Average Sentiment</p>
-                <p className="text-lg font-bold text-emerald-400 mt-1">
-                  {metrics?.positiveSentimentPct != null ? `Positive (${metrics.positiveSentimentPct}%)` : 'No data yet'}
-                </p>
-              </div>
-              <div className="bg-white/5 rounded-xl p-3">
-                <p className="text-[10px] text-slate-400 uppercase tracking-wider font-mono">Active Campaigns</p>
-                <p className="text-lg font-bold text-blue-400 truncate mt-1">
-                  {activeCampaignsCount}
-                </p>
-              </div>
+            <div className="rounded-xl p-3" style={{ background: 'var(--panel-surface)' }}>
+              <p className="text-[10px] uppercase tracking-wider font-mono" style={{ color: 'var(--panel-muted)' }}>Average Sentiment</p>
+              <p className="text-lg font-bold text-emerald-500 mt-1">
+                {metrics?.positiveSentimentPct != null ? `Positive (${metrics.positiveSentimentPct}%)` : 'No data yet'}
+              </p>
+            </div>
+            <div className="rounded-xl p-3" style={{ background: 'var(--panel-surface)' }}>
+              <p className="text-[10px] uppercase tracking-wider font-mono" style={{ color: 'var(--panel-muted)' }}>Active Campaigns</p>
+              <p className="text-lg font-bold text-blue-500 mt-1">{activeCampaignsCount}</p>
             </div>
           </div>
         </div>
-      </div>
-    </div>
+      </Widget>
+    </PageShell>
   );
 }

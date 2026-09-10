@@ -52,6 +52,7 @@ function extractUser(kc: KeycloakType): AuthUser {
 
   // Map Keycloak roles to the app's UserRole type
   const ROLE_MAP: Record<string, string> = {
+    'platform-admin':      'Super Admin',
     'super-admin':         'Super Admin',
     'org-admin':           'Organization Admin',
     'sales-manager':       'Sales Manager',

@@ -35,12 +35,31 @@ export interface QuestionFlowEdge {
   label?: string;
 }
 
+export type VariableDataType =
+  | 'string'
+  | 'number'
+  | 'boolean'
+  | 'date'
+  | 'array'
+  | 'object';
+
+export interface WorkflowVariable {
+  id: string;
+  name: string;
+  dataType: VariableDataType;
+  defaultValue?: string;
+  description?: string;
+  /** Nested child variables — only valid when dataType is 'object' */
+  children?: WorkflowVariable[];
+}
+
 export interface QuestionFlow {
   id: string;
   name: string;
   description?: string;
   nodes: QuestionFlowNode[];
   edges: QuestionFlowEdge[];
+  variables?: WorkflowVariable[];
   active: boolean;
   createdAt: string;
   updatedAt: string;

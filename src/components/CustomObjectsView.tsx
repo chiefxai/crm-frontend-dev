@@ -1,7 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import { Plus, X, ChevronRight, Trash2, Boxes, Loader2, Search, Upload, Pencil, LayoutGrid, List } from 'lucide-react';
 import { apiFetch } from '../lib/api';
-import PageHeader from './PageHeader';
+import PageShell from './ui/PageShell';
+import Widget from './ui/Widget';
+import Modal from './ui/Modal';
 
 interface ObjectField {
   id: string;
@@ -293,40 +295,39 @@ export default function CustomObjectsView() {
 
   if (objects.length === 0) {
     return (
-      <div className="p-8 font-sans">
-        <PageHeader title="Contacts" subtitle="Custom pipelines for your business, beyond lending." />
-        <div className="px-8 flex flex-col items-center justify-center py-20 text-center bg-white border border-slate-200 rounded-2xl mx-8">
+      <PageShell title="Contacts" subtitle="Custom pipelines for your business, beyond lending." layout="fill">
+        <div className="flex flex-col items-center justify-center py-20 text-center">
           <Boxes className="h-10 w-10 text-slate-300 mb-3" />
           <p className="text-sm text-slate-500 max-w-sm">
             No custom objects are configured for this organization. These are seeded automatically based on the industry chosen at signup (Real Estate, Healthcare, Education, E-commerce, Automotive, Field Services).
           </p>
         </div>
-      </div>
+      </PageShell>
     );
   }
 
   return (
-    <div className="font-sans h-full flex flex-col">
-      <PageHeader
-        title={selectedObject?.label || 'Contacts'}
-        subtitle={selectedObject?.description || undefined}
-        action={
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => { setBulkText(''); setBulkResult(null); setShowBulkModal(true); }}
-              className="flex items-center gap-1.5 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 text-sm font-medium px-4 py-2 rounded-xl transition-colors"
-            >
-              <Upload className="h-4 w-4" /> Bulk Upload
-            </button>
-            <button
-              onClick={openCreateModal}
-              className="flex items-center gap-1.5 bg-blue-600 hover:bg-blue-500 text-white text-sm font-medium px-4 py-2 rounded-xl transition-colors"
-            >
-              <Plus className="h-4 w-4" /> New {selectedObject?.label.replace(/s$/, '')}
-            </button>
-          </div>
-        }
-      />
+    <PageShell
+      title={selectedObject?.label || 'Contacts'}
+      subtitle={selectedObject?.description || undefined}
+      layout="fill"
+      action={
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => { setBulkText(''); setBulkResult(null); setShowBulkModal(true); }}
+            className="flex items-center gap-1.5 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 text-sm font-medium px-4 py-2 rounded-xl transition-colors"
+          >
+            <Upload className="h-4 w-4" /> Bulk Upload
+          </button>
+          <button
+            onClick={openCreateModal}
+            className="flex items-center gap-1.5 bg-blue-600 hover:bg-blue-500 text-white text-sm font-medium px-4 py-2 rounded-xl transition-colors"
+          >
+            <Plus className="h-4 w-4" /> New {selectedObject?.label.replace(/s$/, '')}
+          </button>
+        </div>
+      }
+    >
 
       {objects.length > 1 && (
         <div className="px-8 flex gap-2 mb-4">
@@ -393,7 +394,7 @@ export default function CustomObjectsView() {
             })}
           </div>
         ) : (
-          <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+          <Widget padding="none">
             <table className="w-full text-left text-xs">
               <thead>
                 <tr className="bg-slate-50/75 border-b border-slate-100 text-[10px] font-bold text-slate-400 uppercase tracking-widest">
@@ -422,46 +423,45 @@ export default function CustomObjectsView() {
                 )}
               </tbody>
             </table>
-          </div>
+          </Widget>
         )}
       </div>
 
       {showForm && selectedObject && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md max-h-[85vh] overflow-y-auto">
-            <div className="flex items-center justify-between p-5 border-b border-slate-100">
-              <h3 className="font-semibold text-slate-800">{editingRecord ? 'Edit' : 'New'} {selectedObject.label.replace(/s$/, '')}</h3>
-              <button onClick={() => { setShowForm(false); setEditingRecord(null); }}><X className="h-4 w-4 text-slate-400" /></button>
-            </div>
-            <form onSubmit={handleSaveRecord} className="p-5 space-y-4">
-              {selectedObject.fields.map((field) => (
-                <div key={field.key}>
-                  <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5">
-                    {field.label} {field.required && <span className="text-rose-500">*</span>}
-                  </label>
-                  <FieldInput
-                    field={field}
-                    value={formData[field.key]}
-                    onChange={(v) => setFormData((prev) => ({ ...prev, [field.key]: v }))}
-                  />
-                </div>
-              ))}
-              <button type="submit" className="w-full bg-blue-600 hover:bg-blue-500 text-white text-sm font-medium py-2.5 rounded-xl transition-colors">
-                {editingRecord ? 'Save Changes' : 'Create'}
-              </button>
-            </form>
-          </div>
-        </div>
+        <Modal
+          open
+          onClose={() => { setShowForm(false); setEditingRecord(null); }}
+          title={`${editingRecord ? 'Edit' : 'New'} ${selectedObject.label.replace(/s$/, '')}`}
+          maxWidth="max-w-md"
+        >
+          <form onSubmit={handleSaveRecord} className="space-y-4">
+            {selectedObject.fields.map((field) => (
+              <div key={field.key}>
+                <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5">
+                  {field.label} {field.required && <span className="text-rose-500">*</span>}
+                </label>
+                <FieldInput
+                  field={field}
+                  value={formData[field.key]}
+                  onChange={(v) => setFormData((prev) => ({ ...prev, [field.key]: v }))}
+                />
+              </div>
+            ))}
+            <button type="submit" className="w-full bg-blue-600 hover:bg-blue-500 text-white text-sm font-medium py-2.5 rounded-xl transition-colors">
+              {editingRecord ? 'Save Changes' : 'Create'}
+            </button>
+          </form>
+        </Modal>
       )}
 
       {showBulkModal && selectedObject && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[85vh] overflow-y-auto">
-            <div className="flex items-center justify-between p-5 border-b border-slate-100">
-              <h3 className="font-semibold text-slate-800">Bulk Upload {selectedObject.label}</h3>
-              <button onClick={() => setShowBulkModal(false)}><X className="h-4 w-4 text-slate-400" /></button>
-            </div>
-            <div className="p-5 space-y-3">
+        <Modal
+          open
+          onClose={() => setShowBulkModal(false)}
+          title={`Bulk Upload ${selectedObject.label}`}
+          maxWidth="max-w-2xl"
+        >
+          <div className="space-y-3">
               <p className="text-xs text-slate-500">
                 Paste comma-separated data with a header row. Column names should match this object's field keys or labels: <span className="font-mono text-slate-700">{selectedObject.fields.map((f) => f.key).join(', ')}</span>
               </p>
@@ -504,10 +504,9 @@ export default function CustomObjectsView() {
               >
                 {bulkUploading ? 'Uploading…' : `Upload ${bulkPreview.rows.length || ''} Record${bulkPreview.rows.length === 1 ? '' : 's'}`}
               </button>
-            </div>
           </div>
-        </div>
+        </Modal>
       )}
-    </div>
+    </PageShell>
   );
 }

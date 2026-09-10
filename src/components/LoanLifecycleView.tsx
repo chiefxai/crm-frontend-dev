@@ -15,6 +15,8 @@ import {
   Calendar,
   X
 } from 'lucide-react';
+import PageShell from './ui/PageShell';
+import Widget from './ui/Widget';
 import { Loan, LoanDocument, Lead } from '../types';
 
 interface LoanLifecycleViewProps {
@@ -161,28 +163,19 @@ export default function LoanLifecycleView({
   };
 
   return (
-    <div id="loan-lifecycle-pipeline" className="p-8 space-y-6 overflow-y-auto h-screen w-full font-sans">
-      {/* Title Header */}
-      <div>
-        <h2 className="text-2xl font-bold font-display tracking-tight text-slate-800">
-          Underwriting & Loan Lifecycle
-        </h2>
-        <p className="text-sm text-slate-500 mt-1">
-          Audit active credit applications, verify borrower income documents via AI OCR, and log monthly EMI drafts.
-        </p>
-      </div>
-
+    <PageShell
+      title="Underwriting & Loan Lifecycle"
+      subtitle="Audit active credit applications, verify borrower income documents via AI OCR, and log monthly EMI drafts."
+      layout="fill"
+    >
+      <div className="overflow-y-auto px-8 pb-8 pt-6 space-y-6">
       {/* Main split grid */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         {/* Left Side: Loan Application Pool */}
         <div className="lg:col-span-2 space-y-4">
-          <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
-            <div className="p-5 border-b border-slate-100 flex items-center justify-between">
-              <h4 className="text-sm font-bold text-slate-800 font-display">
-                Active Loan Portfolio
-              </h4>
-              <span className="text-xs font-semibold text-slate-400 uppercase tracking-widest">Active: {loans.length}</span>
-            </div>
+          <Widget title="Active Loan Portfolio" padding="none"
+            action={<span className="text-xs font-semibold text-slate-400 uppercase tracking-widest">Active: {loans.length}</span>}
+          >
 
             <div className="divide-y divide-slate-100">
               {loans.map((loan) => {
@@ -227,24 +220,15 @@ export default function LoanLifecycleView({
                 );
               })}
             </div>
-          </div>
+          </Widget>
         </div>
 
         {/* Right Side: Underwriter panel */}
         <div className="space-y-6">
           {selectedLoan ? (
-            <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm space-y-6">
-              <div className="flex items-start justify-between border-b border-slate-100 pb-3">
-                <div className="space-y-1">
-                  <span className="text-[9px] font-mono text-blue-600 uppercase tracking-widest font-bold">
-                    Origination Desk
-                  </span>
-                  <h4 className="text-sm font-bold text-slate-800">{selectedLoan.leadName}</h4>
-                </div>
-                <span className="text-xs font-mono text-slate-400 bg-slate-50 px-2 py-1 rounded">
-                  {selectedLoan.id}
-                </span>
-              </div>
+            <Widget title="Origination Desk" subtitle={selectedLoan?.leadName} padding="md"
+              action={<span className="text-xs font-mono text-slate-400 bg-slate-50 px-2 py-1 rounded">{selectedLoan?.id}</span>}
+            >
 
               {/* Pipeline Step Navigator */}
               <div className="space-y-2">
@@ -423,12 +407,13 @@ export default function LoanLifecycleView({
                   ))}
                 </div>
               </div>
-            </div>
+            </Widget>
           ) : (
             <p className="text-xs text-slate-400 italic text-center my-auto">Select any borrower portfolio item on the left to begin underwriter actions.</p>
           )}
         </div>
       </div>
-    </div>
+      </div>
+    </PageShell>
   );
 }

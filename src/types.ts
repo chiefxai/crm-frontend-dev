@@ -152,8 +152,9 @@ export interface TeamMember {
   phone?: string;
   role: UserRole;
   status: 'Active' | 'Inactive';
-  performanceScore: number; // 0-100 rating
+  performanceScore: number;
   assignedLeadsCount: number;
+  featureFlags?: string[];
 }
 
 export interface OrganizationSettings {

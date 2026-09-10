@@ -14,6 +14,9 @@ import {
   CheckCircle,
   X
 } from 'lucide-react';
+import PageShell from './ui/PageShell';
+import Widget from './ui/Widget';
+import Modal from './ui/Modal';
 import { Campaign, CampaignStatus, Workflow } from '../types';
 
 interface CampaignViewProps {
@@ -130,13 +133,11 @@ export default function CampaignView({
   };
 
   return (
-    <div id="campaign-launcher-dock" className="p-8 space-y-6 overflow-y-auto h-screen w-full font-sans">
-      {/* Title Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div>
-          <h2 className="text-2xl font-bold font-display tracking-tight text-slate-900">AI Campaign Outbound Dock</h2>
-          <p className="text-sm text-slate-500 mt-1">Initialize automated call-center loops, track live connection funnels, and trigger dialers.</p>
-        </div>
+    <PageShell
+      title="AI Campaign Outbound Dock"
+      subtitle="Initialize automated call-center loops, track live connection funnels, and trigger dialers."
+      layout="fill"
+      action={
         <button
           onClick={() => setIsLaunchModalOpen(true)}
           className="flex items-center px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white text-sm font-semibold rounded-xl shadow-md shadow-blue-600/10 transition-all cursor-pointer"
@@ -144,17 +145,16 @@ export default function CampaignView({
           <FolderPlus className="h-4.5 w-4.5 mr-1.5" />
           Launch AI Campaign
         </button>
-      </div>
-
+      }
+    >
+      <div className="overflow-y-auto px-8 pb-8 pt-6 space-y-6">
       {/* Campaigns list & Telemetry split */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         {/* Left Side: Campaign list */}
         <div className="lg:col-span-2 space-y-4">
-          <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
-            <div className="p-5 border-b border-slate-100 flex items-center justify-between">
-              <h4 className="text-sm font-bold text-slate-800 font-display">Active Campaigns Portfolio</h4>
-              <span className="text-xs font-semibold text-slate-400 uppercase tracking-widest">Total: {campaigns.length}</span>
-            </div>
+          <Widget title="Active Campaigns Portfolio" padding="none"
+            action={<span className="text-xs font-semibold text-slate-400 uppercase tracking-widest">Total: {campaigns.length}</span>}
+          >
 
             <div className="divide-y divide-slate-100">
               {campaigns.map((camp) => {
@@ -231,7 +231,7 @@ export default function CampaignView({
                 );
               })}
             </div>
-          </div>
+          </Widget>
         </div>
 
         {/* Right Side: Telemetry logs & dials panel */}
@@ -297,18 +297,8 @@ export default function CampaignView({
 
       {/* Launch Campaign Modal */}
       {isLaunchModalOpen && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center z-50 p-4">
-          <div className="w-full max-w-md bg-white rounded-2xl shadow-2xl border border-slate-100 overflow-hidden animate-in zoom-in-95 duration-150">
-            <div className="p-6 border-b border-slate-100 bg-slate-50 flex items-center justify-between">
-              <h3 className="text-md font-bold text-slate-800 font-display">Launch Outbound AI Campaign</h3>
-              <button
-                onClick={() => setIsLaunchModalOpen(false)}
-                className="p-1 hover:bg-slate-200 rounded-full text-slate-400"
-              >
-                <X className="h-5 w-5" />
-              </button>
-            </div>
-            <form onSubmit={handleLaunchCampaign} className="p-6 space-y-4">
+        <Modal open onClose={() => setIsLaunchModalOpen(false)} title="Launch Outbound AI Campaign" maxWidth="max-w-md">
+            <form onSubmit={handleLaunchCampaign} className="space-y-4">
               <div>
                 <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Campaign Identifier</label>
                 <input
@@ -356,9 +346,9 @@ export default function CampaignView({
                 Initialize Dialer Port
               </button>
             </form>
-          </div>
-        </div>
+        </Modal>
       )}
-    </div>
+      </div>
+    </PageShell>
   );
 }

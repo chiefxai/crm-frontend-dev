@@ -22,6 +22,8 @@ import {
 } from 'lucide-react';
 import { OrganizationSettings } from '../types';
 import { motion } from 'motion/react';
+import PageShell from './ui/PageShell';
+import Widget from './ui/Widget';
 
 interface CompanyProfileFieldConfig {
   key: string;
@@ -75,11 +77,15 @@ let cachedProfileConfig: CompanyProfileConfig | null = null;
 interface CompanyProfileViewProps {
   orgSettings: OrganizationSettings;
   setOrgSettings: React.Dispatch<React.SetStateAction<OrganizationSettings>>;
+  activeSubTab?: 'profile' | 'legal' | 'channels' | 'compliance';
+  setActiveSubTab?: (sub: string) => void;
 }
 
 export default function CompanyProfileView({
   orgSettings,
-  setOrgSettings
+  setOrgSettings,
+  activeSubTab: activeSubTabProp,
+  setActiveSubTab: setActiveSubTabProp,
 }: CompanyProfileViewProps) {
   // Which fields/labels/tag-lists to show — differs per org industry.
   // formData keeps generic internal field names (`nmlsId`, `defaultInterestRate`,
@@ -144,7 +150,13 @@ export default function CompanyProfileView({
   const [newSector, setNewSector] = useState('');
 
   // UI state
-  const [activeSubTab, setActiveSubTab] = useState<'profile' | 'legal' | 'channels' | 'compliance'>('profile');
+  // Use prop-controlled sub-tab when provided (driven by sidebar), fall back to internal state.
+  const [_internalSubTab, _setInternalSubTab] = useState<'profile' | 'legal' | 'channels' | 'compliance'>('profile');
+  const activeSubTab = (activeSubTabProp as 'profile' | 'legal' | 'channels' | 'compliance') || _internalSubTab;
+  const setActiveSubTab = (v: string) => {
+    _setInternalSubTab(v as 'profile' | 'legal' | 'channels' | 'compliance');
+    setActiveSubTabProp?.(v);
+  };
   const [isSaving, setIsSaving] = useState(false);
   const [saveMessage, setSaveMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
@@ -294,20 +306,11 @@ export default function CompanyProfileView({
   };
 
   return (
-    <div id="company-profile-view" className="p-8 space-y-6 overflow-y-auto h-screen w-full font-sans">
-      {/* View Header */}
-      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-        <div>
-          <div className="flex items-center space-x-2">
-            <Building className="h-6 w-6 text-blue-600" />
-            <h2 className="text-2xl font-bold font-display tracking-tight text-slate-800">Company Information</h2>
-          </div>
-          <p className="text-sm text-slate-500 mt-1">
-            Configure your organization identity, legal registrations, operating {config.sectors.label.toLowerCase()}, and verify compliance criteria.
-          </p>
-        </div>
-
-        {/* Save Status Banner */}
+    <PageShell
+      title="Company Information"
+      subtitle={`Configure your organization identity, legal registrations, operating ${config.sectors.label.toLowerCase()}, and verify compliance criteria.`}
+      layout="fill"
+      action={
         <div className="flex items-center space-x-3">
           {saveMessage && (
             <motion.div
@@ -321,7 +324,6 @@ export default function CompanyProfileView({
               {saveMessage.text}
             </motion.div>
           )}
-
           <button
             onClick={() => handleSave()}
             disabled={isSaving}
@@ -340,7 +342,9 @@ export default function CompanyProfileView({
             )}
           </button>
         </div>
-      </div>
+      }
+    >
+      <div className="overflow-y-auto px-8 pb-8 pt-6 space-y-6">
 
       {/* Quick Stats Bento bar */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
@@ -400,47 +404,35 @@ export default function CompanyProfileView({
         </div>
       </div>
 
-      {/* Main Form Layout */}
-      <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
-        {/* Section selector tabs (left) */}
-        <div className="lg:col-span-1 bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex flex-col space-y-1.5 self-start">
-          <button
-            onClick={() => setActiveSubTab('profile')}
-            className={`w-full flex items-center px-4 py-2.5 rounded-xl text-xs font-bold uppercase tracking-wider transition-all cursor-pointer ${
-              activeSubTab === 'profile' ? 'bg-blue-600 text-white shadow-md shadow-blue-500/10' : 'text-slate-500 hover:bg-slate-50'
-            }`}
-          >
-            <Building2 className="h-4 w-4 mr-3" /> Identity & Brand
-          </button>
-          <button
-            onClick={() => setActiveSubTab('legal')}
-            className={`w-full flex items-center px-4 py-2.5 rounded-xl text-xs font-bold uppercase tracking-wider transition-all cursor-pointer ${
-              activeSubTab === 'legal' ? 'bg-blue-600 text-white shadow-md shadow-blue-500/10' : 'text-slate-500 hover:bg-slate-50'
-            }`}
-          >
-            <Award className="h-4 w-4 mr-3" /> Legal & Licenses
-          </button>
-          <button
-            onClick={() => setActiveSubTab('channels')}
-            className={`w-full flex items-center px-4 py-2.5 rounded-xl text-xs font-bold uppercase tracking-wider transition-all cursor-pointer ${
-              activeSubTab === 'channels' ? 'bg-blue-600 text-white shadow-md shadow-blue-500/10' : 'text-slate-500 hover:bg-slate-50'
-            }`}
-          >
-            <Globe className="h-4 w-4 mr-3" /> Support Channels
-          </button>
-          <button
-            onClick={() => setActiveSubTab('compliance')}
-            className={`w-full flex items-center px-4 py-2.5 rounded-xl text-xs font-bold uppercase tracking-wider transition-all cursor-pointer ${
-              activeSubTab === 'compliance' ? 'bg-blue-600 text-white shadow-md shadow-blue-500/10' : 'text-slate-500 hover:bg-slate-50'
-            }`}
-          >
-            <ShieldCheck className="h-4 w-4 mr-3" /> Compliance Check
-          </button>
-        </div>
-
-        {/* Form Container (right) */}
-        <div className="lg:col-span-3">
-          <form onSubmit={handleSave} className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-6">
+      {/* Main Form — navigation handled by sidebar */}
+      <Widget
+        padding="md"
+        title={
+          activeSubTab === 'profile' ? 'Identity & Commercial Branding'
+          : activeSubTab === 'legal' ? 'Regulatory Filings & Licensing'
+          : activeSubTab === 'channels' ? 'Communication Channels & Support Routing'
+          : 'Compliance Verification Suite'
+        }
+        subtitle={
+          activeSubTab === 'profile' ? 'Configure user-facing commercial credentials and portfolio limits.'
+          : activeSubTab === 'legal' ? 'Provide government-issued identifiers, licenses, and tax records.'
+          : activeSubTab === 'channels' ? 'Set up email, phone, and support contact routing.'
+          : 'Review and verify your organization\'s compliance criteria.'
+        }
+        icon={
+          activeSubTab === 'profile' ? Building2
+          : activeSubTab === 'legal' ? ShieldCheck
+          : activeSubTab === 'channels' ? Globe
+          : Award
+        }
+        accent={
+          activeSubTab === 'profile' ? '#2563eb'
+          : activeSubTab === 'legal' ? '#7c3aed'
+          : activeSubTab === 'channels' ? '#0891b2'
+          : '#059669'
+        }
+      >
+          <form onSubmit={handleSave} className="space-y-6">
             
             {/* SUBTAB 1: Profile & Identity */}
             {activeSubTab === 'profile' && (
@@ -449,11 +441,6 @@ export default function CompanyProfileView({
                 animate={{ opacity: 1, y: 0 }}
                 className="space-y-6"
               >
-                <div>
-                  <h3 className="text-base font-bold text-slate-800 font-display">Identity & Commercial Branding</h3>
-                  <p className="text-xs text-slate-400 mt-1">Configure user-facing commercial credentials and portfolio limits.</p>
-                </div>
-
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-1.5">
                     <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Legal Business Name</label>
@@ -619,11 +606,6 @@ export default function CompanyProfileView({
                 animate={{ opacity: 1, y: 0 }}
                 className="space-y-6"
               >
-                <div>
-                  <h3 className="text-base font-bold text-slate-800 font-display">Regulatory Filings & Licensing</h3>
-                  <p className="text-xs text-slate-400 mt-1">Provide legally binding numbers and officer designations required for financial audit trails.</p>
-                </div>
-
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-1.5">
                     <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide">{config.taxIdLabel}</label>
@@ -727,11 +709,6 @@ export default function CompanyProfileView({
                 animate={{ opacity: 1, y: 0 }}
                 className="space-y-6"
               >
-                <div>
-                  <h3 className="text-base font-bold text-slate-800 font-display">Communication Channels & Support Routing</h3>
-                  <p className="text-xs text-slate-400 mt-1">Specify outward-facing endpoints used in automated credit campaigns, SMS headers, and customer documents.</p>
-                </div>
-
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-1.5">
                     <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Corporate Website Domain</label>
@@ -799,11 +776,6 @@ export default function CompanyProfileView({
                 animate={{ opacity: 1, y: 0 }}
                 className="space-y-6"
               >
-                <div>
-                  <h3 className="text-base font-bold text-slate-800 font-display">Compliance Verification Suite</h3>
-                  <p className="text-xs text-slate-400 mt-1">Cross-examine business registration and licensing registries to qualify for high-volume automated underwriting pools.</p>
-                </div>
-
                 {/* Main Suite Panel */}
                 <div className="grid grid-cols-1 md:grid-cols-12 gap-6 bg-slate-50 p-6 rounded-2xl border border-slate-200">
                   <div className="md:col-span-4 space-y-4">
@@ -922,8 +894,8 @@ export default function CompanyProfileView({
             </div>
 
           </form>
-        </div>
+      </Widget>
       </div>
-    </div>
+    </PageShell>
   );
 }

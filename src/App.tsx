@@ -1,8 +1,11 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { apiFetch, getAuthToken, getApiBase } from './lib/api';
 import { COST_PER_MINUTE_INR_FALLBACK as COST_PER_MINUTE_INR } from './lib/pricing';
 import { loadFromStorage, saveToStorage } from './lib/storage';
 import { recordToLead, leadToRecordPatch, leadToRecordCreate } from './lib/objectContacts';
+import { fetchUserFlags, resetUserFlags, subscribe as subscribeFlags, isLoaded as flagsLoaded } from './features/feature-flags/userFlagsStore';
+import { TAB_TO_FLAG } from './features/feature-flags/registry';
 import {
   Lead,
   Workflow,
@@ -29,13 +32,14 @@ const EMPTY_ORG_SETTINGS: OrganizationSettings = {
 };
 
 // UI components imports
+import { useTheme } from './shared/theme/ThemeContext';
+import { Sun, Moon, Monitor, LogOut, ChevronDown } from 'lucide-react';
 import Sidebar from './components/Sidebar';
 import DashboardView from './components/DashboardView';
 import LeadManagementView from './components/LeadManagementView';
 import WorkflowsView from './features/workflows/WorkflowsView';
 import { QuestionFlow } from './features/workflows/types';
 import { useFeatureFlags } from './features/feature-flags/FeatureFlagContext';
-import ThemeToggle from './shared/theme/ThemeToggle';
 import CampaignView from './components/CampaignView';
 import DialerSimulator from './components/DialerSimulator';
 import LoanLifecycleView from './components/LoanLifecycleView';
@@ -52,14 +56,196 @@ import KnowledgeBaseView from './components/KnowledgeBaseView';
 import AuditLogView from './components/AuditLogView';
 import EnquiriesView from './components/EnquiriesView';
 import BillingView from './components/BillingView';
+import NotificationBell, { AppNotification } from './components/NotificationBell';
+
+// Debounced sync: collapses multiple rapid state changes into one POST.
+// Without this, setting 8 state vars at load triggers 8 simultaneous syncs.
+function useDebouncedSync(url: string, data: any, enabled: boolean, delay = 800) {
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    if (!enabled) return;
+    if (timer.current) clearTimeout(timer.current);
+    timer.current = setTimeout(() => {
+      apiFetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      }).catch(err => console.error(`Sync error ${url}:`, err));
+    }, delay);
+    return () => { if (timer.current) clearTimeout(timer.current); };
+  }, [data, enabled]);
+}
+
+// ── Profile dropdown (YouTube-style) ─────────────────────────────────────────
+interface ProfileMenuProps {
+  kcUser: { name?: string; email?: string; role?: string } | null;
+  dbRole: string | null;
+  logout: () => void;
+}
+
+const THEME_OPTIONS = [
+  { mode: 'light'  as const, icon: Sun,     label: 'Light'  },
+  { mode: 'dark'   as const, icon: Moon,    label: 'Dark'   },
+  { mode: 'system' as const, icon: Monitor, label: 'System' },
+];
+
+function ProfileMenu({ kcUser, dbRole, logout }: ProfileMenuProps) {
+  const { mode, setMode } = useTheme();
+  const [open, setOpen] = React.useState(false);
+  const ref = React.useRef<HTMLDivElement>(null);
+
+  React.useEffect(() => {
+    const h = (e: MouseEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false); };
+    document.addEventListener('mousedown', h);
+    return () => document.removeEventListener('mousedown', h);
+  }, []);
+
+  const displayName = kcUser?.name || kcUser?.email || '?';
+  const initials = displayName.split(' ').map((p: string) => p[0]).slice(0, 2).join('').toUpperCase();
+  const role = dbRole || kcUser?.role || '';
+
+  return (
+    <div ref={ref} className="relative">
+      {/* Avatar trigger */}
+      <button
+        onClick={() => setOpen(v => !v)}
+        className="flex items-center gap-2 pl-1 pr-2.5 py-1 rounded-full transition-colors cursor-pointer group"
+        style={{ background: 'transparent' }}
+        onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'var(--bg-subtle)'; }}
+        onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'transparent'; }}
+        title="Account"
+      >
+        <span className="h-8 w-8 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white text-xs font-bold select-none shrink-0">
+          {initials}
+        </span>
+        <ChevronDown className={`h-3.5 w-3.5 text-slate-400 transition-transform ${open ? 'rotate-180' : ''}`} />
+      </button>
+
+      {/* Dropdown panel */}
+      {open && (
+        <div
+          className="absolute right-0 top-full mt-2 w-72 rounded-2xl shadow-2xl overflow-hidden z-[200]"
+          style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)' }}
+        >
+          {/* Identity section */}
+          <div className="px-5 pt-5 pb-4" style={{ borderBottom: '1px solid var(--border)' }}>
+            <div className="flex items-center gap-3">
+              <span className="h-12 w-12 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white text-base font-bold select-none shrink-0">
+                {initials}
+              </span>
+              <div className="min-w-0">
+                <p className="text-sm font-semibold truncate leading-snug" style={{ color: 'var(--text-primary)' }}>
+                  {kcUser?.name || 'Unknown'}
+                </p>
+                <p className="text-xs truncate" style={{ color: 'var(--text-muted)' }}>{kcUser?.email || ''}</p>
+                {role && (
+                  <span className="inline-block mt-1 text-[10px] font-bold tracking-wide uppercase bg-blue-50 text-blue-700 px-2 py-0.5 rounded-full">
+                    {role}
+                  </span>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* Theme section */}
+          <div className="px-4 py-3" style={{ borderBottom: '1px solid var(--border)' }}>
+            <p className="text-[10px] font-bold uppercase tracking-widest mb-2 px-1" style={{ color: 'var(--text-muted)' }}>Appearance</p>
+            <div className="flex gap-1">
+              {THEME_OPTIONS.map(({ mode: m, icon: Icon, label }) => (
+                <button
+                  key={m}
+                  onClick={() => setMode(m)}
+                  className="flex-1 flex flex-col items-center gap-1 py-2 rounded-xl text-[11px] font-medium transition-colors cursor-pointer"
+                  style={mode === m
+                    ? { background: '#2563eb', color: '#fff' }
+                    : { background: 'transparent', color: 'var(--text-secondary)' }
+                  }
+                  onMouseEnter={e => { if (mode !== m) (e.currentTarget as HTMLElement).style.background = 'var(--bg-subtle)'; }}
+                  onMouseLeave={e => { if (mode !== m) (e.currentTarget as HTMLElement).style.background = 'transparent'; }}
+                >
+                  <Icon className="h-4 w-4" />
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Sign out */}
+          <div className="px-3 py-2">
+            <button
+              onClick={() => { setOpen(false); logout(); }}
+              className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-rose-500 transition-colors cursor-pointer"
+              onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'rgba(239,68,68,0.08)'; }}
+              onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'transparent'; }}
+            >
+              <LogOut className="h-4 w-4" />
+              Sign out
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 
 export default function App() {
   // Auth state comes from Keycloak — no manual isAuthenticated flag needed.
-  const { user: kcUser, logout } = useAuth();
+  const { user: kcUser, logout, getToken } = useAuth();
+  const navigate = useNavigate();
+  const location = useLocation();
 
-  const [activeTab, setActiveTab] = useState<string>(() =>
-    loadFromStorage<string>('chiefx_tab', 'dashboard')
+  // Slug ↔ tab-ID mappings — URL uses human-readable slugs, internal code uses short IDs.
+  const TAB_TO_SLUG: Record<string, string> = {
+    dashboard:     'executive-dashboard',
+    leads:         'lead-crm',
+    contacts:      'contact-directory',
+    workflows:     'workflow-builder',
+    campaigns:     'ai-campaigns',
+    dialer:        'voice-simulator',
+    'call-logs':   'call-logs',
+    reports:       'reports',
+    inbox:         'unified-inbox',
+    'agent-studio':'agent-studio',
+    compliance:    'compliance',
+    knowledge:     'knowledge-base',
+    enquiries:     'enquiries',
+    'audit-log':   'audit-log',
+    billing:       'billing',
+    loans:         'loan-lifecycle',
+    company:       'company-profile',
+    settings:      'administration',
+  };
+  const SLUG_TO_TAB: Record<string, string> = Object.fromEntries(
+    Object.entries(TAB_TO_SLUG).map(([tab, slug]) => [slug, tab])
   );
+
+  // Derive active tab from URL slug — /lead-crm → "leads", / → "dashboard"
+  // Sub-tabs for company-profile and administration are encoded as the second segment:
+  // /company-profile/legal → tab=company, subTab=legal
+  const segments = location.pathname.split('/').filter(Boolean);
+  const slug = segments[0] || 'executive-dashboard';
+  const subSlug = segments[1] || '';
+  const activeTab = SLUG_TO_TAB[slug] || 'dashboard';
+
+  // Sub-tab defaults per parent tab
+  const DEFAULT_SUB_TAB: Record<string, string> = {
+    company: 'profile',
+    settings: 'numbers',
+  };
+  const activeSubTab = subSlug || DEFAULT_SUB_TAB[activeTab] || '';
+
+  const setActiveTab = (tab: string) => {
+    const s = TAB_TO_SLUG[tab] || tab;
+    navigate(s === 'executive-dashboard' ? '/' : `/${s}`, { replace: false });
+  };
+
+  const setActiveSubTab = (subTab: string, parentTab?: string) => {
+    const parent = parentTab ?? activeTab;
+    const parentSlug = TAB_TO_SLUG[parent] || parent;
+    navigate(`/${parentSlug}/${subTab}`, { replace: false });
+  };
 
   // CRM DB states — default to empty, NOT the built-in demo/seed data.
   // These get populated for real from the backend right after login (see
@@ -110,6 +296,18 @@ export default function App() {
   const [primaryObject, setPrimaryObject] = useState<{ key: string; stages: { id: string; key: string; label: string }[]; fields: { id: string; key: string; label: string; type: string; required?: boolean }[] } | null>(null);
 
   const [hasLoaded, setHasLoaded] = useState<boolean>(false);
+  // DB membership role — authoritative once /api/settings/me resolves.
+  const [dbRole, setDbRole] = useState<string>('');
+  const [flagsReady, setFlagsReady] = useState<boolean>(flagsLoaded);
+  const [grantedFlags, setGrantedFlags] = useState<string[]>([]);
+  useEffect(() => {
+    return subscribeFlags((granted, loaded, role) => {
+      if (role) setDbRole(role);
+      if (loaded) { setFlagsReady(true); setGrantedFlags(granted); }
+    });
+  }, []);
+  const syncedLeadIds = useRef(new Set<string>());
+  const previousLeadsRef = useRef<Lead[]>([]);
   const [questionFlows, setQuestionFlows] = useState<QuestionFlow[]>(() =>
     loadFromStorage<QuestionFlow[]>('chiefx_question_flows', [])
   );
@@ -120,10 +318,43 @@ export default function App() {
   // cleared when it completes. Not a simulation: this only fires for real
   // Twilio/Vobiz call events from server.js/vobizProxy.js/twilioProxy.js.
   const [liveCallBanner, setLiveCallBanner] = useState<{ message: string; startedAt: number } | null>(null);
+  const [notifications, setNotifications] = useState<AppNotification[]>([]);
+
+  const pushNotification = (type: string, message: string) => {
+    setNotifications(prev => [
+      { id: `${Date.now()}-${Math.random().toString(36).slice(2)}`, type, message, timestamp: Date.now(), read: false },
+      ...prev.slice(0, 49), // keep last 50
+    ]);
+  };
 
   // Load database content once Keycloak has authenticated the user.
   useEffect(() => {
     if (!kcUser) return;
+
+    // Clear all CRM localStorage when the logged-in user changes so a new
+    // org admin never sees data that belonged to a previous browser session.
+    const lastUserId = localStorage.getItem('chiefx_last_user_id');
+    if (lastUserId !== kcUser.id) {
+      // Different user — clear all CRM state and stale feature-flag cache.
+      const CRM_KEYS = [
+        'chiefx_leads', 'chiefx_workflows', 'chiefx_campaigns',
+        'chiefx_calllogs', 'chiefx_loans', 'chiefx_numbers',
+        'chiefx_team', 'chiefx_org', 'chiefx_dialer_tasks', 'chiefx_question_flows',
+        'chiefx_feature_flags',
+      ];
+      CRM_KEYS.forEach(k => localStorage.removeItem(k));
+      setLeads([]); setWorkflows([]); setCampaigns([]); setCallLogs([]);
+      setLoans([]); setVirtualNumbers([]); setTeamMembers([]);
+      setOrgSettings(EMPTY_ORG_SETTINGS); setDialerTasks([]); setQuestionFlows([]);
+      // resetUserFlags / setDbRole called unconditionally below
+    }
+    localStorage.setItem('chiefx_last_user_id', kcUser.id);
+
+    // Always reset and re-fetch flags on every auth cycle so the sidebar reflects
+    // the current DB grants, not a stale in-memory cache from a previous render.
+    resetUserFlags();
+    setDbRole('');
+    fetchUserFlags();
     setHasLoaded(false);
     const loadBackendData = async () => {
       try {
@@ -139,14 +370,14 @@ export default function App() {
           resDialerTasks,
           resBilling
         ] = await Promise.all([
-          apiFetch('/api/leads').then(r => r.json()),
-          apiFetch('/api/workflows').then(r => r.json()),
-          apiFetch('/api/campaigns').then(r => r.json()),
-          apiFetch('/api/call-logs').then(r => r.json()),
-          apiFetch('/api/loans').then(r => r.json()),
-          apiFetch('/api/settings/numbers').then(r => r.json()),
-          apiFetch('/api/settings/team').then(r => r.json()),
-          apiFetch('/api/settings/org').then(r => r.json()),
+          apiFetch('/api/leads').then(r => r.json()).catch(() => null),
+          apiFetch('/api/workflows').then(r => r.json()).catch(() => null),
+          apiFetch('/api/campaigns').then(r => r.json()).catch(() => null),
+          apiFetch('/api/call-logs').then(r => r.json()).catch(() => null),
+          apiFetch('/api/loans').then(r => r.json()).catch(() => null),
+          apiFetch('/api/settings/numbers').then(r => r.json()).catch(() => null),
+          apiFetch('/api/settings/team').then(r => r.json()).catch(() => null),
+          apiFetch('/api/settings/org').then(r => r.json()).catch(() => null),
           // Falls back to null (not []) on failure so a transient error here
           // can't be mistaken for "this org genuinely has zero tasks".
           apiFetch('/api/dialer-tasks').then(r => r.json()).catch(() => null),
@@ -207,49 +438,58 @@ export default function App() {
   // Live call events — SSE stream, authenticated via ?token= query param.
   useEffect(() => {
     if (!kcUser || !hasLoaded) return;
-    const token = getAuthToken();
-    if (!token) return;
+    let source: EventSource | null = null;
+    let closed = false;
 
-    const source = new EventSource(`${getApiBase()}/api/logs-stream?token=${encodeURIComponent(token)}`);
-    source.onmessage = (event) => {
+    (async () => {
+      let token: string;
       try {
-        const data = JSON.parse(event.data);
-        if (data.type === 'call_started') {
-          setLiveCallBanner({ message: `Incoming call from ${data.callerNumber || 'unknown number'}…`, startedAt: Date.now() });
-        } else if (data.type === 'call_completed') {
-          setLiveCallBanner(null);
-          if (data.callLog) {
-            setCallLogs((prev) => [data.callLog, ...prev]);
-          }
-        }
-      } catch {
-        // non-JSON keepalive/init messages — ignore
+        token = await getToken(); // always-fresh token via Keycloak refresh
+      } catch (err) {
+        console.warn('SSE: failed to refresh token, skipping stream creation', err);
+        return;
       }
+      if (closed) return; // effect cleaned up while we were awaiting
+
+      source = new EventSource(`${getApiBase()}/api/logs-stream?token=${encodeURIComponent(token)}`);
+      source.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data);
+          if (data.type === 'call_started') {
+            const msg = `Incoming call from ${data.callerNumber || 'unknown number'}…`;
+            setLiveCallBanner({ message: msg, startedAt: Date.now() });
+            pushNotification('call_started', msg);
+          } else if (data.type === 'call_completed') {
+            setLiveCallBanner(null);
+            if (data.callLog) {
+              setCallLogs((prev) => [data.callLog, ...prev]);
+            }
+            pushNotification('call_completed', `Call completed${data.callLog?.leadName ? ` with ${data.callLog.leadName}` : ''}`);
+          } else if (data.message) {
+            pushNotification(data.type || 'info', data.message);
+          }
+        } catch {
+          // non-JSON keepalive/init messages — ignore
+        }
+      };
+      source.onerror = () => {
+        // EventSource auto-reconnects on its own; nothing to do here beyond
+        // not crashing the app if the tunnel/backend is briefly unreachable.
+      };
+    })();
+
+    return () => {
+      closed = true;
+      source?.close();
     };
-    source.onerror = () => {
-      // EventSource auto-reconnects on its own; nothing to do here beyond
-      // not crashing the app if the tunnel/backend is briefly unreachable.
-    };
-    return () => source.close();
   }, [kcUser, hasLoaded]);
 
-  // Persist active tab across reloads
-  useEffect(() => {
-    saveToStorage('chiefx_tab', activeTab);
-  }, [activeTab]);
-
-  // If a non-lending org somehow lands on a lending-only screen (e.g. a
-  // stale activeTab restored from a previous session, or the org's
-  // industry changed), redirect to the dashboard rather than showing a
-  // hidden/irrelevant view.
+  // Redirect if a non-lending org lands on a lending-only route or a retired route.
   useEffect(() => {
     const isLending = !orgSettings.industry || orgSettings.industry === 'lending';
     const lendingOnlyTabs = new Set(['leads', 'campaigns', 'loans']);
-    // "objects" (the old separate "Contacts" tab) is retired — Contact
-    // Directory covers every industry now — so redirect away from it too
-    // if a stale activeTab from before this change is still pointing there.
     if ((!isLending && lendingOnlyTabs.has(activeTab)) || activeTab === 'objects') {
-      setActiveTab('dashboard');
+      navigate('/', { replace: true });
     }
   }, [orgSettings.industry, activeTab]);
 
@@ -261,6 +501,7 @@ export default function App() {
       // records (see the load effect above). Patch each one back to its
       // real record instead of /api/leads/sync, which would write into
       // the (unused, for this org) lending leads table.
+      const prevLeads = previousLeadsRef.current;
       leads.forEach((lead) => {
         // Contacts added via LeadManagementView/CSV import get a
         // client-generated "L-<n>" id (see handleAddLead) that was never
@@ -270,6 +511,8 @@ export default function App() {
         // then swap in the record's actual id so every later edit PATCHes
         // correctly.
         if (lead.id.startsWith('L-')) {
+          if (syncedLeadIds.current.has(lead.id)) return;
+          syncedLeadIds.current.add(lead.id);
           apiFetch(`/api/objects/${primaryObject.key}/records`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -278,11 +521,15 @@ export default function App() {
             .then(r => r.json())
             .then(record => {
               if (record?.id) {
+                syncedLeadIds.current.delete(lead.id);
                 setLeads(prev => prev.map(l => (l.id === lead.id ? { ...l, id: record.id } : l)));
               }
             })
             .catch(err => console.error("Error creating object record:", err));
         } else {
+          // Only PATCH if this lead actually changed since the last sync
+          const prev = prevLeads.find(p => p.id === lead.id);
+          if (prev && JSON.stringify(prev) === JSON.stringify(lead)) return;
           apiFetch(`/api/objects/${primaryObject.key}/records/${lead.id}`, {
             method: 'PATCH',
             headers: { 'Content-Type': 'application/json' },
@@ -291,121 +538,128 @@ export default function App() {
         }
       });
     } else {
-      apiFetch('/api/leads/sync', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(leads)
-      }).catch(err => console.error("Error syncing leads:", err));
+      // Only sync leads that are new or changed
+      const prevLeads = previousLeadsRef.current;
+      const changedLeads = leads.filter(lead => {
+        if (lead.id.startsWith('L-')) {
+          if (syncedLeadIds.current.has(lead.id)) return false;
+          syncedLeadIds.current.add(lead.id);
+          return true;
+        }
+        const prev = prevLeads.find(p => p.id === lead.id);
+        return !prev || JSON.stringify(prev) !== JSON.stringify(lead);
+      });
+      if (changedLeads.length > 0) {
+        apiFetch('/api/leads/sync', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(leads)
+        }).catch(err => console.error("Error syncing leads:", err));
+      }
     }
+    previousLeadsRef.current = leads;
   }, [leads, hasLoaded, primaryObject]);
 
-  useEffect(() => {
-    saveToStorage('chiefx_workflows', workflows);
-    if (hasLoaded) {
-      apiFetch('/api/workflows/sync', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(workflows)
-      }).catch(err => console.error("Error syncing workflows:", err));
-    }
-  }, [workflows, hasLoaded]);
+  useEffect(() => { saveToStorage('chiefx_workflows', workflows); }, [workflows]);
+  useDebouncedSync('/api/workflows/sync', workflows, hasLoaded);
 
-  useEffect(() => {
-    saveToStorage('chiefx_campaigns', campaigns);
-    if (hasLoaded) {
-      apiFetch('/api/campaigns/sync', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(campaigns)
-      }).catch(err => console.error("Error syncing campaigns:", err));
-    }
-  }, [campaigns, hasLoaded]);
+  useEffect(() => { saveToStorage('chiefx_campaigns', campaigns); }, [campaigns]);
+  useDebouncedSync('/api/campaigns/sync', campaigns, hasLoaded);
 
-  useEffect(() => {
-    saveToStorage('chiefx_calllogs', callLogs);
-    if (hasLoaded) {
-      apiFetch('/api/call-logs/sync', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(callLogs)
-      }).catch(err => console.error("Error syncing call logs:", err));
-    }
-  }, [callLogs, hasLoaded]);
+  useEffect(() => { saveToStorage('chiefx_calllogs', callLogs); }, [callLogs]);
+  useDebouncedSync('/api/call-logs/sync', callLogs, hasLoaded);
 
-  useEffect(() => {
-    saveToStorage('chiefx_dialer_tasks', dialerTasks);
-    if (hasLoaded) {
-      apiFetch('/api/dialer-tasks/sync', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(dialerTasks)
-      })
-        .then(res => { if (!res.ok) res.json().then(body => console.warn('Dialer task sync failed:', body?.error || res.status)); })
-        .catch(err => console.warn('Dialer task sync error (data saved locally):', err.message));
-    }
-  }, [dialerTasks, hasLoaded]);
+  useEffect(() => { saveToStorage('chiefx_dialer_tasks', dialerTasks); }, [dialerTasks]);
+  useDebouncedSync('/api/dialer-tasks/sync', dialerTasks, hasLoaded);
 
-  useEffect(() => {
-    saveToStorage('chiefx_loans', loans);
-    if (hasLoaded) {
-      apiFetch('/api/loans/sync', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(loans)
-      }).catch(err => console.error("Error syncing loans:", err));
-    }
-  }, [loans, hasLoaded]);
+  useEffect(() => { saveToStorage('chiefx_loans', loans); }, [loans]);
+  useDebouncedSync('/api/loans/sync', loans, hasLoaded);
 
+  // Only org admins / super admins can write to team, numbers, and org settings.
+  // DB role is authoritative once loaded; JWT role is the optimistic initial value.
+  const ADMIN_ROLE_SET = new Set(['Organization Admin', 'Super Admin']);
+  const isAdmin = ADMIN_ROLE_SET.has(dbRole || kcUser?.role || '');
+
+  useEffect(() => { saveToStorage('chiefx_team', teamMembers); }, [teamMembers]);
+  useDebouncedSync('/api/settings/team/sync', teamMembers, hasLoaded && isAdmin);
+
+  useEffect(() => { saveToStorage('chiefx_question_flows', questionFlows); }, [questionFlows]);
+
+  useEffect(() => { saveToStorage('chiefx_org', orgSettings); }, [orgSettings]);
+  useDebouncedSync('/api/settings/org', orgSettings, hasLoaded && isAdmin);
+
+  // Numbers sync kept separate — needs error handling + revert on conflict
+  const numbersTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => {
     saveToStorage('chiefx_numbers', virtualNumbers);
-    if (hasLoaded) {
-      apiFetch('/api/settings/numbers/sync', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(virtualNumbers)
-      }).then(async (res) => {
+    if (!hasLoaded || !isAdmin) return;
+    if (numbersTimer.current) clearTimeout(numbersTimer.current);
+    numbersTimer.current = setTimeout(async () => {
+      try {
+        const res = await apiFetch('/api/settings/numbers/sync', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(virtualNumbers)
+        });
         if (res.ok) return;
-        // A number already owned by another org gets rejected here — the
-        // Connect button that triggered this only checked the channels-
-        // connect response, not this sync, so without surfacing the error
-        // and re-pulling server truth the UI kept showing the rejected
-        // number as if it had actually saved.
         const body = await res.json().catch(() => ({}));
         alert(body.error || 'Failed to save virtual number(s) — reverting to last saved state.');
-        const fresh = await apiFetch('/api/settings/numbers').then((r) => r.json()).catch(() => null);
+        const fresh = await apiFetch('/api/settings/numbers').then(r => r.json()).catch(() => null);
         if (Array.isArray(fresh)) setVirtualNumbers(fresh);
-      }).catch(err => console.error("Error syncing virtual numbers:", err));
-    }
+      } catch (err) { console.error("Error syncing virtual numbers:", err); }
+    }, 800);
+    return () => { if (numbersTimer.current) clearTimeout(numbersTimer.current); };
   }, [virtualNumbers, hasLoaded]);
 
+  // After flags load, redirect to the first accessible tab if the current one is blocked.
   useEffect(() => {
-    saveToStorage('chiefx_team', teamMembers);
-    if (hasLoaded) {
-      apiFetch('/api/settings/team/sync', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(teamMembers)
-      }).catch(err => console.error("Error syncing team members:", err));
-    }
-  }, [teamMembers, hasLoaded]);
+    if (!flagsReady) return;
+    const flagKey = TAB_TO_FLAG[activeTab];
+    if (!flagKey || isEnabled(flagKey)) return; // current tab is fine
 
-  useEffect(() => {
-    saveToStorage('chiefx_question_flows', questionFlows);
-  }, [questionFlows]);
+    // Find the first sidebar tab the user can actually see
+    const orderedTabs = [
+      'dashboard', 'leads', 'contacts', 'workflows', 'campaigns',
+      'dialer', 'call-logs', 'reports', 'inbox', 'agent-studio',
+      'compliance', 'knowledge', 'enquiries', 'audit-log', 'billing', 'loans',
+    ];
+    const firstAccessible = orderedTabs.find(tab => {
+      const fk = TAB_TO_FLAG[tab];
+      return !fk || isEnabled(fk);
+    });
 
-  useEffect(() => {
-    saveToStorage('chiefx_org', orgSettings);
-    if (hasLoaded) {
-      apiFetch('/api/settings/org', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(orgSettings)
-      }).catch(err => console.error("Error syncing org settings:", err));
+    if (firstAccessible) {
+      const s = TAB_TO_SLUG[firstAccessible] || firstAccessible;
+      navigate(s === 'executive-dashboard' ? '/' : `/${s}`, { replace: true });
     }
-  }, [orgSettings, hasLoaded]);
+    // If nothing is accessible, stay on current route — renderTabContent shows no-access UI.
+  }, [flagsReady, activeTab, isEnabled]);
 
   // Switch workspace content
   const renderTabContent = () => {
+    const flagKey = TAB_TO_FLAG[activeTab];
+    if (flagKey && !isEnabled(flagKey)) {
+      // Still loading flags — show nothing to avoid flash
+      if (!flagsReady) return null;
+      // Flags loaded but this tab is off — check if user has ANY access
+      const hasAnyAccess = !flagsReady || grantedFlags.length > 0 ||
+        ['Organization Admin', 'Super Admin'].includes(dbRole);
+      return (
+        <div className="flex flex-col items-center justify-center h-full py-24 text-center px-6">
+          <div className="h-16 w-16 rounded-2xl bg-slate-100 flex items-center justify-center mb-5">
+            <svg className="h-8 w-8 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z" />
+            </svg>
+          </div>
+          <h2 className="text-lg font-semibold text-slate-700 mb-2">No Access</h2>
+          <p className="text-sm text-slate-400 max-w-xs">
+            {hasAnyAccess
+              ? "You don't have access to this feature. Contact your Organization Admin to request access."
+              : "Your account has no feature access yet. Please contact your Organization Admin to get started."}
+          </p>
+        </div>
+      );
+    }
     switch (activeTab) {
       case 'dashboard':
         return (
@@ -503,6 +757,8 @@ export default function App() {
           <CompanyProfileView
             orgSettings={orgSettings}
             setOrgSettings={setOrgSettings}
+            activeSubTab={activeSubTab as 'profile' | 'legal' | 'channels' | 'compliance'}
+            setActiveSubTab={setActiveSubTab}
           />
         );
       case 'settings':
@@ -515,6 +771,9 @@ export default function App() {
             orgSettings={orgSettings}
             setOrgSettings={setOrgSettings}
             costPerMinuteInr={costPerMinuteInr}
+            activeSubTab={activeSubTab as 'numbers' | 'team' | 'billing' | 'api' | 'features'}
+            setActiveSubTab={setActiveSubTab}
+            currentUserEmail={kcUser?.email}
           />
         );
       default:
@@ -527,18 +786,20 @@ export default function App() {
   };
 
   return (
-    <div className="flex h-screen w-screen overflow-hidden bg-slate-50/50">
+    <div className="grid grid-cols-[auto_1fr] h-screen w-screen overflow-hidden bg-slate-50/50 dark:bg-[var(--bg)]">
       {/* Sidebar Rail */}
       <Sidebar
         activeTab={activeTab}
         setActiveTab={setActiveTab}
-        userRole={(kcUser?.role as UserRole) ?? null}
+        activeSubTab={activeSubTab}
+        setActiveSubTab={setActiveSubTab}
+        userRole={((dbRole || kcUser?.role) as UserRole) ?? null}
         organizationName={orgSettings.name}
         industry={orgSettings.industry}
       />
 
-      {/* Main Workspace Frame */}
-      <main className="flex-1 flex flex-col min-w-0 overflow-hidden relative">
+      {/* Main Workspace — fills remaining 12-col grid space */}
+      <main className="flex flex-col min-w-0 overflow-hidden relative">
         {liveCallBanner && (
           <div className="absolute top-0 left-0 right-0 z-50 bg-emerald-600 text-white text-xs font-semibold px-4 py-2 flex items-center justify-center gap-2 animate-pulse">
             <span className="h-1.5 w-1.5 rounded-full bg-white"></span>
@@ -546,7 +807,7 @@ export default function App() {
           </div>
         )}
         {/* Global Floating Header */}
-        <header className="h-16 bg-white border-b border-slate-100 flex items-center justify-between px-8 shrink-0 relative z-10">
+        <header className="h-16 bg-white border-b border-slate-100 flex items-center justify-between px-8 shrink-0 relative z-50">
           <div className="flex items-center space-x-2">
             <span className="text-xs font-mono text-slate-400">workspace:</span>
             <span className="text-xs font-mono font-semibold px-2 py-0.5 rounded text-blue-600 bg-blue-50">
@@ -554,31 +815,18 @@ export default function App() {
             </span>
           </div>
 
-          <div className="flex items-center space-x-4">
-            <ThemeToggle />
-            <span className="text-xs text-slate-400">Representative:</span>
-            <div className="flex items-center space-x-2 bg-slate-50 border border-slate-100 px-3 py-1 rounded-xl">
-              <span className="h-2 w-2 rounded-full bg-emerald-500"></span>
-              <span className="text-xs font-semibold text-slate-700">
-                {kcUser?.name || kcUser?.email || 'Loading…'}
-              </span>
-              {kcUser?.role && (
-                <span className="text-[9px] font-mono bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded">
-                  {kcUser.role}
-                </span>
-              )}
-            </div>
-            <button
-              onClick={logout}
-              className="text-xs text-rose-500 hover:text-rose-600 font-semibold hover:underline cursor-pointer"
-            >
-              Sign Out
-            </button>
+          <div className="flex items-center space-x-3">
+            <NotificationBell
+              notifications={notifications}
+              onMarkAllRead={() => setNotifications(prev => prev.map(n => ({ ...n, read: true })))}
+              onClear={() => setNotifications([])}
+            />
+            <ProfileMenu kcUser={kcUser} dbRole={dbRole} logout={logout} />
           </div>
         </header>
 
-        {/* Selected Dashboard view content container */}
-        <div className="flex-1 overflow-hidden flex flex-col">
+        {/* Selected view — 12-col grid host */}
+        <div className="flex-1 overflow-hidden flex flex-col min-h-0">
           {renderTabContent()}
         </div>
       </main>
