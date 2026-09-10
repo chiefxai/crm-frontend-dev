@@ -201,14 +201,17 @@ export default function App() {
   useEffect(() => {
     if (!kcUser) { setMembershipStatus('checking'); return; }
     setMembershipStatus('checking');
+    // Check org membership first; if denied, check platform-admin access as fallback.
     apiFetch('/api/auth/me')
       .then(async r => {
-        if (r.ok) { setMembershipStatus('ok'); }
-        else {
+        if (r.ok) { setMembershipStatus('ok'); return; }
+        // Not an org member — check if they're a platform admin
+        return apiFetch('/api/platform/whoami').then(async r2 => {
+          if (r2.ok) { setMembershipStatus('ok'); return; }
           const body = await r.json().catch(() => ({}));
           setMembershipError(body.error || 'Your account is not registered in this platform.');
           setMembershipStatus('denied');
-        }
+        });
       })
       .catch(() => {
         setMembershipError('Could not reach the server. Please try again later.');
