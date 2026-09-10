@@ -193,6 +193,28 @@ function ProfileMenu({ kcUser, dbRole, logout }: ProfileMenuProps) {
 export default function App() {
   // Auth state comes from Keycloak — no manual isAuthenticated flag needed.
   const { user: kcUser, logout, getToken } = useAuth();
+
+  // Gate the app: verify the Keycloak user has a membership in our DB.
+  // 'checking' → spinner, 'ok' → show app, 'denied' → no-access screen.
+  const [membershipStatus, setMembershipStatus] = useState<'checking' | 'ok' | 'denied'>('checking');
+  const [membershipError, setMembershipError] = useState<string>('');
+  useEffect(() => {
+    if (!kcUser) { setMembershipStatus('checking'); return; }
+    setMembershipStatus('checking');
+    apiFetch('/api/auth/me')
+      .then(async r => {
+        if (r.ok) { setMembershipStatus('ok'); }
+        else {
+          const body = await r.json().catch(() => ({}));
+          setMembershipError(body.error || 'Your account is not registered in this platform.');
+          setMembershipStatus('denied');
+        }
+      })
+      .catch(() => {
+        setMembershipError('Could not reach the server. Please try again later.');
+        setMembershipStatus('denied');
+      });
+  }, [kcUser?.id]);
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -784,6 +806,42 @@ export default function App() {
         );
     }
   };
+
+  // Membership gate — show spinner or no-access screen before the app
+  if (membershipStatus === 'checking') {
+    return (
+      <div className="flex items-center justify-center h-screen w-screen" style={{ background: 'var(--bg-subtle)' }}>
+        <div className="flex flex-col items-center gap-3">
+          <div className="h-8 w-8 rounded-full border-2 border-blue-600 border-t-transparent animate-spin" />
+          <p className="text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>Verifying access…</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (membershipStatus === 'denied') {
+    return (
+      <div className="flex items-center justify-center h-screen w-screen" style={{ background: 'var(--bg-subtle)' }}>
+        <div className="flex flex-col items-center gap-4 text-center max-w-sm px-6">
+          <div className="h-16 w-16 rounded-2xl flex items-center justify-center" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)' }}>
+            <svg className="h-8 w-8 text-rose-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
+            </svg>
+          </div>
+          <div>
+            <h2 className="text-lg font-bold mb-1" style={{ color: 'var(--text-primary)' }}>Access Denied</h2>
+            <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>{membershipError}</p>
+          </div>
+          <button
+            onClick={logout}
+            className="mt-2 px-5 py-2 text-sm font-semibold rounded-xl bg-rose-500 text-white hover:bg-rose-600 transition-colors"
+          >
+            Sign out
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="grid grid-cols-[auto_1fr] h-screen w-screen overflow-hidden bg-slate-50/50 dark:bg-[var(--bg)]">
