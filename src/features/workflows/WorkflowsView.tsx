@@ -104,6 +104,7 @@ export default function WorkflowsView({ flows, setFlows }: WorkflowsViewProps) {
     setNewName('');
     setCreating(false);
     setEditingId(flow.id);
+    setEditorView('variables'); // start on variables so user defines them first
   };
 
   const handleDelete = (id: string) => {

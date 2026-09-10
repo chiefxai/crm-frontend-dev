@@ -15,10 +15,11 @@ import {
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 
-import { Plus, Trash2, Play, Save, CheckCircle2, HelpCircle, Zap, GitBranch, Square } from 'lucide-react';
-import { QuestionFlow, QuestionFlowNode, QuestionFlowEdge } from './types';
+import { Plus, Trash2, Save, CheckCircle2, HelpCircle, Zap, GitBranch, Square, Variable, ChevronRight, ChevronLeft } from 'lucide-react';
+import { QuestionFlow, QuestionFlowNode, QuestionFlowEdge, WorkflowVariable } from './types';
 import { nodeTypes } from './components/FlowNodes';
 import NodeEditor from './components/NodeEditor';
+import WorkflowVariables from './components/WorkflowVariables';
 
 function toRFNodes(nodes: QuestionFlowNode[]): Node[] {
   return nodes.map(n => ({
@@ -72,7 +73,12 @@ export default function QuestionFlowBuilder({ flow, allFlows, onChange }: Props)
   const [rfEdges, setRfEdges, onEdgesChange] = useEdgesState(toRFEdges(flow.edges));
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
+  const [varPanelOpen, setVarPanelOpen] = useState(false);
   const reactFlowWrapper = useRef<HTMLDivElement>(null);
+
+  const handleVarsChange = (vars: WorkflowVariable[]) => {
+    onChange({ ...flow, nodes: fromRFNodes(rfNodes), edges: fromRFEdges(rfEdges), variables: vars, updatedAt: new Date().toISOString() });
+  };
 
   const selectedNode = rfNodes.find(n => n.id === selectedNodeId);
 
@@ -174,6 +180,23 @@ export default function QuestionFlowBuilder({ flow, allFlows, onChange }: Props)
         )}
 
         <button
+          onClick={() => setVarPanelOpen(v => !v)}
+          className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg border transition-colors ${
+            varPanelOpen
+              ? 'bg-violet-600 text-white border-violet-600'
+              : 'bg-violet-50 text-violet-700 border-violet-200 hover:bg-violet-100'
+          }`}
+        >
+          <Variable className="h-3.5 w-3.5" />
+          Variables
+          {(flow.variables ?? []).length > 0 && (
+            <span className={`text-[10px] font-bold px-1.5 rounded-full ${varPanelOpen ? 'bg-white/20 text-white' : 'bg-violet-100 text-violet-700'}`}>
+              {(flow.variables ?? []).length}
+            </span>
+          )}
+        </button>
+
+        <button
           onClick={handleSave}
           className={`flex items-center gap-1.5 px-4 py-1.5 text-xs font-semibold rounded-lg transition-colors ${
             saved
@@ -213,12 +236,42 @@ export default function QuestionFlowBuilder({ flow, allFlows, onChange }: Props)
 
         {/* Node editor panel */}
         {selectedNode && (
-          <NodeEditor
-            node={selectedNode.data as QuestionFlowNode}
-            allNodes={fromRFNodes(rfNodes)}
-            onChange={onNodeEditorChange}
-            onClose={() => setSelectedNodeId(null)}
-          />
+          <>
+            <div
+              className="absolute inset-0 z-40"
+              onClick={() => setSelectedNodeId(null)}
+            />
+            <NodeEditor
+              node={selectedNode.data as QuestionFlowNode}
+              allNodes={fromRFNodes(rfNodes)}
+              onChange={onNodeEditorChange}
+              onClose={() => setSelectedNodeId(null)}
+            />
+          </>
+        )}
+
+        {/* Variables sidebar */}
+        {varPanelOpen && (
+          <div className="absolute top-0 right-0 h-full w-80 bg-white border-l border-slate-200 shadow-xl z-20 flex flex-col overflow-hidden">
+            <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100 shrink-0">
+              <div className="flex items-center gap-2">
+                <Variable className="h-4 w-4 text-violet-600" />
+                <span className="text-sm font-semibold text-slate-800">Variables</span>
+              </div>
+              <button
+                onClick={() => setVarPanelOpen(false)}
+                className="p-1 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition-colors"
+              >
+                <ChevronRight className="h-4 w-4" />
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto">
+              <WorkflowVariables
+                variables={flow.variables ?? []}
+                onChange={handleVarsChange}
+              />
+            </div>
+          </div>
         )}
       </div>
     </div>
