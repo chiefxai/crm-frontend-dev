@@ -502,7 +502,8 @@ Real Tamil speakers do not say the "correct" written form of a word. They contra
           from: selectedOutboundNumber || undefined,
           language: selectedTask?.language || undefined,
           assignedContact: assignedMember ? { name: assignedMember.name, phone: assignedMember.phone } : undefined,
-          starhealthEnabled: !!selectedTask?.starhealthEnabled
+          starhealthEnabled: !!selectedTask?.starhealthEnabled,
+          agentId: selectedTask?.assignedTeamMemberId || undefined,
         })
       });
       const data = await res.json();
@@ -554,7 +555,8 @@ Real Tamil speakers do not say the "correct" written form of a word. They contra
           from: selectedOutboundNumber || undefined,
           language: selectedTask?.language || undefined,
           assignedContact: assignedMember ? { name: assignedMember.name, phone: assignedMember.phone } : undefined,
-          starhealthEnabled: !!selectedTask?.starhealthEnabled
+          starhealthEnabled: !!selectedTask?.starhealthEnabled,
+          agentId: selectedTask?.assignedTeamMemberId || undefined,
         })
       });
       const data = await res.json();
@@ -606,7 +608,8 @@ Real Tamil speakers do not say the "correct" written form of a word. They contra
           questions: selectedTask ? selectedTask.questions : [],
           from: selectedOutboundNumber || undefined,
           language: selectedTask?.language || undefined,
-          assignedContact: assignedMemberTwilio ? { name: assignedMemberTwilio.name, phone: assignedMemberTwilio.phone } : undefined
+          assignedContact: assignedMemberTwilio ? { name: assignedMemberTwilio.name, phone: assignedMemberTwilio.phone } : undefined,
+          agentId: selectedTask?.assignedTeamMemberId || undefined,
         })
       });
       const data = await res.json();
