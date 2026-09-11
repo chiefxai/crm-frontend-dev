@@ -28,7 +28,7 @@ export default function BillingView() {
       {/* Minutes used */}
       <Widget colSpan={6} title="AI Minutes This Period" subtitle={`Period resets ${new Date(info.billingPeriodEnd).toLocaleDateString()}`} icon={Clock} accent="#2563eb" padding="md">
         <div className="flex items-baseline gap-2 mt-2">
-          <span className="text-3xl font-bold text-slate-800 dark:text-[var(--text-primary)]">{info.aiMinutesUsed}</span>
+          <span className="text-3xl font-bold text-slate-800 dark:text-[var(--text-primary)]">{info.aiMinutesUsed.toFixed(2)}</span>
           <span className="text-sm text-slate-400">minutes used</span>
         </div>
       </Widget>

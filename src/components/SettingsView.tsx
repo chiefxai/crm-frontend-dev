@@ -946,7 +946,7 @@ export default function SettingsView({
                 <div className="grid grid-cols-3 gap-4 pt-2">
                   <div className="bg-slate-50 p-4 rounded-xl text-center">
                     <span className="text-[10px] text-slate-400 uppercase tracking-wider block">Minutes Consumed</span>
-                    <strong className="text-md text-slate-800 font-mono">{orgSettings.aiMinutesUsed}</strong>
+                    <strong className="text-md text-slate-800 font-mono">{orgSettings.aiMinutesUsed.toFixed(2)}</strong>
                   </div>
                   <div className="bg-slate-50 p-4 rounded-xl text-center">
                     <span className="text-[10px] text-slate-400 uppercase tracking-wider block">AI Voice Cost (₹{costPerMinuteInr}/min)</span>

@@ -13,7 +13,7 @@ import {
   Network,
   Variable,
 } from 'lucide-react';
-import { QuestionFlow, QuestionFlowNode, QuestionFlowEdge, WorkflowVariable } from './types';
+import { QuestionFlow, WorkflowVariable } from './types';
 import QuestionFlowBuilder from './QuestionFlowBuilder';
 import WorkflowVariables from './components/WorkflowVariables';
 import PageShell from '../../components/ui/PageShell';
@@ -25,59 +25,12 @@ function uid(prefix: string) {
 }
 
 function createDefaultFlow(name: string): QuestionFlow {
-  const startId = uid('n');
-  const q1Id = uid('n');
-  const yesId = uid('n');
-  const noId = uid('n');
-  const endId = uid('n');
-  const opt1Id = uid('opt');
-  const opt2Id = uid('opt');
-
-  const nodes: QuestionFlowNode[] = [
-    { id: startId, type: 'start', label: 'Start', position: { x: 200, y: 30 } },
-    {
-      id: q1Id,
-      type: 'question',
-      label: 'Opening Question',
-      questionText: 'Hi, am I speaking with [Name]? Are you interested in our offer?',
-      options: [
-        { id: opt1Id, text: 'Yes, interested', goToNodeId: yesId },
-        { id: opt2Id, text: 'No, not interested', goToNodeId: noId, terminateFlow: true },
-      ],
-      position: { x: 140, y: 140 },
-    },
-    {
-      id: yesId,
-      type: 'action',
-      label: 'Assign Agent',
-      actionType: 'assign_agent',
-      actionValue: 'Senior Sales Agent',
-      position: { x: 60, y: 300 },
-    },
-    {
-      id: noId,
-      type: 'action',
-      label: 'Close Lead',
-      actionType: 'close_lead',
-      position: { x: 280, y: 300 },
-    },
-    { id: endId, type: 'end', label: 'End', position: { x: 200, y: 430 } },
-  ];
-
-  const edges: QuestionFlowEdge[] = [
-    { id: uid('e'), source: startId, target: q1Id },
-    { id: uid('e'), source: q1Id, target: yesId, optionId: opt1Id, label: 'Yes' },
-    { id: uid('e'), source: q1Id, target: noId, optionId: opt2Id, label: 'No' },
-    { id: uid('e'), source: yesId, target: endId },
-    { id: uid('e'), source: noId, target: endId },
-  ];
-
   return {
     id: uid('flow'),
     name,
     description: '',
-    nodes,
-    edges,
+    nodes: [],
+    edges: [],
     active: false,
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),

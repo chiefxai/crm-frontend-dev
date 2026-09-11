@@ -229,7 +229,7 @@ export default function DashboardView({
         iconBg="var(--bg-subtle)"
         iconColor="var(--text-secondary)"
         label="AI Voice Minutes This Period"
-        value={`${orgSettings.aiMinutesUsed} min`}
+        value={`${orgSettings.aiMinutesUsed.toFixed(2)} min`}
         sub={`${formatInr(orgSettings.aiMinutesUsed * costPerMinuteInr)} at ₹${costPerMinuteInr}/min`}
         badge={`${daysLeft}d Left`}
         badgeColor="neutral"
