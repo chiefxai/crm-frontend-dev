@@ -149,7 +149,23 @@ body {
   color: var(--text-muted) !important;
 }
 
-/* Tables */
+/* Tables — use theme border everywhere so no black/white borders */
+table {
+  border-color: var(--border);
+}
+table thead tr,
+table tbody tr,
+table tfoot tr {
+  border-color: var(--border);
+}
+/* Tailwind divide-y uses currentColor by default; override globally */
+[class*="divide-y"] > * + * {
+  border-color: var(--border) !important;
+}
+[class*="divide-x"] > * + * {
+  border-color: var(--border) !important;
+}
+
 .dark table thead tr {
   background-color: var(--bg-subtle) !important;
 }

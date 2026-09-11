@@ -36,7 +36,7 @@ export default function SlideOver({
 
   return (
     <div
-      className={`fixed inset-0 bg-black/40 backdrop-blur-sm flex justify-end ${zIndex}`}
+      className={`fixed inset-0 bg-black/40 flex justify-end ${zIndex}`}
       onClick={onClose}
     >
       <div
