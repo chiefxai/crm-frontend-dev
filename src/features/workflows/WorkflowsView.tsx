@@ -165,36 +165,50 @@ export default function WorkflowsView({ flows, setFlows }: WorkflowsViewProps) {
               }}
             />
           )}
-          {editorView === 'json' && (
-            <div className="h-full flex flex-col" style={{ background: '#0f172a' }}>
-              {/* JSON toolbar */}
-              <div className="flex items-center justify-between px-5 py-3 border-b shrink-0" style={{ borderColor: '#1e293b' }}>
-                <div className="flex items-center gap-2">
-                  <Braces className="h-4 w-4" style={{ color: '#f59e0b' }} />
-                  <span className="text-xs font-bold" style={{ color: '#f1f5f9' }}>Flow JSON</span>
-                  <span className="text-[10px] px-2 py-0.5 rounded-full font-semibold" style={{ background: '#1e293b', color: '#64748b' }}>dev only</span>
+          {editorView === 'json' && (() => {
+            // Clean shape passed to AI agent — no diagram ids/positions
+            const cleanVar = (v: WorkflowVariable): object => ({
+              name: v.name,
+              questionText: v.questionText,
+              dataType: v.dataType,
+              ...(v.branches && v.branches.length > 0 ? {
+                branches: v.branches.map(b => ({
+                  condition: b.condition,
+                  followUp: b.variables.map(cleanVar)
+                }))
+              } : {})
+            });
+            const cleanJson = {
+              name: editingFlow.name,
+              ...(editingFlow.description ? { description: editingFlow.description } : {}),
+              questions: (editingFlow.variables ?? []).map(cleanVar)
+            };
+            const jsonStr = JSON.stringify(cleanJson, null, 2);
+            return (
+              <div className="h-full flex flex-col" style={{ background: '#0f172a' }}>
+                <div className="flex items-center justify-between px-5 py-3 border-b shrink-0" style={{ borderColor: '#1e293b' }}>
+                  <div className="flex items-center gap-2">
+                    <Braces className="h-4 w-4" style={{ color: '#f59e0b' }} />
+                    <span className="text-xs font-bold" style={{ color: '#f1f5f9' }}>AI Agent JSON</span>
+                    <span className="text-[10px] px-2 py-0.5 rounded-full font-semibold" style={{ background: '#1e293b', color: '#64748b' }}>dev · synced to backend</span>
+                  </div>
+                  <button
+                    onClick={() => { navigator.clipboard.writeText(jsonStr); setJsonCopied(true); setTimeout(() => setJsonCopied(false), 2000); }}
+                    className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors"
+                    style={{ background: jsonCopied ? '#064e3b' : '#1e293b', color: jsonCopied ? '#34d399' : '#94a3b8' }}
+                  >
+                    {jsonCopied ? <Check className="h-3.5 w-3.5" /> : <ClipboardCopy className="h-3.5 w-3.5" />}
+                    {jsonCopied ? 'Copied!' : 'Copy JSON'}
+                  </button>
                 </div>
-                <button
-                  onClick={() => {
-                    navigator.clipboard.writeText(JSON.stringify(editingFlow, null, 2));
-                    setJsonCopied(true);
-                    setTimeout(() => setJsonCopied(false), 2000);
-                  }}
-                  className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors"
-                  style={{ background: jsonCopied ? '#064e3b' : '#1e293b', color: jsonCopied ? '#34d399' : '#94a3b8' }}
-                >
-                  {jsonCopied ? <Check className="h-3.5 w-3.5" /> : <ClipboardCopy className="h-3.5 w-3.5" />}
-                  {jsonCopied ? 'Copied!' : 'Copy JSON'}
-                </button>
+                <div className="flex-1 overflow-auto p-5">
+                  <pre className="text-xs leading-relaxed font-mono whitespace-pre-wrap break-words" style={{ color: '#e2e8f0' }}>
+                    {jsonStr}
+                  </pre>
+                </div>
               </div>
-              {/* JSON body */}
-              <div className="flex-1 overflow-auto p-5">
-                <pre className="text-xs leading-relaxed font-mono whitespace-pre-wrap break-words" style={{ color: '#e2e8f0' }}>
-                  {JSON.stringify(editingFlow, null, 2)}
-                </pre>
-              </div>
-            </div>
-          )}
+            );
+          })()}
         </div>
       </PageShell>
     );

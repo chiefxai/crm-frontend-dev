@@ -361,7 +361,8 @@ export default function App() {
         resTeam,
         resOrg,
         resDialerTasks,
-        resBilling
+        resBilling,
+        resQuestionFlows
       ] = await Promise.all([
         apiFetch('/api/leads').then(r => r.json()).catch(() => null),
         apiFetch('/api/workflows').then(r => r.json()).catch(() => null),
@@ -371,7 +372,8 @@ export default function App() {
         apiFetch('/api/settings/team').then(r => r.json()).catch(() => null),
         apiFetch('/api/settings/org').then(r => r.json()).catch(() => null),
         apiFetch('/api/dialer-tasks').then(r => r.json()).catch(() => null),
-        apiFetch('/api/billing').then(r => r.json()).catch(() => null)
+        apiFetch('/api/billing').then(r => r.json()).catch(() => null),
+        apiFetch('/api/question-flows').then(r => r.json()).catch(() => null)
       ]);
 
       if (Array.isArray(resLeads)) setLeads(resLeads);
@@ -383,6 +385,7 @@ export default function App() {
       if (resBilling && typeof resBilling.costPerMinuteInr === 'number') setCostPerMinuteInr(resBilling.costPerMinuteInr);
       if (resOrg && Object.keys(resOrg).length > 0) setOrgSettings({ ...EMPTY_ORG_SETTINGS, ...resOrg });
       if (Array.isArray(resDialerTasks)) setDialerTasks(resDialerTasks);
+      if (Array.isArray(resQuestionFlows) && resQuestionFlows.length > 0) setQuestionFlows(resQuestionFlows);
 
       const industry = (resOrg && resOrg.industry) || orgSettings.industry;
       if (industry && industry !== 'lending') {
@@ -581,6 +584,7 @@ export default function App() {
   useDebouncedSync('/api/settings/team/sync', teamMembers, hasLoaded && isAdmin);
 
   useEffect(() => { saveToStorage('chiefx_question_flows', questionFlows); }, [questionFlows]);
+  useDebouncedSync('/api/question-flows/sync', questionFlows, hasLoaded);
 
   useEffect(() => { saveToStorage('chiefx_org', orgSettings); }, [orgSettings]);
   useDebouncedSync('/api/settings/org', orgSettings, hasLoaded && isAdmin);
