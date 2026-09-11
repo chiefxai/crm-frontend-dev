@@ -20,24 +20,13 @@ import {
 } from 'lucide-react';
 import { Lead, CallLog } from '../types';
 import { getPlayableRecordingUrl } from '../lib/api';
+import { formatPhone } from '../lib/phone';
 import PageShell from './ui/PageShell';
 import Widget from './ui/Widget';
 import KpiCard from './ui/KpiCard';
 import Modal from './ui/Modal';
 import FilterBar from './ui/FilterBar';
 
-// Real calls come in as raw digit strings (e.g. "919384813556" — country
-// code glued straight onto the 10-digit number, no separators) since
-// that's the exact format Vobiz/Twilio webhooks hand us as caller ID.
-// Manually-entered/CSV-imported contacts often already have their own
-// formatting (e.g. "+1 (555) 000-0000") — only reformat the bare-digit
-// case so we don't mangle those.
-function formatPhoneDisplay(phone: string): string {
-  const digits = phone.replace(/\D/g, '');
-  if (digits.length === 12 && digits.startsWith('91')) return `+91 ${digits.slice(2)}`;
-  if (digits.length === 10 && digits === phone) return `+91 ${digits}`;
-  return phone;
-}
 
 interface ContactDirectoryViewProps {
   leads: Lead[];
@@ -423,7 +412,7 @@ export default function ContactDirectoryView({
                     </div>
                   </td>
                   <td className="py-4 px-6 font-mono text-slate-600">
-                    {formatPhoneDisplay(lead.phone)}
+                    {formatPhone(lead.phone)}
                   </td>
                   <td className="py-4 px-6 text-slate-500">
                     {lead.email}

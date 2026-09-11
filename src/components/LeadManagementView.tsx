@@ -29,6 +29,7 @@ import Widget from './ui/Widget';
 import SlideOver from './ui/SlideOver';
 import Modal from './ui/Modal';
 import FilterBar from './ui/FilterBar';
+import { formatPhone } from '../lib/phone';
 
 interface LeadManagementViewProps {
   leads: Lead[];
@@ -514,7 +515,7 @@ export default function LeadManagementView({
                   <div className="space-y-2.5">
                     <div className="flex items-center text-xs text-slate-600">
                       <Phone className="h-4 w-4 mr-2.5 text-slate-400" />
-                      <span>{selectedLead.phone}</span>
+                      <span>{formatPhone(selectedLead.phone)}</span>
                     </div>
                     <div className="flex items-center text-xs text-slate-600 font-medium">
                       <Mail className="absolute inline h-4 w-4 text-slate-400 mr-2.5" />

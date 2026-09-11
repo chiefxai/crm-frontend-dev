@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Search, Loader2, ChevronDown, ChevronUp } from 'lucide-react';
 import { apiFetch } from '../lib/api';
+import { formatPhone } from '../lib/phone';
 import { CallRow } from './types';
 
 export default function CallsPage() {
@@ -67,7 +68,7 @@ export default function CallsPage() {
               >
                 <div className="flex items-center gap-3">
                   <span className="text-xs font-semibold text-amber-600 bg-amber-50 px-2 py-0.5 rounded-full">{c.orgName}</span>
-                  <span className="text-sm text-slate-700">{c.callerNumber || 'Unknown'}</span>
+                  <span className="text-sm text-slate-700">{formatPhone(c.callerNumber) || 'Unknown'}</span>
                   <span className="text-xs text-slate-400">{c.agentName} · {c.durationSeconds}s</span>
                   {c.sentiment && <span className="text-[10px] font-bold text-slate-500">{c.sentiment}</span>}
                 </div>
