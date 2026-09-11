@@ -13,9 +13,11 @@ import Modal from './ui/Modal';
 interface VirtualNumber {
   id: string;
   number: string;
-  friendly_name?: string;
+  friendlyName?: string;
+  friendly_name?: string; // from listNumbersWithAgent (snake_case)
   provider?: string;
-  agent_id?: string | null;
+  agentId?: string | null;
+  agent_id?: string | null; // from listNumbersWithAgent (snake_case)
 }
 
 interface Agent {
@@ -102,8 +104,9 @@ export default function AgentStudioView() {
 
   useEffect(() => { loadData(); }, []);
 
+  const getAgentId = (n: VirtualNumber) => n.agentId ?? n.agent_id ?? null;
   const freeNumbers = (editingId: string | null) =>
-    numbers.filter(n => !n.agent_id || n.agent_id === editingId);
+    numbers.filter(n => !getAgentId(n) || getAgentId(n) === editingId);
 
   const openCreate = () => {
     setForm(emptyForm());
@@ -307,8 +310,8 @@ export default function AgentStudioView() {
                     <div className="flex items-center gap-1.5 text-[11px] font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2.5 py-1.5 rounded-xl">
                       <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
                       {agent.assignedNumber.number}
-                      {agent.assignedNumber.friendly_name && (
-                        <span className="text-emerald-500 font-normal">· {agent.assignedNumber.friendly_name}</span>
+                      {(agent.assignedNumber.friendlyName ?? agent.assignedNumber.friendly_name) && (
+                        <span className="text-emerald-500 font-normal">· {agent.assignedNumber.friendlyName ?? agent.assignedNumber.friendly_name}</span>
                       )}
                     </div>
                   ) : (
@@ -495,7 +498,7 @@ export default function AgentStudioView() {
                     <div className="min-w-0 flex-1">
                       <p className="text-sm font-semibold text-slate-800">{n.number}</p>
                       <p className="text-[10px] text-slate-400 mt-0.5">
-                        {n.friendly_name ?? '—'}{n.provider ? ` · ${n.provider}` : ''}
+                        {(n.friendlyName ?? n.friendly_name) || '—'}{n.provider ? ` · ${n.provider}` : ''}
                       </p>
                     </div>
                     {form.assignedNumber?.id === n.id && (
