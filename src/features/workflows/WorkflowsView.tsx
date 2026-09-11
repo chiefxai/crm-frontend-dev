@@ -171,10 +171,10 @@ export default function WorkflowsView({ flows, setFlows }: WorkflowsViewProps) {
               name: v.name,
               questionText: v.questionText,
               dataType: v.dataType,
-              ...(v.branches && v.branches.length > 0 ? {
-                branches: v.branches.map(b => ({
+              ...((v.branches ?? []).length > 0 ? {
+                branches: (v.branches ?? []).map(b => ({
                   condition: b.condition,
-                  followUp: b.variables.map(cleanVar)
+                  followUp: (b.variables ?? []).map(cleanVar)
                 }))
               } : {})
             });
