@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import {
   Sparkles, Send, Loader2, Mic, Check, Plus, Trash2, Edit2,
-  Phone, PhoneOff, Bot, ChevronDown, Globe, Zap,
+  Phone, PhoneOff, Bot, Zap,
 } from 'lucide-react';
 import { apiFetch } from '../lib/api';
 import PageShell from './ui/PageShell';
@@ -33,14 +33,6 @@ interface Agent {
 type SaveStatus = 'idle' | 'saving' | 'saved' | 'error';
 
 const VOICES = ['Arjun', 'Priya', 'Dev', 'Kavya'];
-const LANGUAGES = [
-  { value: 'en', label: 'English' },
-  { value: 'ta', label: 'Tamil' },
-  { value: 'hi', label: 'Hindi' },
-  { value: 'te', label: 'Telugu' },
-  { value: 'kn', label: 'Kannada' },
-  { value: 'ml', label: 'Malayalam' },
-];
 const PRESETS = ['Tanglish', 'Support', 'Sales'];
 
 function Slider({ label, value, onChange }: { label: string; value: number; onChange: (v: number) => void }) {
@@ -70,7 +62,7 @@ function emptyForm(): Omit<Agent, 'id'> {
     emotion: 78,
     speed: 52,
     friendliness: 82,
-    language: 'en',
+    language: 'en', // kept for API compatibility, not shown in form
     assignedNumber: null,
   };
 }
@@ -279,9 +271,7 @@ export default function AgentStudioView() {
                       </div>
                       <div className="min-w-0">
                         <p className="text-sm font-bold text-slate-800 truncate">{agent.name}</p>
-                        <p className="text-[10px] text-slate-400 mt-0.5">
-                          {LANGUAGES.find(l => l.value === agent.language)?.label ?? agent.language} · {agent.activeVoice}
-                        </p>
+                        <p className="text-[10px] text-slate-400 mt-0.5">{agent.activeVoice}</p>
                       </div>
                     </div>
                     <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
@@ -366,46 +356,27 @@ export default function AgentStudioView() {
 
           <div className="border-t border-slate-100" />
 
-          {/* Voice & Language */}
+          {/* Voice */}
           <div>
             <div className="flex items-center gap-2 mb-3">
               <Mic className="h-4 w-4 text-violet-500" />
-              <p className="text-xs font-semibold text-slate-700 uppercase tracking-widest">Voice & Language</p>
+              <p className="text-xs font-semibold text-slate-700 uppercase tracking-widest">Voice</p>
             </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="block text-xs font-semibold text-slate-500 mb-2">Voice</label>
-                <div className="flex gap-2 flex-wrap">
-                  {VOICES.map(v => (
-                    <button
-                      key={v}
-                      type="button"
-                      onClick={() => setForm(f => ({ ...f, activeVoice: v }))}
-                      className={`px-3 py-1.5 text-xs font-semibold rounded-xl border-2 transition-all cursor-pointer ${
-                        form.activeVoice === v
-                          ? 'bg-violet-600 text-white border-violet-600 shadow-sm'
-                          : 'bg-white text-slate-600 border-slate-200 hover:border-slate-300'
-                      }`}
-                    >
-                      {v}
-                    </button>
-                  ))}
-                </div>
-              </div>
-              <div>
-                <label className="block text-xs font-semibold text-slate-500 mb-2">Language</label>
-                <div className="relative">
-                  <Globe className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400 pointer-events-none" />
-                  <select
-                    value={form.language}
-                    onChange={e => setForm(f => ({ ...f, language: e.target.value }))}
-                    className="w-full pl-8 pr-8 py-2.5 text-sm border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-violet-400 appearance-none bg-slate-50"
-                  >
-                    {LANGUAGES.map(l => <option key={l.value} value={l.value}>{l.label}</option>)}
-                  </select>
-                  <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400 pointer-events-none" />
-                </div>
-              </div>
+            <div className="grid grid-cols-4 gap-2">
+              {VOICES.map(v => (
+                <button
+                  key={v}
+                  type="button"
+                  onClick={() => setForm(f => ({ ...f, activeVoice: v }))}
+                  className={`py-2.5 text-sm font-semibold rounded-xl border-2 transition-all cursor-pointer ${
+                    form.activeVoice === v
+                      ? 'bg-violet-600 text-white border-violet-600 shadow-sm'
+                      : 'bg-white text-slate-600 border-slate-200 hover:border-slate-300 hover:bg-slate-50'
+                  }`}
+                >
+                  {v}
+                </button>
+              ))}
             </div>
           </div>
 
@@ -465,31 +436,76 @@ export default function AgentStudioView() {
             <div className="flex items-center gap-2 mb-3">
               <Phone className="h-4 w-4 text-emerald-500" />
               <p className="text-xs font-semibold text-slate-700 uppercase tracking-widest">Phone Number</p>
+              <span className="text-[10px] text-slate-400 font-normal normal-case ml-1">One number per agent</span>
             </div>
-            <div className="relative">
-              <select
-                value={form.assignedNumber?.id ?? ''}
-                onChange={e => {
-                  const id = e.target.value;
-                  const num = id ? numbers.find(n => n.id === id) ?? null : null;
-                  setForm(f => ({ ...f, assignedNumber: num }));
-                }}
-                className="w-full pr-8 pl-4 py-2.5 text-sm border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-400 appearance-none bg-slate-50"
-              >
-                <option value="">— No number assigned —</option>
+
+            {numbers.length === 0 ? (
+              <div className="flex items-center gap-3 px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-500">
+                <PhoneOff className="h-4 w-4 shrink-0 text-slate-400" />
+                No virtual numbers yet. Add one in <span className="font-semibold">Settings → Virtual Numbers</span>.
+              </div>
+            ) : assignableNumbers.length === 0 ? (
+              <div className="flex items-center gap-3 px-4 py-3 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-700">
+                <Phone className="h-4 w-4 shrink-0" />
+                All virtual numbers are already assigned to other agents.
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {/* None option */}
+                <button
+                  type="button"
+                  onClick={() => setForm(f => ({ ...f, assignedNumber: null }))}
+                  className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl border-2 text-left transition-all cursor-pointer ${
+                    !form.assignedNumber
+                      ? 'border-slate-400 bg-slate-50'
+                      : 'border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50'
+                  }`}
+                >
+                  <div className="h-8 w-8 rounded-lg bg-slate-100 flex items-center justify-center shrink-0">
+                    <PhoneOff className="h-4 w-4 text-slate-400" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-semibold text-slate-600">No number</p>
+                    <p className="text-[10px] text-slate-400">Agent won't handle any line</p>
+                  </div>
+                  {!form.assignedNumber && (
+                    <div className="ml-auto h-4 w-4 rounded-full bg-slate-500 flex items-center justify-center">
+                      <Check className="h-2.5 w-2.5 text-white" />
+                    </div>
+                  )}
+                </button>
+
+                {/* Available numbers */}
                 {assignableNumbers.map(n => (
-                  <option key={n.id} value={n.id}>
-                    {n.number}{n.friendly_name ? ` · ${n.friendly_name}` : ''}{n.provider ? ` (${n.provider})` : ''}
-                  </option>
+                  <button
+                    key={n.id}
+                    type="button"
+                    onClick={() => setForm(f => ({ ...f, assignedNumber: n }))}
+                    className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl border-2 text-left transition-all cursor-pointer ${
+                      form.assignedNumber?.id === n.id
+                        ? 'border-emerald-400 bg-emerald-50'
+                        : 'border-slate-200 bg-white hover:border-emerald-300 hover:bg-emerald-50/40'
+                    }`}
+                  >
+                    <div className={`h-8 w-8 rounded-lg flex items-center justify-center shrink-0 ${
+                      form.assignedNumber?.id === n.id ? 'bg-emerald-100' : 'bg-slate-100'
+                    }`}>
+                      <Phone className={`h-4 w-4 ${form.assignedNumber?.id === n.id ? 'text-emerald-600' : 'text-slate-400'}`} />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-semibold text-slate-800">{n.number}</p>
+                      <p className="text-[10px] text-slate-400 mt-0.5">
+                        {n.friendly_name ?? '—'}{n.provider ? ` · ${n.provider}` : ''}
+                      </p>
+                    </div>
+                    {form.assignedNumber?.id === n.id && (
+                      <div className="ml-auto h-4 w-4 rounded-full bg-emerald-500 flex items-center justify-center shrink-0">
+                        <Check className="h-2.5 w-2.5 text-white" />
+                      </div>
+                    )}
+                  </button>
                 ))}
-              </select>
-              <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400 pointer-events-none" />
-            </div>
-            {numbers.length === 0 && (
-              <p className="text-[11px] text-slate-400 mt-2">No virtual numbers yet. Add one in Settings → Virtual Numbers.</p>
-            )}
-            {numbers.length > 0 && assignableNumbers.length === 0 && (
-              <p className="text-[11px] text-amber-600 mt-2">All virtual numbers are already assigned to other agents.</p>
+              </div>
             )}
           </div>
 
