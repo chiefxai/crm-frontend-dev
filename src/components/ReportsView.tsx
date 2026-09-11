@@ -10,7 +10,7 @@ import {
   Legend,
   ResponsiveContainer
 } from 'recharts';
-import { PhoneIncoming, PhoneOutgoing, Clock, DollarSign, Smile, CheckCircle2, ListChecks, FileDown, ChevronDown, ChevronRight, Download } from 'lucide-react';
+import { PhoneIncoming, PhoneOutgoing, Clock, DollarSign, Smile, CheckCircle2, ListChecks, FileDown, ChevronDown, ChevronRight, Download, FileText } from 'lucide-react';
 import PageShell from './ui/PageShell';
 import Button from './ui/Button';
 import Widget from './ui/Widget';
@@ -246,8 +246,8 @@ export default function ReportsView({ callLogs, dialerTasks, leads, costPerMinut
       title="Reports"
       subtitle="Call analytics — day, month, or year, incoming or outgoing, overall or per task."
       action={
-        <Button icon={FileDown} onClick={() => setShowPreview(true)}>
-          Preview & Download PDF
+        <Button icon={FileText} onClick={() => setShowPreview(true)}>
+          Preview Report
         </Button>
       }
     >
