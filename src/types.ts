@@ -74,6 +74,7 @@ export interface CallLog {
   id: string;
   leadId: string;
   leadName: string;
+  callerNumber?: string;
   campaignId?: string;
   duration: number; // in seconds
   status: 'Completed' | 'Failed' | 'Busy' | 'In Progress';
@@ -83,6 +84,7 @@ export interface CallLog {
   summary: string;
   recordingUrl?: string;
   direction?: 'inbound' | 'outbound';
+  answers?: Record<string, string>;
   createdAt: string;
 }
 
