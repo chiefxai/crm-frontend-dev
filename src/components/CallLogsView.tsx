@@ -2,8 +2,9 @@ import React, { useState } from 'react';
 import { Phone, PlayCircle, Download } from 'lucide-react';
 import Modal from './ui/Modal';
 import { downloadCSV } from '../shared/lib/exporters';
-import { CallLog } from '../types';
+import { CallLog, Lead } from '../types';
 import { callCostInr, formatInr } from '../lib/pricing';
+import { normalizePhone, formatPhone } from '../lib/phone';
 import { getPlayableRecordingUrl } from '../lib/api';
 import Pagination from '../shared/components/Pagination';
 import { usePagination } from '../shared/hooks/usePagination';
@@ -17,6 +18,7 @@ import EmptyState from './ui/EmptyState';
 interface CallLogsViewProps {
   callLogs: CallLog[];
   costPerMinuteInr?: number;
+  leads?: Lead[];
 }
 
 const SENTIMENT_COLOR: Record<string, 'green' | 'rose' | 'slate'> = {
@@ -32,15 +34,23 @@ function formatDuration(seconds: number) {
   return `${m}:${String(s).padStart(2, '0')}`;
 }
 
-export default function CallLogsView({ callLogs, costPerMinuteInr }: CallLogsViewProps) {
+export default function CallLogsView({ callLogs, costPerMinuteInr, leads = [] }: CallLogsViewProps) {
   const [searchTerm, setSearchTerm] = useState('');
   const [selected, setSelected] = useState<CallLog | null>(null);
   const [fromDate, setFromDate] = useState('');
   const [toDate, setToDate] = useState('');
 
+  function resolveCallerName(c: CallLog): string {
+    if (c.leadName && c.leadName !== 'Unknown') return c.leadName;
+    const match = leads.find(l => normalizePhone(l.phone) === c.callerNumber);
+    if (match) return match.name;
+    return formatPhone(c.callerNumber) || c.callerNumber || 'Unknown';
+  }
+
   const filtered = callLogs.filter(c => {
+    const displayName = resolveCallerName(c);
     const matchesSearch = !searchTerm.trim() ||
-      c.leadName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      displayName.toLowerCase().includes(searchTerm.toLowerCase()) ||
       c.summary.toLowerCase().includes(searchTerm.toLowerCase());
     if (!matchesSearch) return false;
     const created = new Date(c.createdAt);
@@ -65,7 +75,7 @@ export default function CallLogsView({ callLogs, costPerMinuteInr }: CallLogsVie
           size="sm"
           onClick={() => downloadCSV('call_logs.csv',
             ['Name', 'Direction', 'Duration (s)', 'Cost (INR)', 'Status', 'Sentiment', 'Intent', 'Summary', 'Date'],
-            sorted.map(c => [c.leadName, c.direction ?? 'unknown', c.duration, callCostInr(c.duration, costPerMinuteInr ?? 0).toFixed(2), c.status, c.sentiment, c.intent, c.summary, new Date(c.createdAt).toLocaleString()])
+            sorted.map(c => [resolveCallerName(c), c.direction ?? 'unknown', c.duration, callCostInr(c.duration, costPerMinuteInr ?? 0).toFixed(2), c.status, c.sentiment, c.intent, c.summary, new Date(c.createdAt).toLocaleString()])
           )}
         >
           Export CSV
@@ -115,7 +125,7 @@ export default function CallLogsView({ callLogs, costPerMinuteInr }: CallLogsVie
             <tbody className="divide-y" style={{ borderColor: 'var(--border)', color: 'var(--text-secondary)' }}>
               {pagination.paginatedItems.map(c => (
                 <tr key={c.id} className="hover:bg-[var(--bg-subtle)]">
-                  <td className="px-5 py-3 font-semibold" style={{ color: 'var(--text-primary)' }}>{c.leadName}</td>
+                  <td className="px-5 py-3 font-semibold" style={{ color: 'var(--text-primary)' }}>{resolveCallerName(c)}</td>
                   <td className="px-5 py-3 font-mono">{formatDuration(c.duration)}</td>
                   <td className="px-5 py-3 font-mono">{formatInr(callCostInr(c.duration, costPerMinuteInr))}</td>
                   <td className="px-5 py-3">{c.status}</td>
@@ -144,7 +154,7 @@ export default function CallLogsView({ callLogs, costPerMinuteInr }: CallLogsVie
         <Modal
           open
           onClose={() => setSelected(null)}
-          title={selected.leadName}
+          title={resolveCallerName(selected)}
           subtitle={`${new Date(selected.createdAt).toLocaleString()} • ${formatDuration(selected.duration)} • ${formatInr(callCostInr(selected.duration, costPerMinuteInr))}`}
           maxWidth="max-w-2xl"
         >
