@@ -274,6 +274,7 @@ Real Tamil speakers do not say the "correct" written form of a word. They contra
   const [activeLead, setActiveLead] = useState<Lead | null>(null);
   const [twilioCallSid, setTwilioCallSid] = useState<string | null>(null);
   const [vobizCallSid, setVobizCallSid] = useState<string | null>(null);
+  const [piopiyCallSid, setPiopiyCallSid] = useState<string | null>(null);
   const [callState, setCallState] = useState<'idle' | 'dialing' | 'connected' | 'completed'>('idle');
   // When on, finishing a call automatically dials the next pending lead in
   // the task instead of requiring "Auto-Dial Next List Target" + "Dial"
@@ -303,9 +304,9 @@ Real Tamil speakers do not say the "correct" written form of a word. They contra
   const chatBottomRef = useRef<HTMLDivElement | null>(null);
 
   // Outbound numbers this org has actually provisioned (Settings > Numbers)
-  // that can really place a call — only Twilio/Vobiz.ai are wired to real
-  // dialing; other provider labels are display-only for inbound routing.
-  const dialableNumbers = virtualNumbers.filter((n) => /twilio|vobiz/i.test(n.provider || ''));
+  // that can really place a call — Twilio, Vobiz, and PIOPIY are wired to
+  // real dialing; other provider labels are display-only for inbound routing.
+  const dialableNumbers = virtualNumbers.filter((n) => /twilio|vobiz|piopiy/i.test(n.provider || ''));
   const [selectedOutboundNumber, setSelectedOutboundNumber] = useState<string>('');
   useEffect(() => {
     if (!selectedOutboundNumber && dialableNumbers.length) {
@@ -512,6 +513,57 @@ Real Tamil speakers do not say the "correct" written form of a word. They contra
 
   const handleHangupVobizCall = async () => {
     setVobizCallSid(null);
+    handleHangupCall();
+  };
+
+  const handleInitiatePiopiyCall = async (lead: Lead) => {
+    if (callState === 'dialing' || callState === 'connected') return;
+    setActiveLead(lead);
+    setCallState('dialing');
+    setDuration(0);
+    setTranscript([]);
+    setCurrentSentiment('Neutral');
+    setCurrentIntent('Unknown');
+    setActiveQuestionIndex(0);
+    setExtractedAnswers({});
+    setPlayingTapeId(null);
+    setIsTapePlaying(false);
+    try {
+      const assignedMember = selectedTask?.assignedTeamMemberId
+        ? teamMembers.find((m) => m.id === selectedTask.assignedTeamMemberId)
+        : undefined;
+      const res = await apiFetch('/api/piopiy/call', {
+        method: 'POST',
+        body: JSON.stringify({
+          phoneNumber: lead.phone,
+          questions: selectedTask ? selectedTask.questions : [],
+          from: selectedOutboundNumber || undefined,
+          language: selectedTask?.language || undefined,
+          assignedContact: assignedMember ? { name: assignedMember.name, phone: assignedMember.phone } : undefined,
+          starhealthEnabled: !!selectedTask?.starhealthEnabled
+        })
+      });
+      const data = await res.json();
+      if (data.success && data.callSid) {
+        setPiopiyCallSid(data.callSid);
+        setCallState('connected');
+        setTranscript([{ speaker: 'AI', text: `[Piopiy Call Started] Dialing ${lead.name} at ${lead.phone}...`, timestamp: new Date().toTimeString().split(' ')[0] }]);
+      } else {
+        throw new Error(data.error || 'Failed to initiate Piopiy call');
+      }
+    } catch (err: any) {
+      setCallState('idle');
+      alert(`Piopiy call failed: ${err.message}`);
+    }
+  };
+
+  const handleHangupPiopiyCall = async () => {
+    if (piopiyCallSid) {
+      try {
+        await apiFetch('/api/piopiy/hangup', { method: 'POST', body: JSON.stringify({ callSid: piopiyCallSid }) });
+      } catch (err) { console.error('Piopiy hangup failed:', err); }
+    }
+    setPiopiyCallSid(null);
     handleHangupCall();
   };
 
@@ -831,7 +883,9 @@ Currently on question ${nextIndex} out of ${selectedTask.questions.length}. Next
 
   const dialLead = (lead: Lead) => {
     const num = dialableNumbers.find((n) => n.number === selectedOutboundNumber);
-    if (/vobiz/i.test(num?.provider || '')) handleInitiateVobizCall(lead);
+    const provider = num?.provider || '';
+    if (/vobiz/i.test(provider)) handleInitiateVobizCall(lead);
+    else if (/piopiy/i.test(provider)) handleInitiatePiopiyCall(lead);
     else handleInitiateTwilioCall(lead);
   };
 
@@ -859,7 +913,10 @@ Currently on question ${nextIndex} out of ${selectedTask.questions.length}. Next
         if (data.type !== 'call_completed' || !data.callLog) return;
         const log = data.callLog;
         if (log.direction !== 'outbound') return;
-        if (sanitize(log.leadName || '') !== activePhone) return;
+        // Match on callerNumber (E.164 phone stored separately from display name)
+        // falling back to leadName for older logs that predate the callerNumber column.
+        const logPhone = sanitize(log.callerNumber || log.leadName || '');
+        if (logPhone !== activePhone) return;
         handleHangupCall({
           recordingUrl: log.recordingUrl,
           duration: log.duration,
