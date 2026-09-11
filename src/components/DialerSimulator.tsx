@@ -654,7 +654,7 @@ Real Tamil speakers do not say the "correct" written form of a word. They contra
   // player always showed "No recording available" even though the call
   // really was recorded: this function only ever wrote the local
   // simulated timer/transcript, never the real Supabase-hosted recording URL.
-  const handleHangupCall = (realCallLog?: { recordingUrl?: string; duration?: number; sentiment?: string; summary?: string; callId?: string; transcript?: { speaker: 'AI' | 'Customer'; text: string; timestamp: string }[] }) => {
+  const handleHangupCall = (realCallLog?: { recordingUrl?: string; duration?: number; sentiment?: string; summary?: string; callId?: string; transcript?: { speaker: 'AI' | 'Customer'; text: string; timestamp: string }[]; answers?: { question: string; answer: string }[] }) => {
     if (!activeLead) return;
     setCallState('completed');
 
@@ -692,7 +692,12 @@ Real Tamil speakers do not say the "correct" written form of a word. They contra
               sentiment: (realCallLog?.sentiment as typeof currentSentiment) || currentSentiment,
               intent: currentIntent,
               summary: realCallLog?.summary || summaryText,
-              answers: { ...extractedAnswers },
+              // Real calls: answers come from the backend (lead_responses
+              // table, populated by the AI's save_question_response tool).
+              // Simulation mode falls back to the local extractedAnswers state.
+              answers: realCallLog?.answers
+                ? Object.fromEntries(realCallLog.answers.map(a => [a.question, a.answer]))
+                : { ...extractedAnswers },
               recordingUrl: realCallLog?.recordingUrl,
               // The real call_logs row's id — server.js now writes this as
               // the same internal call id lead_responses.call_id uses, so
@@ -940,7 +945,8 @@ Currently on question ${nextIndex} out of ${selectedTask.questions.length}. Next
           sentiment: log.sentiment,
           summary: log.summary,
           callId: log.id,
-          transcript: log.transcript
+          transcript: log.transcript,
+          answers: log.answers, // { question, answer }[] from lead_responses
         });
       } catch {
         // non-JSON keepalive/init messages — ignore
