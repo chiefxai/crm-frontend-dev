@@ -131,6 +131,13 @@ export default function DashboardView({
     (new Date(orgSettings.billingPeriodEnd).getTime() - Date.now()) / (1000 * 60 * 60 * 24)
   ));
 
+  // AI call conversion: % of completed calls with positive sentiment
+  const completedCalls = callLogs.filter(c => c.status === 'Completed' || c.duration > 0);
+  const positiveCalls = completedCalls.filter(c => c.sentiment === 'Positive');
+  const aiCallConversionPct = completedCalls.length > 0
+    ? Math.round((positiveCalls.length / completedCalls.length) * 100)
+    : null;
+
   // ── Interested clients table columns ─────────────────────────────────────
   const clientColumns: Column<InterestedClient>[] = [
     {
@@ -233,6 +240,18 @@ export default function DashboardView({
         sub={`${formatInr(orgSettings.aiMinutesUsed * costPerMinuteInr)} at ₹${costPerMinuteInr}/min`}
         badge={`${daysLeft}d Left`}
         badgeColor="neutral"
+      />
+
+      <KpiCard
+        colSpan={3}
+        icon={PhoneCall}
+        iconBg="#f0fdf4"
+        iconColor="#16a34a"
+        label="AI Call Conversion"
+        value={aiCallConversionPct !== null ? `${aiCallConversionPct}%` : '—'}
+        sub={`${positiveCalls.length} positive of ${completedCalls.length} calls`}
+        badge={aiCallConversionPct !== null && aiCallConversionPct >= 50 ? 'Good' : completedCalls.length === 0 ? 'No data' : 'Low'}
+        badgeColor={aiCallConversionPct !== null && aiCallConversionPct >= 50 ? 'green' : 'neutral'}
       />
 
       {/* ── Row 2: Charts ── */}

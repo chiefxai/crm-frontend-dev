@@ -152,7 +152,10 @@ export default function WorkflowsView({ flows, setFlows }: WorkflowsViewProps) {
           ) : (
             <WorkflowVariables
               variables={editingFlow.variables ?? []}
-              onChange={(vars: WorkflowVariable[]) => handleFlowChange({ ...editingFlow, variables: vars })}
+              onChange={(vars: WorkflowVariable[]) => {
+                // When variables change, clear nodes/edges so diagram regenerates on next switch
+                handleFlowChange({ ...editingFlow, variables: vars, nodes: [], edges: [] });
+              }}
             />
           )}
         </div>
