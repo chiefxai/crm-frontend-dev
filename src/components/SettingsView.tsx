@@ -506,21 +506,23 @@ export default function SettingsView({
                 <Modal
                   open
                   onClose={() => setShowProviderForm(false)}
-                  title="Connect Calling Provider"
-                  subtitle="Connect your account so calls use your credentials."
-                  maxWidth="max-w-md"
+                  title="Add Virtual Number"
+                  subtitle="Choose your telephony provider and enter your credentials to register a virtual number."
+                  maxWidth="max-w-lg"
                 >
-                    <div className="space-y-4">
-                      {/* Provider selector — logo cards */}
-                      <div className="grid grid-cols-3 gap-2">
+                  <div className="space-y-5">
+                    {/* Provider selector */}
+                    <div>
+                      <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-widest mb-2">Select Provider</p>
+                      <div className="grid grid-cols-3 gap-3">
                         {([
                           {
                             id: 'twilio',
                             label: 'Twilio',
                             connected: !!twilioChannel,
-                            accent: 'border-red-400 bg-red-50',
+                            selectedBg: 'bg-red-50 border-red-400',
                             logo: (
-                              <svg viewBox="0 0 60 60" className="h-7 w-7" fill="none" xmlns="http://www.w3.org/2000/svg">
+                              <svg viewBox="0 0 60 60" className="h-8 w-8" fill="none" xmlns="http://www.w3.org/2000/svg">
                                 <circle cx="30" cy="30" r="30" fill="#F22F46"/>
                                 <circle cx="30" cy="18" r="5" fill="white"/>
                                 <circle cx="30" cy="42" r="5" fill="white"/>
@@ -533,102 +535,178 @@ export default function SettingsView({
                             id: 'vobiz',
                             label: 'Vobiz.ai',
                             connected: !!vobizChannel,
-                            accent: 'border-purple-400 bg-purple-50',
+                            selectedBg: 'bg-purple-50 border-purple-400',
                             logo: (
-                              <div className="h-7 w-7 rounded-lg bg-gradient-to-br from-purple-500 to-indigo-600 flex items-center justify-center text-white font-black text-sm">V</div>
+                              <div className="h-8 w-8 rounded-xl bg-gradient-to-br from-purple-500 to-indigo-600 flex items-center justify-center text-white font-black text-base shadow-sm">V</div>
                             ),
                           },
                           {
                             id: 'telecmi',
                             label: 'TeleCMI',
                             connected: !!telecmiChannel,
-                            accent: 'border-teal-400 bg-teal-50',
+                            selectedBg: 'bg-teal-50 border-teal-400',
                             logo: (
-                              <div className="h-7 w-7 rounded-lg bg-gradient-to-br from-teal-500 to-cyan-600 flex items-center justify-center text-white font-black text-sm">T</div>
+                              <div className="h-8 w-8 rounded-xl bg-gradient-to-br from-teal-500 to-cyan-600 flex items-center justify-center text-white font-black text-base shadow-sm">T</div>
                             ),
                           },
-                        ] as const).map(({ id, label, connected, accent, logo }) => (
+                        ] as const).map(({ id, label, connected, selectedBg, logo }) => (
                           <button
                             key={id}
                             type="button"
                             onClick={() => setConnectProvider(id)}
-                            className={`flex flex-col items-center gap-1.5 py-3 px-2 rounded-xl border-2 transition-all cursor-pointer ${
-                              connectProvider === id ? accent : 'border-slate-200 bg-white hover:border-slate-300'
+                            className={`relative flex flex-col items-center gap-2 py-4 px-3 rounded-2xl border-2 transition-all cursor-pointer ${
+                              connectProvider === id
+                                ? selectedBg
+                                : 'border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50'
                             }`}
                           >
                             {logo}
-                            <span className="text-[10px] font-semibold text-slate-700">{label}</span>
+                            <span className="text-xs font-semibold text-slate-700">{label}</span>
                             {connected && (
-                              <span className="text-[9px] font-bold text-emerald-600 bg-emerald-100 px-1.5 py-0.5 rounded-full">Connected</span>
+                              <span className="absolute top-2 right-2 h-2 w-2 rounded-full bg-emerald-500 ring-2 ring-white" title="Connected" />
                             )}
                           </button>
                         ))}
                       </div>
-
-                      {connectProvider === 'telecmi' ? (
-                        <form onSubmit={(e) => { handleConnectTelecmi(e); setShowProviderForm(false); }} className="space-y-2.5">
-                          {telecmiChannel && (
-                            <div className="flex items-center justify-between text-[11px] text-emerald-600 bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-2">
-                              <span>Currently: {telecmiChannel.externalId}</span>
-                              <button type="button" onClick={() => handleDisconnectChannel('piopiy')} disabled={disconnectingChannel === 'piopiy'} className="text-rose-500 hover:text-rose-600 font-semibold disabled:opacity-50 cursor-pointer">
-                                {disconnectingChannel === 'piopiy' ? 'Disconnecting…' : 'Disconnect'}
-                              </button>
-                            </div>
-                          )}
-                          <input type="text" value={telecmiAppId} onChange={(e) => setTelecmiAppId(e.target.value)} placeholder="App ID" className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-teal-500" />
-                          <input type="password" value={telecmiSecret} onChange={(e) => setTelecmiSecret(e.target.value)} placeholder="App Secret" className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-teal-500" />
-                          <input type="text" value={telecmiPhone} onChange={(e) => setTelecmiPhone(e.target.value)} placeholder="Phone number (e.g. +919XXXXXXXXX)" className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-teal-500" />
-                          <input type="text" value={telecmiLabel} onChange={(e) => setTelecmiLabel(e.target.value)} placeholder="Friendly name (e.g. TeleCMI Line)" className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-teal-500" />
-                          <div className="flex items-center justify-between pt-1">
-                            <p className="text-[10px] text-slate-400">Submit again to add another number.</p>
-                            <button type="submit" disabled={savingTelecmi} className="bg-teal-600 hover:bg-teal-500 disabled:opacity-60 text-white text-xs font-semibold rounded-lg px-5 py-2 transition-all cursor-pointer">
-                              {savingTelecmi ? 'Connecting…' : telecmiChannel ? 'Update' : 'Connect TeleCMI'}
-                            </button>
-                          </div>
-                        </form>
-                      ) : connectProvider === 'twilio' ? (
-                        <form onSubmit={(e) => { handleConnectTwilio(e); setShowProviderForm(false); }} className="space-y-2.5">
-                          {twilioChannel && (
-                            <div className="flex items-center justify-between text-[11px] text-emerald-600 bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-2">
-                              <span>Currently: {twilioChannel.externalId}</span>
-                              <button type="button" onClick={() => handleDisconnectChannel('twilio')} disabled={disconnectingChannel === 'twilio'} className="text-rose-500 hover:text-rose-600 font-semibold disabled:opacity-50 cursor-pointer">
-                                {disconnectingChannel === 'twilio' ? 'Disconnecting…' : 'Disconnect'}
-                              </button>
-                            </div>
-                          )}
-                          <input type="text" value={twilioSid} onChange={(e) => setTwilioSid(e.target.value)} placeholder="Account SID" className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-indigo-500" />
-                          <input type="password" value={twilioToken} onChange={(e) => setTwilioToken(e.target.value)} placeholder="Auth Token" className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-indigo-500" />
-                          <input type="text" value={twilioPhone} onChange={(e) => setTwilioPhone(e.target.value)} placeholder="+1 (800) 000-0000" className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-indigo-500" />
-                          <input type="text" value={twilioLabel} onChange={(e) => setTwilioLabel(e.target.value)} placeholder="Friendly name (e.g. Sales Line)" className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-indigo-500" />
-                          <div className="flex items-center justify-between pt-1">
-                            <p className="text-[10px] text-slate-400">Submit again to add another number.</p>
-                            <button type="submit" disabled={savingTwilio} className="bg-emerald-600 hover:bg-emerald-500 disabled:opacity-60 text-white text-xs font-semibold rounded-lg px-5 py-2 transition-all cursor-pointer">
-                              {savingTwilio ? 'Connecting…' : twilioChannel ? 'Update' : 'Connect Twilio'}
-                            </button>
-                          </div>
-                        </form>
-                      ) : (
-                        <form onSubmit={(e) => { handleConnectVobiz(e); setShowProviderForm(false); }} className="space-y-2.5">
-                          {vobizChannel && (
-                            <div className="flex items-center justify-between text-[11px] text-emerald-600 bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-2">
-                              <span>Currently: {vobizChannel.externalId}</span>
-                              <button type="button" onClick={() => handleDisconnectChannel('vobiz')} disabled={disconnectingChannel === 'vobiz'} className="text-rose-500 hover:text-rose-600 font-semibold disabled:opacity-50 cursor-pointer">
-                                {disconnectingChannel === 'vobiz' ? 'Disconnecting…' : 'Disconnect'}
-                              </button>
-                            </div>
-                          )}
-                          <input type="text" value={vobizAuthId} onChange={(e) => setVobizAuthId(e.target.value)} placeholder="Auth ID" className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-purple-500" />
-                          <input type="password" value={vobizToken} onChange={(e) => setVobizToken(e.target.value)} placeholder="Auth Token" className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-purple-500" />
-                          <input type="text" value={vobizPhone} onChange={(e) => setVobizPhone(e.target.value)} placeholder="+1 (800) 000-0000" className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-purple-500" />
-                          <input type="text" value={vobizLabel} onChange={(e) => setVobizLabel(e.target.value)} placeholder="Friendly name (e.g. Sales Line)" className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-purple-500" />
-                          <div className="flex justify-end pt-1">
-                            <button type="submit" disabled={savingVobiz} className="bg-purple-600 hover:bg-purple-500 disabled:opacity-60 text-white text-xs font-semibold rounded-lg px-5 py-2 transition-all cursor-pointer">
-                              {savingVobiz ? 'Connecting…' : vobizChannel ? 'Update' : 'Connect Vobiz.ai'}
-                            </button>
-                          </div>
-                        </form>
-                      )}
                     </div>
+
+                    {/* Divider */}
+                    <div className="border-t border-slate-100" />
+
+                    {/* Per-provider form */}
+                    {connectProvider === 'twilio' && (
+                      <form onSubmit={(e) => { handleConnectTwilio(e); setShowProviderForm(false); }} className="space-y-4">
+                        {twilioChannel && (
+                          <div className="flex items-center justify-between text-xs text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-xl px-4 py-2.5">
+                            <div className="flex items-center gap-2">
+                              <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                              <span>Active: <span className="font-semibold">{twilioChannel.externalId}</span></span>
+                            </div>
+                            <button type="button" onClick={() => handleDisconnectChannel('twilio')} disabled={disconnectingChannel === 'twilio'} className="text-rose-500 hover:text-rose-600 font-semibold text-xs disabled:opacity-50 cursor-pointer">
+                              {disconnectingChannel === 'twilio' ? 'Disconnecting…' : 'Disconnect'}
+                            </button>
+                          </div>
+                        )}
+                        <div className="space-y-3">
+                          <div>
+                            <label className="block text-xs font-semibold text-slate-600 mb-1.5">Account SID</label>
+                            <input type="text" value={twilioSid} onChange={(e) => setTwilioSid(e.target.value)} placeholder="ACxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx" className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-red-400 focus:border-transparent transition-all" />
+                          </div>
+                          <div>
+                            <label className="block text-xs font-semibold text-slate-600 mb-1.5">Auth Token</label>
+                            <input type="password" value={twilioToken} onChange={(e) => setTwilioToken(e.target.value)} placeholder="••••••••••••••••••••••••••••••••" className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-red-400 focus:border-transparent transition-all" />
+                          </div>
+                          <div className="grid grid-cols-2 gap-3">
+                            <div>
+                              <label className="block text-xs font-semibold text-slate-600 mb-1.5">Phone Number</label>
+                              <input type="text" value={twilioPhone} onChange={(e) => setTwilioPhone(e.target.value)} placeholder="+91XXXXXXXXXX" className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-red-400 focus:border-transparent transition-all" />
+                            </div>
+                            <div>
+                              <label className="block text-xs font-semibold text-slate-600 mb-1.5">Label <span className="text-slate-400 font-normal">(optional)</span></label>
+                              <input type="text" value={twilioLabel} onChange={(e) => setTwilioLabel(e.target.value)} placeholder="e.g. Sales Line" className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-red-400 focus:border-transparent transition-all" />
+                            </div>
+                          </div>
+                        </div>
+                        <div className="flex items-center justify-between pt-1">
+                          <p className="text-[11px] text-slate-400">Repeat to add another number.</p>
+                          <button type="submit" disabled={savingTwilio} className="flex items-center gap-2 bg-red-500 hover:bg-red-600 disabled:opacity-60 text-white text-sm font-semibold rounded-xl px-6 py-2.5 transition-all cursor-pointer shadow-sm">
+                            {savingTwilio ? 'Connecting…' : twilioChannel ? 'Update Number' : 'Connect Twilio'}
+                          </button>
+                        </div>
+                      </form>
+                    )}
+
+                    {connectProvider === 'vobiz' && (
+                      <form onSubmit={(e) => { handleConnectVobiz(e); setShowProviderForm(false); }} className="space-y-4">
+                        {vobizChannel && (
+                          <div className="flex items-center justify-between text-xs text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-xl px-4 py-2.5">
+                            <div className="flex items-center gap-2">
+                              <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                              <span>Active: <span className="font-semibold">{vobizChannel.externalId}</span></span>
+                            </div>
+                            <button type="button" onClick={() => handleDisconnectChannel('vobiz')} disabled={disconnectingChannel === 'vobiz'} className="text-rose-500 hover:text-rose-600 font-semibold text-xs disabled:opacity-50 cursor-pointer">
+                              {disconnectingChannel === 'vobiz' ? 'Disconnecting…' : 'Disconnect'}
+                            </button>
+                          </div>
+                        )}
+                        <div className="space-y-3">
+                          <div>
+                            <label className="block text-xs font-semibold text-slate-600 mb-1.5">Auth ID</label>
+                            <input type="text" value={vobizAuthId} onChange={(e) => setVobizAuthId(e.target.value)} placeholder="Your Vobiz.ai Auth ID" className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-purple-400 focus:border-transparent transition-all" />
+                          </div>
+                          <div>
+                            <label className="block text-xs font-semibold text-slate-600 mb-1.5">Auth Token</label>
+                            <input type="password" value={vobizToken} onChange={(e) => setVobizToken(e.target.value)} placeholder="••••••••••••••••••••••••••••••••" className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-purple-400 focus:border-transparent transition-all" />
+                          </div>
+                          <div className="grid grid-cols-2 gap-3">
+                            <div>
+                              <label className="block text-xs font-semibold text-slate-600 mb-1.5">Phone Number</label>
+                              <input type="text" value={vobizPhone} onChange={(e) => setVobizPhone(e.target.value)} placeholder="+91XXXXXXXXXX" className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-purple-400 focus:border-transparent transition-all" />
+                            </div>
+                            <div>
+                              <label className="block text-xs font-semibold text-slate-600 mb-1.5">Label <span className="text-slate-400 font-normal">(optional)</span></label>
+                              <input type="text" value={vobizLabel} onChange={(e) => setVobizLabel(e.target.value)} placeholder="e.g. Support Line" className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-purple-400 focus:border-transparent transition-all" />
+                            </div>
+                          </div>
+                        </div>
+                        <div className="flex items-center justify-between pt-1">
+                          <p className="text-[11px] text-slate-400">Repeat to add another number.</p>
+                          <button type="submit" disabled={savingVobiz} className="flex items-center gap-2 bg-purple-600 hover:bg-purple-700 disabled:opacity-60 text-white text-sm font-semibold rounded-xl px-6 py-2.5 transition-all cursor-pointer shadow-sm">
+                            {savingVobiz ? 'Connecting…' : vobizChannel ? 'Update Number' : 'Connect Vobiz.ai'}
+                          </button>
+                        </div>
+                      </form>
+                    )}
+
+                    {connectProvider === 'telecmi' && (
+                      <form onSubmit={(e) => { handleConnectTelecmi(e); setShowProviderForm(false); }} className="space-y-4">
+                        {telecmiChannel && (
+                          <div className="flex items-center justify-between text-xs text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-xl px-4 py-2.5">
+                            <div className="flex items-center gap-2">
+                              <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                              <span>Active: <span className="font-semibold">{telecmiChannel.externalId}</span></span>
+                            </div>
+                            <button type="button" onClick={() => handleDisconnectChannel('piopiy')} disabled={disconnectingChannel === 'piopiy'} className="text-rose-500 hover:text-rose-600 font-semibold text-xs disabled:opacity-50 cursor-pointer">
+                              {disconnectingChannel === 'piopiy' ? 'Disconnecting…' : 'Disconnect'}
+                            </button>
+                          </div>
+                        )}
+                        <div className="space-y-3">
+                          <div>
+                            <label className="block text-xs font-semibold text-slate-600 mb-1.5">App ID</label>
+                            <input type="text" value={telecmiAppId} onChange={(e) => setTelecmiAppId(e.target.value)} placeholder="Your TeleCMI App ID" className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-teal-400 focus:border-transparent transition-all" />
+                          </div>
+                          <div>
+                            <label className="block text-xs font-semibold text-slate-600 mb-1.5">App Secret</label>
+                            <input type="password" value={telecmiSecret} onChange={(e) => setTelecmiSecret(e.target.value)} placeholder="••••••••••••••••••••••••••••••••" className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-teal-400 focus:border-transparent transition-all" />
+                          </div>
+                          <div className="grid grid-cols-2 gap-3">
+                            <div>
+                              <label className="block text-xs font-semibold text-slate-600 mb-1.5">Phone Number</label>
+                              <input type="text" value={telecmiPhone} onChange={(e) => setTelecmiPhone(e.target.value)} placeholder="+91XXXXXXXXXX" className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-teal-400 focus:border-transparent transition-all" />
+                            </div>
+                            <div>
+                              <label className="block text-xs font-semibold text-slate-600 mb-1.5">Label <span className="text-slate-400 font-normal">(optional)</span></label>
+                              <input type="text" value={telecmiLabel} onChange={(e) => setTelecmiLabel(e.target.value)} placeholder="e.g. TeleCMI Line" className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-teal-400 focus:border-transparent transition-all" />
+                            </div>
+                          </div>
+                        </div>
+                        <div className="flex items-center justify-between pt-1">
+                          <p className="text-[11px] text-slate-400">Repeat to add another number.</p>
+                          <button type="submit" disabled={savingTelecmi} className="flex items-center gap-2 bg-teal-600 hover:bg-teal-700 disabled:opacity-60 text-white text-sm font-semibold rounded-xl px-6 py-2.5 transition-all cursor-pointer shadow-sm">
+                            {savingTelecmi ? 'Connecting…' : telecmiChannel ? 'Update Number' : 'Connect TeleCMI'}
+                          </button>
+                        </div>
+                      </form>
+                    )}
+
+                    {!connectProvider && (
+                      <div className="flex flex-col items-center justify-center py-8 text-center text-slate-400">
+                        <Phone className="h-8 w-8 mb-2 opacity-30" />
+                        <p className="text-sm">Select a provider above to continue</p>
+                      </div>
+                    )}
+                  </div>
                 </Modal>
               )}
             </div>
