@@ -179,10 +179,11 @@ export default function AgentStudioView() {
       const wantedOutboundId  = form.outboundNumber?.id ?? null;
       const currentOutboundId = editingAgent?.outboundNumber?.id ?? null;
       if (wantedOutboundId !== currentOutboundId) {
-        await apiFetch(`/api/agents/${saved.id}/assign-outbound-number`, {
+        const outboundRes = await apiFetch(`/api/agents/${saved.id}/assign-outbound-number`, {
           method: 'PUT',
           body: JSON.stringify({ numberId: wantedOutboundId }),
         });
+        if (!outboundRes.ok) throw new Error((await outboundRes.json()).error || 'Failed to assign outbound number');
       }
 
       setSaveStatus('saved');
