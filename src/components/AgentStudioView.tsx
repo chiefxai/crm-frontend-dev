@@ -264,68 +264,97 @@ export default function AgentStudioView() {
               </button>
             </div>
           ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-0 divide-x divide-y divide-slate-100">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 p-4">
               {agents.map(agent => (
-                <div key={agent.id} className="p-5 hover:bg-[var(--bg-subtle)] transition-colors group">
-                  <div className="flex items-start justify-between gap-3 mb-3">
-                    <div className="flex items-center gap-3 min-w-0">
-                      <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center shrink-0 shadow-sm">
-                        <Bot className="h-5 w-5 text-white" />
+                <div
+                  key={agent.id}
+                  className="relative flex flex-col rounded-2xl border border-slate-200 bg-white hover:border-indigo-300 hover:shadow-md transition-all group overflow-hidden"
+                >
+                  {/* Top accent bar */}
+                  <div className="h-1 w-full bg-gradient-to-r from-indigo-500 to-purple-500" />
+
+                  <div className="p-5 flex flex-col gap-4 flex-1">
+                    {/* Header */}
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className="h-11 w-11 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center shrink-0 shadow-sm">
+                          <Bot className="h-5 w-5 text-white" />
+                        </div>
+                        <div className="min-w-0">
+                          <p className="text-sm font-bold text-slate-800 truncate leading-tight">{agent.name}</p>
+                          <p className="text-[11px] text-slate-400 mt-0.5 flex items-center gap-1">
+                            <Mic className="h-3 w-3" /> {agent.activeVoice}
+                          </p>
+                        </div>
                       </div>
-                      <div className="min-w-0">
-                        <p className="text-sm font-bold text-slate-800 truncate">{agent.name}</p>
-                        <p className="text-[10px] text-slate-400 mt-0.5">{agent.activeVoice}</p>
+                      <div className="flex items-center gap-1 shrink-0">
+                        <button
+                          onClick={() => openEdit(agent)}
+                          className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
+                          title="Edit"
+                        >
+                          <Edit2 className="h-3.5 w-3.5" />
+                        </button>
+                        <button
+                          onClick={() => handleDelete(agent.id)}
+                          disabled={deletingId === agent.id}
+                          className="p-1.5 text-slate-400 hover:text-rose-500 hover:bg-rose-50 rounded-lg transition-colors disabled:opacity-50"
+                          title="Delete"
+                        >
+                          {deletingId === agent.id
+                            ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                            : <Trash2 className="h-3.5 w-3.5" />}
+                        </button>
                       </div>
                     </div>
-                    <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
-                      <button
-                        onClick={() => openEdit(agent)}
-                        className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
-                        title="Edit"
-                      >
-                        <Edit2 className="h-3.5 w-3.5" />
-                      </button>
-                      <button
-                        onClick={() => handleDelete(agent.id)}
-                        disabled={deletingId === agent.id}
-                        className="p-1.5 text-slate-400 hover:text-rose-500 hover:bg-rose-50 rounded-lg transition-colors disabled:opacity-50"
-                        title="Delete"
-                      >
-                        {deletingId === agent.id
-                          ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                          : <Trash2 className="h-3.5 w-3.5" />}
-                      </button>
+
+                    {/* Delivery sliders summary */}
+                    <div className="grid grid-cols-3 gap-2">
+                      {[
+                        { label: 'Emotion', value: agent.emotion, color: 'bg-indigo-500' },
+                        { label: 'Speed', value: agent.speed, color: 'bg-blue-500' },
+                        { label: 'Friendly', value: agent.friendliness, color: 'bg-violet-500' },
+                      ].map(({ label, value, color }) => (
+                        <div key={label} className="bg-slate-50 rounded-xl p-2.5 text-center">
+                          <p className="text-[9px] font-semibold text-slate-400 uppercase tracking-wide mb-1.5">{label}</p>
+                          <div className="w-full h-1 bg-slate-200 rounded-full overflow-hidden">
+                            <div className={`h-full rounded-full ${color}`} style={{ width: `${value}%` }} />
+                          </div>
+                          <p className="text-[10px] font-bold text-slate-600 mt-1.5">{value}</p>
+                        </div>
+                      ))}
                     </div>
-                  </div>
 
-                  {/* Stats row */}
-                  <div className="flex flex-wrap gap-1.5 mb-3">
-                    <span className="text-[10px] font-semibold bg-indigo-50 text-indigo-600 px-2 py-0.5 rounded-full">E {agent.emotion}</span>
-                    <span className="text-[10px] font-semibold bg-blue-50 text-blue-600 px-2 py-0.5 rounded-full">S {agent.speed}</span>
-                    <span className="text-[10px] font-semibold bg-violet-50 text-violet-600 px-2 py-0.5 rounded-full">F {agent.friendliness}</span>
-                  </div>
-
-                  {/* Number */}
-                  {agent.assignedNumber ? (
-                    <div className="flex items-center gap-1.5 text-[11px] font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2.5 py-1.5 rounded-xl">
-                      <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                      {agent.assignedNumber.number}
-                      {(agent.assignedNumber.friendlyName ?? agent.assignedNumber.friendly_name) && (
-                        <span className="text-emerald-500 font-normal">· {agent.assignedNumber.friendlyName ?? agent.assignedNumber.friendly_name}</span>
+                    {/* Assigned number */}
+                    <div className="mt-auto">
+                      {agent.assignedNumber ? (
+                        <div className="flex items-center gap-2 px-3 py-2 bg-emerald-50 border border-emerald-200 rounded-xl">
+                          <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse shrink-0" />
+                          <div className="min-w-0">
+                            <p className="text-xs font-bold text-emerald-700 truncate">{agent.assignedNumber.number}</p>
+                            {(agent.assignedNumber.friendlyName ?? agent.assignedNumber.friendly_name) && (
+                              <p className="text-[10px] text-emerald-500 truncate">{agent.assignedNumber.friendlyName ?? agent.assignedNumber.friendly_name}</p>
+                            )}
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-2 px-3 py-2 bg-slate-50 border border-dashed border-slate-300 rounded-xl">
+                          <PhoneOff className="h-3.5 w-3.5 text-slate-400 shrink-0" />
+                          <p className="text-[11px] text-slate-400">No number assigned</p>
+                        </div>
                       )}
                     </div>
-                  ) : (
-                    <div className="flex items-center gap-1.5 text-[11px] text-slate-400 bg-slate-50 border border-slate-200 px-2.5 py-1.5 rounded-xl">
-                      <PhoneOff className="h-3 w-3" /> No number assigned
-                    </div>
-                  )}
+                  </div>
 
-                  <button
-                    onClick={() => openEdit(agent)}
-                    className="mt-3 w-full text-[11px] font-semibold text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50 py-1.5 rounded-lg transition-colors border border-indigo-100"
-                  >
-                    Edit Agent
-                  </button>
+                  {/* Footer action */}
+                  <div className="px-5 pb-4">
+                    <button
+                      onClick={() => openEdit(agent)}
+                      className="w-full py-2 text-xs font-semibold text-indigo-600 bg-indigo-50 hover:bg-indigo-100 rounded-xl transition-colors border border-indigo-100"
+                    >
+                      Configure Agent
+                    </button>
+                  </div>
                 </div>
               ))}
             </div>
