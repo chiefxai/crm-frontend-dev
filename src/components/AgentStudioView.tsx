@@ -5,7 +5,6 @@ import {
 } from 'lucide-react';
 import { apiFetch } from '../lib/api';
 import PageShell from './ui/PageShell';
-import Widget from './ui/Widget';
 import Modal from './ui/Modal';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -246,7 +245,6 @@ export default function AgentStudioView() {
     >
       {/* ── Agent list ── */}
       <div className="col-span-12">
-        <Widget colSpan={12} showHeader={false} padding="none">
           {agents.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-20 text-center">
               <div className="h-16 w-16 rounded-2xl bg-indigo-50 flex items-center justify-center mb-4">
@@ -359,7 +357,6 @@ export default function AgentStudioView() {
               ))}
             </div>
           )}
-        </Widget>
       </div>
 
       {/* ── Agent create / edit modal ── */}
