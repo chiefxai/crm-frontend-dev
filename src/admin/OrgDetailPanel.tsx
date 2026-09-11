@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Loader2, Users, PhoneCall, ScrollText, Pencil, Ban, PlayCircle, Trash2, AlertTriangle, ToggleLeft, ToggleRight } from 'lucide-react';
+import { Loader2, Users, PhoneCall, ScrollText, Pencil, Ban, PlayCircle, Trash2, AlertTriangle, ToggleLeft, ToggleRight, Hash, Plus, X } from 'lucide-react';
 import { apiFetch } from '../lib/api';
 import { OrgDetail } from './types';
 import { callCostInr, formatInr } from '../lib/pricing';
@@ -19,6 +19,44 @@ export default function OrgDetailPanel({ orgId, onClose, onChanged }: { orgId: s
   const deleteInputRef = useRef<HTMLInputElement>(null);
   const [enabledFlags, setEnabledFlags] = useState<string[]>([]);
   const [flagsBusy, setFlagsBusy] = useState(false);
+
+  // Virtual numbers
+  const [numbers, setNumbers] = useState<any[]>([]);
+  const [numbersLoading, setNumbersLoading] = useState(false);
+  const [addNumberForm, setAddNumberForm] = useState(false);
+  const [newNum, setNewNum] = useState({ number: '', friendlyName: '', provider: 'Twilio' });
+  const [numBusy, setNumBusy] = useState(false);
+
+  const loadNumbers = () => {
+    setNumbersLoading(true);
+    apiFetch(`/api/platform/organizations/${orgId}/numbers`)
+      .then(r => r.json())
+      .then(d => setNumbers(Array.isArray(d) ? d : []))
+      .catch(() => setNumbers([]))
+      .finally(() => setNumbersLoading(false));
+  };
+
+  const handleAddNumber = async () => {
+    if (!newNum.number.trim()) return;
+    setNumBusy(true);
+    try {
+      const res = await apiFetch(`/api/platform/organizations/${orgId}/numbers`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ number: newNum.number.trim(), friendlyName: newNum.friendlyName.trim(), provider: newNum.provider, status: 'Active' }),
+      });
+      if (!res.ok) throw new Error((await res.json()).error || 'Failed');
+      setNewNum({ number: '', friendlyName: '', provider: 'Twilio' });
+      setAddNumberForm(false);
+      loadNumbers();
+    } catch { /* ignore */ } finally { setNumBusy(false); }
+  };
+
+  const handleDeleteNumber = async (numberId: string) => {
+    if (!confirm('Remove this virtual number?')) return;
+    await apiFetch(`/api/platform/organizations/${orgId}/numbers/${encodeURIComponent(numberId)}`, { method: 'DELETE' });
+    setNumbers(prev => prev.filter(n => n.id !== numberId));
+  };
 
   const loadFlags = () => {
     apiFetch(`/api/platform/organizations/${orgId}/features`)
@@ -64,7 +102,7 @@ export default function OrgDetailPanel({ orgId, onClose, onChanged }: { orgId: s
       .finally(() => setLoading(false));
   };
 
-  useEffect(() => { load(); loadFlags(); }, [orgId]);
+  useEffect(() => { load(); loadFlags(); loadNumbers(); }, [orgId]);
 
   const handleSaveEdit = async () => {
     setBusy(true);
@@ -295,6 +333,73 @@ export default function OrgDetailPanel({ orgId, onClose, onChanged }: { orgId: s
                     </div>
                   ))}
                   {detail.recentActivity.length === 0 && <p className="text-xs text-slate-400">No activity yet.</p>}
+                </div>
+              </div>
+
+              <div className="bg-white border border-slate-200 rounded-2xl p-5">
+                <div className="flex items-center justify-between mb-3">
+                  <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wide flex items-center gap-1.5">
+                    <Hash className="h-3.5 w-3.5" /> Virtual Numbers
+                    {numbersLoading && <Loader2 className="h-3 w-3 animate-spin ml-1 text-slate-400" />}
+                  </h4>
+                  <button
+                    onClick={() => setAddNumberForm(v => !v)}
+                    className="flex items-center gap-1 text-[10px] font-semibold px-2 py-1 rounded-lg bg-indigo-50 text-indigo-700 hover:bg-indigo-100"
+                  >
+                    {addNumberForm ? <X className="h-3 w-3" /> : <Plus className="h-3 w-3" />}
+                    {addNumberForm ? 'Cancel' : 'Add'}
+                  </button>
+                </div>
+                {addNumberForm && (
+                  <div className="mb-3 p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-2">
+                    <div className="grid grid-cols-3 gap-2">
+                      <input
+                        placeholder="Phone number (E.164)"
+                        value={newNum.number}
+                        onChange={e => setNewNum(f => ({ ...f, number: e.target.value }))}
+                        className="col-span-2 text-xs border border-slate-200 rounded-lg px-2 py-1.5 font-mono"
+                      />
+                      <select
+                        value={newNum.provider}
+                        onChange={e => setNewNum(f => ({ ...f, provider: e.target.value }))}
+                        className="text-xs border border-slate-200 rounded-lg px-2 py-1.5"
+                      >
+                        <option>Twilio</option>
+                        <option>Vobiz.ai</option>
+                        <option>TeleCMI</option>
+                      </select>
+                    </div>
+                    <input
+                      placeholder="Label (optional)"
+                      value={newNum.friendlyName}
+                      onChange={e => setNewNum(f => ({ ...f, friendlyName: e.target.value }))}
+                      className="w-full text-xs border border-slate-200 rounded-lg px-2 py-1.5"
+                    />
+                    <button
+                      onClick={handleAddNumber}
+                      disabled={numBusy || !newNum.number.trim()}
+                      className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-50"
+                    >
+                      {numBusy ? 'Adding…' : 'Add Number'}
+                    </button>
+                  </div>
+                )}
+                {numbers.length === 0 && !numbersLoading && (
+                  <p className="text-xs text-slate-400">No virtual numbers registered.</p>
+                )}
+                <div className="space-y-2">
+                  {numbers.map(n => (
+                    <div key={n.id} className="flex items-center justify-between text-xs">
+                      <div>
+                        <span className="font-mono font-medium text-slate-700">{n.number}</span>
+                        {n.friendlyName && <span className="text-slate-400 ml-2">{n.friendlyName}</span>}
+                        <span className="ml-2 text-[10px] bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded-full">{n.provider}</span>
+                      </div>
+                      <button onClick={() => handleDeleteNumber(n.id)} className="text-rose-400 hover:text-rose-600 p-1 rounded-lg hover:bg-rose-50">
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                  ))}
                 </div>
               </div>
 
