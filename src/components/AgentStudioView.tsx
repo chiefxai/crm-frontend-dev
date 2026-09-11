@@ -323,12 +323,13 @@ export default function AgentStudioView() {
                       ))}
                     </div>
 
-                    {/* Assigned number */}
+                    {/* Inbound number */}
                     <div className="mt-auto">
                       {agent.assignedNumber ? (
                         <div className="flex items-center gap-2 px-3 py-2 bg-emerald-50 border border-emerald-200 rounded-xl">
                           <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse shrink-0" />
                           <div className="min-w-0">
+                            <p className="text-[9px] font-semibold text-emerald-500 uppercase tracking-wider mb-0.5">Inbound</p>
                             <p className="text-xs font-bold text-emerald-700 truncate">{agent.assignedNumber.number}</p>
                             {(agent.assignedNumber.friendlyName ?? agent.assignedNumber.friendly_name) && (
                               <p className="text-[10px] text-emerald-500 truncate">{agent.assignedNumber.friendlyName ?? agent.assignedNumber.friendly_name}</p>
@@ -338,7 +339,7 @@ export default function AgentStudioView() {
                       ) : (
                         <div className="flex items-center gap-2 px-3 py-2 bg-slate-50 border border-dashed border-slate-300 rounded-xl">
                           <PhoneOff className="h-3.5 w-3.5 text-slate-400 shrink-0" />
-                          <p className="text-[11px] text-slate-400">No number assigned</p>
+                          <p className="text-[11px] text-slate-400">Outbound only</p>
                         </div>
                       )}
                     </div>
@@ -460,23 +461,20 @@ export default function AgentStudioView() {
 
           <div className="border-t border-slate-100" />
 
-          {/* Phone number */}
+          {/* Inbound number */}
           <div>
-            <div className="flex items-center gap-2 mb-3">
+            <div className="flex items-center gap-2 mb-1">
               <Phone className="h-4 w-4 text-emerald-500" />
-              <p className="text-xs font-semibold text-slate-700 uppercase tracking-widest">Phone Number</p>
-              <span className="text-[10px] text-slate-400 font-normal normal-case ml-1">One number per agent</span>
+              <p className="text-xs font-semibold text-slate-700 uppercase tracking-widest">Inbound Number</p>
             </div>
+            <p className="text-[10px] text-slate-400 mb-3">
+              Incoming calls to this number are routed to this agent. Multiple agents can share the same number for outbound — only inbound routing is exclusive.
+            </p>
 
             {numbers.length === 0 ? (
               <div className="flex items-center gap-3 px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-500">
                 <PhoneOff className="h-4 w-4 shrink-0 text-slate-400" />
                 No virtual numbers yet. Add one in <span className="font-semibold">Settings → Virtual Numbers</span>.
-              </div>
-            ) : assignableNumbers.length === 0 ? (
-              <div className="flex items-center gap-3 px-4 py-3 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-700">
-                <Phone className="h-4 w-4 shrink-0" />
-                All virtual numbers are already assigned to other agents.
               </div>
             ) : (
               <div className="space-y-2">
@@ -494,8 +492,8 @@ export default function AgentStudioView() {
                     <PhoneOff className="h-4 w-4 text-slate-400" />
                   </div>
                   <div>
-                    <p className="text-sm font-semibold text-slate-600">No number</p>
-                    <p className="text-[10px] text-slate-400">Agent won't handle any line</p>
+                    <p className="text-sm font-semibold text-slate-600">Outbound only</p>
+                    <p className="text-[10px] text-slate-400">No inbound line assigned — agent can still make outbound calls</p>
                   </div>
                   {!form.assignedNumber && (
                     <div className="ml-auto h-4 w-4 rounded-full bg-slate-500 flex items-center justify-center">
@@ -504,7 +502,7 @@ export default function AgentStudioView() {
                   )}
                 </button>
 
-                {/* Available numbers */}
+                {/* All numbers — only show unassigned ones (or the one already assigned to this agent) */}
                 {assignableNumbers.map(n => (
                   <button
                     key={n.id}
@@ -534,6 +532,9 @@ export default function AgentStudioView() {
                     )}
                   </button>
                 ))}
+                {assignableNumbers.length === 0 && (
+                  <p className="text-[10px] text-slate-400 px-1">All numbers are assigned to other agents for inbound. Choose "Outbound only" above or reassign a number first.</p>
+                )}
               </div>
             )}
           </div>
