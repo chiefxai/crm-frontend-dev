@@ -140,13 +140,20 @@ export default function PrintableReport({
 
   return (
     <>
-      {/* Print CSS: hides overlay chrome, shows only the report */}
+      {/* Print CSS: visibility approach works regardless of DOM nesting depth */}
       <style>{`
         @media print {
-          body > * { display: none !important; }
-          #chiefvoice-print-root { display: block !important; }
-          #chiefvoice-print-root #${REPORT_ID} { display: block !important; box-shadow: none !important; border-radius: 0 !important; }
           @page { margin: 12mm; size: A4 portrait; }
+          body * { visibility: hidden !important; }
+          #${REPORT_ID}, #${REPORT_ID} * { visibility: visible !important; }
+          #${REPORT_ID} {
+            position: fixed !important;
+            top: 0 !important; left: 0 !important;
+            width: 100% !important;
+            box-shadow: none !important;
+            border-radius: 0 !important;
+            max-width: none !important;
+          }
         }
       `}</style>
 

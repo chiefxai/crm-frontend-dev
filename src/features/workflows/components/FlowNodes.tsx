@@ -29,7 +29,7 @@ export function QuestionNode({ data }: NodeProps) {
   const options: QuestionOption[] = d.options || [];
 
   return (
-    <div className="bg-white border-2 border-blue-300 rounded-2xl shadow-md min-w-[240px] max-w-[300px]">
+    <div className="bg-white border border-blue-200 rounded-2xl shadow-sm min-w-[240px] max-w-[300px]">
       <Handle type="target" position={Position.Top} style={handleStyle} />
       <div className="p-4 border-b border-slate-100">
         <div className="flex items-center gap-2 mb-1">
@@ -77,7 +77,7 @@ export function QuestionNode({ data }: NodeProps) {
 export function ConditionNode({ data }: NodeProps) {
   const d = data as NodeData;
   return (
-    <div className="bg-white border-2 border-amber-300 rounded-2xl shadow-md min-w-[220px]">
+    <div className="bg-white border border-amber-200 rounded-2xl shadow-sm min-w-[220px]">
       <Handle type="target" position={Position.Top} style={{ ...handleStyle, background: '#f59e0b' }} />
       <div className="p-4">
         <div className="flex items-center gap-2 mb-1">
@@ -109,7 +109,7 @@ export function ActionNode({ data }: NodeProps) {
   const color = actionColors[d.actionType || ''] || 'slate';
 
   return (
-    <div className={`bg-white border-2 border-${color}-300 rounded-2xl shadow-md min-w-[200px]`}>
+    <div className={`bg-white border border-${color}-200 rounded-2xl shadow-sm min-w-[200px]`}>
       <Handle type="target" position={Position.Top} style={handleStyle} />
       <div className="p-4">
         <div className="flex items-center gap-2 mb-1">
