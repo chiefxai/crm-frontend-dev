@@ -1,6 +1,14 @@
 import React, { useState } from 'react';
 import { X, Plus, Trash2, ArrowRight } from 'lucide-react';
-import { QuestionFlowNode, QuestionOption } from '../types';
+import { QuestionFlowNode, QuestionOption, VariableDataType } from '../types';
+
+const ANSWER_TYPES: { value: VariableDataType; label: string; icon: string }[] = [
+  { value: 'string',  label: 'Text',   icon: 'T' },
+  { value: 'number',  label: 'Number', icon: '#' },
+  { value: 'boolean', label: 'Yes/No', icon: '?' },
+  { value: 'date',    label: 'Date',   icon: '📅' },
+  { value: 'array',   label: 'List',   icon: '☰' },
+];
 
 interface NodeEditorProps {
   node: QuestionFlowNode;
@@ -75,6 +83,40 @@ export default function NodeEditor({ node, allNodes, onChange, onClose }: NodeEd
               onChange={e => setField('questionText', e.target.value)}
               placeholder="What should the AI ask the customer?"
             />
+          </div>
+        )}
+
+        {/* Answer type + field name */}
+        {local.type === 'question' && (
+          <div className="space-y-3 p-3 rounded-xl bg-slate-50 border border-slate-100">
+            <p className="text-xs font-semibold text-slate-600">Save caller's answer</p>
+            <div>
+              <label className="text-[10px] font-medium text-slate-500 block mb-1">Field name</label>
+              <input
+                className="w-full border border-slate-200 rounded-lg px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono"
+                value={local.answerFieldName || ''}
+                onChange={e => setField('answerFieldName', e.target.value)}
+                placeholder="e.g. customer_name"
+              />
+            </div>
+            <div>
+              <label className="text-[10px] font-medium text-slate-500 block mb-1.5">Answer type</label>
+              <div className="flex flex-wrap gap-1.5">
+                {ANSWER_TYPES.map(t => (
+                  <button
+                    key={t.value}
+                    onClick={() => setField('answerType', t.value)}
+                    className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-semibold border transition-all"
+                    style={(local.answerType ?? 'string') === t.value
+                      ? { background: '#ede9fe', color: '#6d28d9', borderColor: '#c4b5fd' }
+                      : { background: 'white', color: '#64748b', borderColor: '#e2e8f0' }
+                    }
+                  >
+                    <span className="text-[10px]">{t.icon}</span> {t.label}
+                  </button>
+                ))}
+              </div>
+            </div>
           </div>
         )}
 

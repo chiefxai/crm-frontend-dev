@@ -215,6 +215,20 @@ export default function QuestionFlowBuilder({ flow, allFlows, onChange }: Props)
     });
   }, [rfNodes, rfEdges]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Delete selected node on keyboard Delete / Backspace
+  useEffect(() => {
+    if (!selectedNodeId) return;
+    const handler = (e: KeyboardEvent) => {
+      if ((e.key === 'Delete' || e.key === 'Backspace') &&
+          !(e.target instanceof HTMLInputElement) &&
+          !(e.target instanceof HTMLTextAreaElement)) {
+        deleteNode(selectedNodeId);
+      }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [selectedNodeId]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const selectedNode = rfNodes.find(n => n.id === selectedNodeId);
 
   const onConnect = useCallback(

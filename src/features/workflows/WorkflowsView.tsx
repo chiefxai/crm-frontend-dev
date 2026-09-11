@@ -12,6 +12,9 @@ import {
   X,
   Network,
   Variable,
+  Braces,
+  ClipboardCopy,
+  Check,
 } from 'lucide-react';
 import { QuestionFlow, WorkflowVariable } from './types';
 import QuestionFlowBuilder from './QuestionFlowBuilder';
@@ -44,7 +47,8 @@ interface WorkflowsViewProps {
 
 export default function WorkflowsView({ flows, setFlows }: WorkflowsViewProps) {
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [editorView, setEditorView] = useState<'diagram' | 'variables'>('diagram');
+  const [editorView, setEditorView] = useState<'diagram' | 'variables' | 'json'>('diagram');
+  const [jsonCopied, setJsonCopied] = useState(false);
   const [newName, setNewName] = useState('');
   const [creating, setCreating] = useState(false);
 
@@ -87,8 +91,9 @@ export default function WorkflowsView({ flows, setFlows }: WorkflowsViewProps) {
 
   if (editingFlow) {
     const VIEWS = [
-      { id: 'diagram' as const, label: 'Diagram', icon: Network },
-      { id: 'variables' as const, label: 'Variables', icon: Variable },
+      { id: 'diagram'   as const, label: 'Diagram',   icon: Network   },
+      { id: 'variables' as const, label: 'Variables',  icon: Variable  },
+      { id: 'json'      as const, label: 'JSON',       icon: Braces    },
     ];
 
     return (
@@ -106,7 +111,9 @@ export default function WorkflowsView({ flows, setFlows }: WorkflowsViewProps) {
                   onClick={() => setEditorView(id)}
                   className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all"
                   style={editorView === id
-                    ? { background: '#2563eb', color: '#ffffff' }
+                    ? id === 'json'
+                      ? { background: '#d97706', color: '#ffffff' }
+                      : { background: '#2563eb', color: '#ffffff' }
                     : { background: 'transparent', color: 'var(--text-secondary)' }
                   }
                 >
@@ -143,20 +150,50 @@ export default function WorkflowsView({ flows, setFlows }: WorkflowsViewProps) {
         }
       >
         <div className="flex-1 overflow-hidden">
-          {editorView === 'diagram' ? (
+          {editorView === 'diagram' && (
             <QuestionFlowBuilder
               flow={editingFlow}
               allFlows={flows}
               onChange={handleFlowChange}
             />
-          ) : (
+          )}
+          {editorView === 'variables' && (
             <WorkflowVariables
               variables={editingFlow.variables ?? []}
               onChange={(vars: WorkflowVariable[]) => {
-                // When variables change, clear nodes/edges so diagram regenerates on next switch
                 handleFlowChange({ ...editingFlow, variables: vars, nodes: [], edges: [] });
               }}
             />
+          )}
+          {editorView === 'json' && (
+            <div className="h-full flex flex-col" style={{ background: '#0f172a' }}>
+              {/* JSON toolbar */}
+              <div className="flex items-center justify-between px-5 py-3 border-b shrink-0" style={{ borderColor: '#1e293b' }}>
+                <div className="flex items-center gap-2">
+                  <Braces className="h-4 w-4" style={{ color: '#f59e0b' }} />
+                  <span className="text-xs font-bold" style={{ color: '#f1f5f9' }}>Flow JSON</span>
+                  <span className="text-[10px] px-2 py-0.5 rounded-full font-semibold" style={{ background: '#1e293b', color: '#64748b' }}>dev only</span>
+                </div>
+                <button
+                  onClick={() => {
+                    navigator.clipboard.writeText(JSON.stringify(editingFlow, null, 2));
+                    setJsonCopied(true);
+                    setTimeout(() => setJsonCopied(false), 2000);
+                  }}
+                  className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors"
+                  style={{ background: jsonCopied ? '#064e3b' : '#1e293b', color: jsonCopied ? '#34d399' : '#94a3b8' }}
+                >
+                  {jsonCopied ? <Check className="h-3.5 w-3.5" /> : <ClipboardCopy className="h-3.5 w-3.5" />}
+                  {jsonCopied ? 'Copied!' : 'Copy JSON'}
+                </button>
+              </div>
+              {/* JSON body */}
+              <div className="flex-1 overflow-auto p-5">
+                <pre className="text-xs leading-relaxed font-mono whitespace-pre-wrap break-words" style={{ color: '#e2e8f0' }}>
+                  {JSON.stringify(editingFlow, null, 2)}
+                </pre>
+              </div>
+            </div>
           )}
         </div>
       </PageShell>

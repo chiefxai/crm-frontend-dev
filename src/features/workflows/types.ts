@@ -12,6 +12,10 @@ export interface QuestionFlowNode {
   type: QuestionNodeType;
   label: string;
   questionText?: string;
+  /** Expected answer type — shown in node editor for question nodes */
+  answerType?: VariableDataType;
+  /** Field name under which the answer is stored */
+  answerFieldName?: string;
   options?: QuestionOption[];
   actionType?: 'tag_lead' | 'assign_agent' | 'send_sms' | 'schedule_callback' | 'close_lead';
   actionValue?: string;
