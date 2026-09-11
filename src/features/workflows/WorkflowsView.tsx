@@ -254,8 +254,8 @@ export default function WorkflowsView({ flows, setFlows }: WorkflowsViewProps) {
                     </div>
                     {flow.description && <p className="text-xs text-slate-500 mb-2">{flow.description}</p>}
                     <div className="flex items-center gap-4 text-xs text-slate-400">
-                      <span>{flow.nodes.length} nodes</span>
-                      <span>{flow.edges.length} connections</span>
+                      <span>{(flow.nodes ?? []).length} nodes</span>
+                      <span>{(flow.edges ?? []).length} connections</span>
                       <span>Updated {new Date(flow.updatedAt).toLocaleDateString()}</span>
                     </div>
                   </div>

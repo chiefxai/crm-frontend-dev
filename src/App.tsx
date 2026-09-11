@@ -385,7 +385,8 @@ export default function App() {
       if (resBilling && typeof resBilling.costPerMinuteInr === 'number') setCostPerMinuteInr(resBilling.costPerMinuteInr);
       if (resOrg && Object.keys(resOrg).length > 0) setOrgSettings({ ...EMPTY_ORG_SETTINGS, ...resOrg });
       if (Array.isArray(resDialerTasks)) setDialerTasks(resDialerTasks);
-      if (Array.isArray(resQuestionFlows) && resQuestionFlows.length > 0) setQuestionFlows(resQuestionFlows);
+      if (Array.isArray(resQuestionFlows) && resQuestionFlows.length > 0)
+        setQuestionFlows(resQuestionFlows.map((f: any) => ({ nodes: [], edges: [], variables: [], ...f })));
 
       const industry = (resOrg && resOrg.industry) || orgSettings.industry;
       if (industry && industry !== 'lending') {
