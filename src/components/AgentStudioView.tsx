@@ -28,7 +28,9 @@ interface Agent {
   speed: number;
   friendliness: number;
   language: string;
-  assignedNumber?: VirtualNumber | null;
+  assignedNumber?: VirtualNumber | null;   // inbound (exclusive)
+  outboundNumber?: VirtualNumber | null;   // outbound (shared)
+  outboundNumberId?: string | null;
 }
 
 type SaveStatus = 'idle' | 'saving' | 'saved' | 'error';
@@ -65,6 +67,7 @@ function emptyForm(): Omit<Agent, 'id'> {
     friendliness: 82,
     language: 'en', // kept for API compatibility, not shown in form
     assignedNumber: null,
+    outboundNumber: null,
   };
 }
 
@@ -125,6 +128,7 @@ export default function AgentStudioView() {
       friendliness: agent.friendliness,
       language: agent.language,
       assignedNumber: agent.assignedNumber ?? null,
+      outboundNumber: agent.outboundNumber ?? null,
     });
     setEditingAgent(agent);
     setCreating(false);
@@ -163,12 +167,21 @@ export default function AgentStudioView() {
         saved = await res.json();
       } else return;
 
-      const wantedNumberId = form.assignedNumber?.id ?? null;
-      const currentNumberId = editingAgent?.assignedNumber?.id ?? null;
-      if (wantedNumberId !== currentNumberId) {
+      const wantedInboundId  = form.assignedNumber?.id ?? null;
+      const currentInboundId = editingAgent?.assignedNumber?.id ?? null;
+      if (wantedInboundId !== currentInboundId) {
         await apiFetch(`/api/agents/${saved.id}/assign-number`, {
           method: 'PUT',
-          body: JSON.stringify({ numberId: wantedNumberId }),
+          body: JSON.stringify({ numberId: wantedInboundId }),
+        });
+      }
+
+      const wantedOutboundId  = form.outboundNumber?.id ?? null;
+      const currentOutboundId = editingAgent?.outboundNumber?.id ?? null;
+      if (wantedOutboundId !== currentOutboundId) {
+        await apiFetch(`/api/agents/${saved.id}/assign-outbound-number`, {
+          method: 'PUT',
+          body: JSON.stringify({ numberId: wantedOutboundId }),
         });
       }
 
@@ -323,8 +336,8 @@ export default function AgentStudioView() {
                       ))}
                     </div>
 
-                    {/* Inbound number */}
-                    <div className="mt-auto">
+                    {/* Inbound + Outbound number badges */}
+                    <div className="mt-auto space-y-1.5">
                       {agent.assignedNumber ? (
                         <div className="flex items-center gap-2 px-3 py-2 bg-emerald-50 border border-emerald-200 rounded-xl">
                           <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse shrink-0" />
@@ -339,7 +352,21 @@ export default function AgentStudioView() {
                       ) : (
                         <div className="flex items-center gap-2 px-3 py-2 bg-slate-50 border border-dashed border-slate-300 rounded-xl">
                           <PhoneOff className="h-3.5 w-3.5 text-slate-400 shrink-0" />
-                          <p className="text-[11px] text-slate-400">Outbound only</p>
+                          <p className="text-[11px] text-slate-400">No inbound number</p>
+                        </div>
+                      )}
+                      {agent.outboundNumber ? (
+                        <div className="flex items-center gap-2 px-3 py-2 bg-violet-50 border border-violet-200 rounded-xl">
+                          <Zap className="h-3 w-3 text-violet-500 shrink-0" />
+                          <div className="min-w-0">
+                            <p className="text-[9px] font-semibold text-violet-500 uppercase tracking-wider mb-0.5">Outbound</p>
+                            <p className="text-xs font-bold text-violet-700 truncate">{agent.outboundNumber.number}</p>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-2 px-3 py-2 bg-slate-50 border border-dashed border-slate-300 rounded-xl">
+                          <Zap className="h-3 w-3 text-slate-400 shrink-0" />
+                          <p className="text-[11px] text-slate-400">Org default outbound</p>
                         </div>
                       )}
                     </div>
@@ -461,16 +488,15 @@ export default function AgentStudioView() {
 
           <div className="border-t border-slate-100" />
 
-          {/* Inbound number */}
+          {/* Inbound Number — exclusive (one number → one agent) */}
           <div>
             <div className="flex items-center gap-2 mb-1">
               <Phone className="h-4 w-4 text-emerald-500" />
               <p className="text-xs font-semibold text-slate-700 uppercase tracking-widest">Inbound Number</p>
             </div>
             <p className="text-[10px] text-slate-400 mb-3">
-              Incoming calls to this number are routed to this agent. Multiple agents can share the same number for outbound — only inbound routing is exclusive.
+              Incoming calls to this number are routed exclusively to this agent. A number can only have one inbound agent.
             </p>
-
             {numbers.length === 0 ? (
               <div className="flex items-center gap-3 px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-500">
                 <PhoneOff className="h-4 w-4 shrink-0 text-slate-400" />
@@ -478,22 +504,19 @@ export default function AgentStudioView() {
               </div>
             ) : (
               <div className="space-y-2">
-                {/* None option */}
                 <button
                   type="button"
                   onClick={() => setForm(f => ({ ...f, assignedNumber: null }))}
                   className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl border-2 text-left transition-all cursor-pointer ${
-                    !form.assignedNumber
-                      ? 'border-slate-400 bg-slate-50'
-                      : 'border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50'
+                    !form.assignedNumber ? 'border-slate-400 bg-slate-50' : 'border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50'
                   }`}
                 >
                   <div className="h-8 w-8 rounded-lg bg-slate-100 flex items-center justify-center shrink-0">
                     <PhoneOff className="h-4 w-4 text-slate-400" />
                   </div>
                   <div>
-                    <p className="text-sm font-semibold text-slate-600">Outbound only</p>
-                    <p className="text-[10px] text-slate-400">No inbound line assigned — agent can still make outbound calls</p>
+                    <p className="text-sm font-semibold text-slate-600">None</p>
+                    <p className="text-[10px] text-slate-400">No inbound line for this agent</p>
                   </div>
                   {!form.assignedNumber && (
                     <div className="ml-auto h-4 w-4 rounded-full bg-slate-500 flex items-center justify-center">
@@ -501,22 +524,16 @@ export default function AgentStudioView() {
                     </div>
                   )}
                 </button>
-
-                {/* All numbers — only show unassigned ones (or the one already assigned to this agent) */}
                 {assignableNumbers.map(n => (
                   <button
                     key={n.id}
                     type="button"
                     onClick={() => setForm(f => ({ ...f, assignedNumber: n }))}
                     className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl border-2 text-left transition-all cursor-pointer ${
-                      form.assignedNumber?.id === n.id
-                        ? 'border-emerald-400 bg-emerald-50'
-                        : 'border-slate-200 bg-white hover:border-emerald-300 hover:bg-emerald-50/40'
+                      form.assignedNumber?.id === n.id ? 'border-emerald-400 bg-emerald-50' : 'border-slate-200 bg-white hover:border-emerald-300 hover:bg-emerald-50/40'
                     }`}
                   >
-                    <div className={`h-8 w-8 rounded-lg flex items-center justify-center shrink-0 ${
-                      form.assignedNumber?.id === n.id ? 'bg-emerald-100' : 'bg-slate-100'
-                    }`}>
+                    <div className={`h-8 w-8 rounded-lg flex items-center justify-center shrink-0 ${form.assignedNumber?.id === n.id ? 'bg-emerald-100' : 'bg-slate-100'}`}>
                       <Phone className={`h-4 w-4 ${form.assignedNumber?.id === n.id ? 'text-emerald-600' : 'text-slate-400'}`} />
                     </div>
                     <div className="min-w-0 flex-1">
@@ -533,8 +550,75 @@ export default function AgentStudioView() {
                   </button>
                 ))}
                 {assignableNumbers.length === 0 && (
-                  <p className="text-[10px] text-slate-400 px-1">All numbers are assigned to other agents for inbound. Choose "Outbound only" above or reassign a number first.</p>
+                  <p className="text-[10px] text-slate-400 px-1">All numbers are assigned to other agents for inbound. Reassign a number first or leave as None.</p>
                 )}
+              </div>
+            )}
+          </div>
+
+          <div className="border-t border-slate-100" />
+
+          {/* Outbound Number — shared (many agents can use the same number) */}
+          <div>
+            <div className="flex items-center gap-2 mb-1">
+              <Zap className="h-4 w-4 text-violet-500" />
+              <p className="text-xs font-semibold text-slate-700 uppercase tracking-widest">Outbound Number</p>
+            </div>
+            <p className="text-[10px] text-slate-400 mb-3">
+              Caller ID used when this agent makes outbound calls. Multiple agents can share the same number.
+            </p>
+            {numbers.length === 0 ? (
+              <div className="flex items-center gap-3 px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-500">
+                <PhoneOff className="h-4 w-4 shrink-0 text-slate-400" />
+                No virtual numbers yet. Add one in <span className="font-semibold">Settings → Virtual Numbers</span>.
+              </div>
+            ) : (
+              <div className="space-y-2">
+                <button
+                  type="button"
+                  onClick={() => setForm(f => ({ ...f, outboundNumber: null }))}
+                  className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl border-2 text-left transition-all cursor-pointer ${
+                    !form.outboundNumber ? 'border-slate-400 bg-slate-50' : 'border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50'
+                  }`}
+                >
+                  <div className="h-8 w-8 rounded-lg bg-slate-100 flex items-center justify-center shrink-0">
+                    <PhoneOff className="h-4 w-4 text-slate-400" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-semibold text-slate-600">Use org default</p>
+                    <p className="text-[10px] text-slate-400">Falls back to the org's channel number</p>
+                  </div>
+                  {!form.outboundNumber && (
+                    <div className="ml-auto h-4 w-4 rounded-full bg-slate-500 flex items-center justify-center">
+                      <Check className="h-2.5 w-2.5 text-white" />
+                    </div>
+                  )}
+                </button>
+                {numbers.map(n => (
+                  <button
+                    key={n.id}
+                    type="button"
+                    onClick={() => setForm(f => ({ ...f, outboundNumber: n }))}
+                    className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl border-2 text-left transition-all cursor-pointer ${
+                      form.outboundNumber?.id === n.id ? 'border-violet-400 bg-violet-50' : 'border-slate-200 bg-white hover:border-violet-300 hover:bg-violet-50/40'
+                    }`}
+                  >
+                    <div className={`h-8 w-8 rounded-lg flex items-center justify-center shrink-0 ${form.outboundNumber?.id === n.id ? 'bg-violet-100' : 'bg-slate-100'}`}>
+                      <Phone className={`h-4 w-4 ${form.outboundNumber?.id === n.id ? 'text-violet-600' : 'text-slate-400'}`} />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-semibold text-slate-800">{n.number}</p>
+                      <p className="text-[10px] text-slate-400 mt-0.5">
+                        {(n.friendlyName ?? n.friendly_name) || '—'}{n.provider ? ` · ${n.provider}` : ''}
+                      </p>
+                    </div>
+                    {form.outboundNumber?.id === n.id && (
+                      <div className="ml-auto h-4 w-4 rounded-full bg-violet-500 flex items-center justify-center shrink-0">
+                        <Check className="h-2.5 w-2.5 text-white" />
+                      </div>
+                    )}
+                  </button>
+                ))}
               </div>
             )}
           </div>
