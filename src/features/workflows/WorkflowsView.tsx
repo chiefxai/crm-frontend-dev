@@ -49,6 +49,8 @@ export default function WorkflowsView({ flows, setFlows }: WorkflowsViewProps) {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editorView, setEditorView] = useState<'diagram' | 'variables' | 'json'>('diagram');
   const [jsonCopied, setJsonCopied] = useState(false);
+  const [jsonEditText, setJsonEditText] = useState<string | null>(null);
+  const [jsonError, setJsonError] = useState<string | null>(null);
   const [newName, setNewName] = useState('');
   const [creating, setCreating] = useState(false);
 
@@ -166,7 +168,6 @@ export default function WorkflowsView({ flows, setFlows }: WorkflowsViewProps) {
             />
           )}
           {editorView === 'json' && (() => {
-            // Clean shape passed to AI agent — no diagram ids/positions
             const cleanVar = (v: WorkflowVariable): object => ({
               name: v.name,
               questionText: v.questionText,
@@ -183,28 +184,83 @@ export default function WorkflowsView({ flows, setFlows }: WorkflowsViewProps) {
               ...(editingFlow.description ? { description: editingFlow.description } : {}),
               questions: (editingFlow.variables ?? []).map(cleanVar)
             };
-            const jsonStr = JSON.stringify(cleanJson, null, 2);
+            const jsonStr = jsonEditText ?? JSON.stringify(cleanJson, null, 2);
+
+            const applyJson = () => {
+              try {
+                const parsed = JSON.parse(jsonStr);
+                const questions: WorkflowVariable[] = (parsed.questions ?? []).map((q: any, i: number) => ({
+                  id: `v-import-${Date.now()}-${i}`,
+                  name: q.name || `question_${i + 1}`,
+                  questionText: q.questionText || q.question || '',
+                  dataType: q.dataType || 'text',
+                  branches: (q.branches ?? []).map((b: any, bi: number) => ({
+                    id: `b-import-${Date.now()}-${i}-${bi}`,
+                    condition: b.condition || '',
+                    variables: (b.followUp ?? b.variables ?? []).map((fv: any, fi: number) => ({
+                      id: `v-import-${Date.now()}-${i}-${bi}-${fi}`,
+                      name: fv.name || `followup_${fi + 1}`,
+                      questionText: fv.questionText || fv.question || '',
+                      dataType: fv.dataType || 'text',
+                      branches: [],
+                    })),
+                  })),
+                }));
+                handleFlowChange({
+                  ...editingFlow,
+                  name: parsed.name || editingFlow.name,
+                  description: parsed.description || editingFlow.description,
+                  variables: questions,
+                  nodes: [],
+                  edges: [],
+                });
+                setJsonEditText(null);
+                setJsonError(null);
+                setEditorView('variables');
+              } catch (e: any) {
+                setJsonError(e.message);
+              }
+            };
+
             return (
               <div className="h-full flex flex-col" style={{ background: '#0f172a' }}>
                 <div className="flex items-center justify-between px-5 py-3 border-b shrink-0" style={{ borderColor: '#1e293b' }}>
                   <div className="flex items-center gap-2">
                     <Braces className="h-4 w-4" style={{ color: '#f59e0b' }} />
-                    <span className="text-xs font-bold" style={{ color: '#f1f5f9' }}>AI Agent JSON</span>
-                    <span className="text-[10px] px-2 py-0.5 rounded-full font-semibold" style={{ background: '#1e293b', color: '#64748b' }}>dev · synced to backend</span>
+                    <span className="text-xs font-bold" style={{ color: '#f1f5f9' }}>Workflow JSON</span>
+                    <span className="text-[10px] px-2 py-0.5 rounded-full font-semibold" style={{ background: '#1e293b', color: '#64748b' }}>editable · paste or type</span>
                   </div>
-                  <button
-                    onClick={() => { navigator.clipboard.writeText(jsonStr); setJsonCopied(true); setTimeout(() => setJsonCopied(false), 2000); }}
-                    className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors"
-                    style={{ background: jsonCopied ? '#064e3b' : '#1e293b', color: jsonCopied ? '#34d399' : '#94a3b8' }}
-                  >
-                    {jsonCopied ? <Check className="h-3.5 w-3.5" /> : <ClipboardCopy className="h-3.5 w-3.5" />}
-                    {jsonCopied ? 'Copied!' : 'Copy JSON'}
-                  </button>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => { navigator.clipboard.writeText(jsonStr); setJsonCopied(true); setTimeout(() => setJsonCopied(false), 2000); }}
+                      className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors"
+                      style={{ background: jsonCopied ? '#064e3b' : '#1e293b', color: jsonCopied ? '#34d399' : '#94a3b8' }}
+                    >
+                      {jsonCopied ? <Check className="h-3.5 w-3.5" /> : <ClipboardCopy className="h-3.5 w-3.5" />}
+                      {jsonCopied ? 'Copied!' : 'Copy'}
+                    </button>
+                    <button
+                      onClick={applyJson}
+                      className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors"
+                      style={{ background: '#2563eb', color: '#ffffff' }}
+                    >
+                      <Check className="h-3.5 w-3.5" /> Apply JSON
+                    </button>
+                  </div>
                 </div>
-                <div className="flex-1 overflow-auto p-5">
-                  <pre className="text-xs leading-relaxed font-mono whitespace-pre-wrap break-words" style={{ color: '#e2e8f0' }}>
-                    {jsonStr}
-                  </pre>
+                {jsonError && (
+                  <div className="px-5 py-2 text-xs font-mono shrink-0" style={{ background: '#450a0a', color: '#fca5a5' }}>
+                    ⚠ {jsonError}
+                  </div>
+                )}
+                <div className="flex-1 overflow-hidden p-5">
+                  <textarea
+                    className="w-full h-full resize-none font-mono text-xs leading-relaxed outline-none border-0 bg-transparent"
+                    style={{ color: '#e2e8f0', caretColor: '#f59e0b' }}
+                    value={jsonStr}
+                    onChange={e => { setJsonEditText(e.target.value); setJsonError(null); }}
+                    spellCheck={false}
+                  />
                 </div>
               </div>
             );
