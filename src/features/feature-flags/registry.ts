@@ -29,13 +29,6 @@ export const FEATURE_REGISTRY: FeatureFlagDef[] = [
     enabledByDefault: true,
   },
   {
-    key: 'lead_crm',
-    label: 'Lead CRM',
-    description: 'Lead management, scoring, and follow-ups',
-    tabId: 'leads',
-    enabledByDefault: true,
-  },
-  {
     key: 'contact_directory',
     label: 'Contact Directory',
     description: 'Organisation-wide contact book',

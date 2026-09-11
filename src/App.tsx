@@ -36,7 +36,6 @@ import { useTheme } from './shared/theme/ThemeContext';
 import { Sun, Moon, Monitor, LogOut, ChevronDown } from 'lucide-react';
 import Sidebar from './components/Sidebar';
 import DashboardView from './components/DashboardView';
-import LeadManagementView from './components/LeadManagementView';
 import WorkflowsView from './features/workflows/WorkflowsView';
 import { QuestionFlow } from './features/workflows/types';
 import { useFeatureFlags } from './features/feature-flags/FeatureFlagContext';
@@ -223,7 +222,6 @@ export default function App() {
   // Slug ↔ tab-ID mappings — URL uses human-readable slugs, internal code uses short IDs.
   const TAB_TO_SLUG: Record<string, string> = {
     dashboard:     'executive-dashboard',
-    leads:         'lead-crm',
     contacts:      'contact-directory',
     workflows:     'workflow-builder',
     dialer:        'voice-simulator',
@@ -491,7 +489,7 @@ export default function App() {
   // Redirect if a non-lending org lands on a lending-only route or a retired route.
   useEffect(() => {
     const isLending = !orgSettings.industry || orgSettings.industry === 'lending';
-    const lendingOnlyTabs = new Set(['leads', 'loans']);
+    const lendingOnlyTabs = new Set(['loans']);
     if ((!isLending && lendingOnlyTabs.has(activeTab)) || activeTab === 'objects') {
       navigate('/', { replace: true });
     }
@@ -621,7 +619,7 @@ export default function App() {
 
     // Find the first sidebar tab the user can actually see
     const orderedTabs = [
-      'dashboard', 'leads', 'contacts', 'workflows',
+      'dashboard', 'contacts', 'workflows',
       'dialer', 'call-logs', 'reports', 'inbox', 'agent-studio',
       'compliance', 'knowledge', 'enquiries', 'audit-log', 'billing', 'loans',
     ];
@@ -671,15 +669,6 @@ export default function App() {
             loans={loans}
             orgSettings={orgSettings}
             costPerMinuteInr={costPerMinuteInr}
-          />
-        );
-      case 'leads':
-        return (
-          <LeadManagementView
-            leads={leads}
-            setLeads={setLeads}
-            callLogs={callLogs}
-            teamMembers={teamMembers}
           />
         );
       case 'contacts':

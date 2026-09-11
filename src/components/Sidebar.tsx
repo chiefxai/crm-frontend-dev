@@ -42,7 +42,7 @@ interface SidebarProps {
   industry: string;
 }
 
-const LENDING_ONLY_TAB_IDS = new Set(['leads', 'loans']);
+const LENDING_ONLY_TAB_IDS = new Set(['loans']);
 
 interface SubItem { id: string; label: string; icon: React.ElementType; }
 interface SidebarGroup { tabId: string; label: string; icon: React.ElementType; subItems: SubItem[]; }
@@ -243,7 +243,6 @@ export default function Sidebar({
 
   const allMenuItems = [
     { id: 'dashboard',    label: 'Executive Desk',    icon: LayoutDashboard },
-    { id: 'leads',        label: 'Lead CRM',          icon: Users },
     { id: 'contacts',     label: 'Contact Directory', icon: Contact },
     { id: 'workflows',    label: 'Workflow Builder',  icon: GitBranch },
     { id: 'dialer',       label: 'Voice Simulator',   icon: PhoneCall },
