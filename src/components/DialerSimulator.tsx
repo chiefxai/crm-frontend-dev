@@ -33,6 +33,7 @@ import {
   PhoneForwarded
 } from 'lucide-react';
 import { Lead, CallLog, VirtualNumber, TeamMember } from '../types';
+import { QuestionFlow } from '../features/workflows/types';
 import PageShell from './ui/PageShell';
 import Widget from './ui/Widget';
 import Modal from './ui/Modal';
@@ -42,6 +43,14 @@ import Button from './ui/Button';
 import EmptyState from './ui/EmptyState';
 import { apiFetch, getAuthToken, getApiBase, getPlayableRecordingUrl } from '../lib/api';
 import { callCostInr, formatInr } from '../lib/pricing';
+
+interface WizardAgent {
+  id: string;
+  name: string;
+  outboundNumber?: { id: string; number: string } | null;
+  activeVoice?: string;
+  language?: string;
+}
 
 interface DialerSimulatorProps {
   leads: Lead[];
@@ -56,6 +65,7 @@ interface DialerSimulatorProps {
   companyName: string;
   teamMembers?: TeamMember[];
   industry?: string;
+  flows?: QuestionFlow[];
 }
 
 // Broad language list for per-task selection — a generic "speak fluently
@@ -191,7 +201,8 @@ export default function DialerSimulator({
   setTasks,
   companyName,
   teamMembers = [],
-  industry
+  industry,
+  flows = []
 }: DialerSimulatorProps) {
   const isInsurance = industry === 'insurance';
   // Inbound Call states
@@ -259,16 +270,19 @@ Real Tamil speakers do not say the "correct" written form of a word. They contra
 
   const selectedTask = tasks.find((t) => t.id === selectedTaskId) || tasks[0];
 
-  // Task Creation Form States
+  // Task Creation Wizard States
   const [showCreateModal, setShowCreateModal] = useState(false);
-  const [newTaskName, setNewTaskName] = useState('');
-  const [newTaskLanguage, setNewTaskLanguage] = useState(DEFAULT_TASK_LANGUAGE);
-  const [newTaskAssignedMemberId, setNewTaskAssignedMemberId] = useState('');
-  const [newStarhealthEnabled, setNewStarhealthEnabled] = useState(false);
-  const [newQuestions, setNewQuestions] = useState<string[]>([]);
-  const [tempQuestionInput, setTempQuestionInput] = useState('');
-  const [selectedFormLeadIds, setSelectedFormLeadIds] = useState<string[]>([]);
-  const [modalLeadSearch, setModalLeadSearch] = useState('');
+  const [wizardStep, setWizardStep] = useState<1 | 2 | 3 | 4>(1);
+  const [wizardWorkflowId, setWizardWorkflowId] = useState('');
+  const [wizardAgentId, setWizardAgentId] = useState('');
+  const [wizardAgents, setWizardAgents] = useState<WizardAgent[]>([]);
+  const [wizardAgentsLoading, setWizardAgentsLoading] = useState(false);
+  const [wizardSelectedLeadIds, setWizardSelectedLeadIds] = useState<string[]>([]);
+  const [wizardNewContacts, setWizardNewContacts] = useState<{ name: string; phone: string }[]>([]);
+  const [wizardContactSearch, setWizardContactSearch] = useState('');
+  const [wizardNewName, setWizardNewName] = useState('');
+  const [wizardNewPhone, setWizardNewPhone] = useState('');
+  const [wizardContactTab, setWizardContactTab] = useState<'existing' | 'new'>('existing');
 
   // Call simulator live states
   const [activeLead, setActiveLead] = useState<Lead | null>(null);
@@ -393,73 +407,73 @@ Real Tamil speakers do not say the "correct" written form of a word. They contra
     return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   };
 
-  // Add question in creator
-  const handleAddQuestion = () => {
-    if (tempQuestionInput.trim()) {
-      setNewQuestions([...newQuestions, tempQuestionInput.trim()]);
-      setTempQuestionInput('');
-    }
-  };
+    // Wizard: submit final task
+  const handleCreateTask = () => {
+    const workflow = flows.find(f => f.id === wizardWorkflowId);
+    if (!workflow) return;
 
-  const handleRemoveQuestion = (idx: number) => {
-    setNewQuestions(newQuestions.filter((_, i) => i !== idx));
-  };
+    const questions = (workflow.variables ?? [])
+      .map(v => v.questionText || v.name)
+      .filter(Boolean);
 
-  // Toggle lead checkbox in task creator
-  const handleToggleLeadSelection = (leadId: string) => {
-    if (selectedFormLeadIds.includes(leadId)) {
-      setSelectedFormLeadIds(selectedFormLeadIds.filter((id) => id !== leadId));
-    } else {
-      setSelectedFormLeadIds([...selectedFormLeadIds, leadId]);
-    }
-  };
+    // New contacts → add to leadsDatabase first
+    const newLeads: Lead[] = wizardNewContacts.map(c => ({
+      id: `lead-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`,
+      name: c.name.trim(),
+      phone: c.phone.trim(),
+      source: 'Manual Entry',
+      status: 'New' as const,
+      createdAt: new Date().toISOString(),
+    }));
+    if (newLeads.length > 0) setLeadsDatabase(prev => [...prev, ...newLeads]);
 
-  // Create Task Submission
-  const handleCreateTask = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newTaskName.trim() || selectedFormLeadIds.length === 0 || newQuestions.length === 0) {
-      alert('Please fill out task name, select at least one lead and input a question.');
+    const allLeadIds = [...wizardSelectedLeadIds, ...newLeads.map(l => l.id)];
+    if (allLeadIds.length === 0) {
+      alert('Add at least one contact before creating the task.');
       return;
     }
 
+    const agent = wizardAgents.find(a => a.id === wizardAgentId);
+
     const newTask: DialTask = {
-      // dialer_tasks.id is a global primary key, not scoped per org — a
-      // sequential "TASK-101, TASK-102..." counter based on this org's own
-      // local task count collides with another org's tasks the moment both
-      // start counting from the same number (this is exactly what caused
-      // "my task disappeared": the insert 500'd on a duplicate key and the
-      // failure was never surfaced). Use a value no other org can generate.
       id: `TASK-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`,
-      name: newTaskName.trim(),
-      questions: newQuestions,
-      leadIds: selectedFormLeadIds,
+      name: workflow.name,
+      questions,
+      leadIds: allLeadIds,
       status: 'Pending',
       createdAt: new Date().toISOString(),
       callResults: {},
-      language: newTaskLanguage,
-      assignedTeamMemberId: newTaskAssignedMemberId || undefined,
-      starhealthEnabled: isInsurance && newStarhealthEnabled
+      language: agent?.language || DEFAULT_TASK_LANGUAGE,
+      assignedTeamMemberId: wizardAgentId || undefined,
     };
 
-    const updatedTasks = [...tasks, newTask];
-    setTasks(updatedTasks);
+    setTasks(prev => [...prev, newTask]);
     setSelectedTaskId(newTask.id);
     setShowCreateModal(false);
-
-    // Reset Form — blank, not pre-filled from anywhere. The user wants to
-    // type this task's questions themselves every time, not start from
-    // any default (org's, industry's, or otherwise).
-    setNewTaskName('');
-    setNewTaskLanguage(DEFAULT_TASK_LANGUAGE);
-    setNewTaskAssignedMemberId('');
-    setNewStarhealthEnabled(false);
-    setNewQuestions([]);
-    setSelectedFormLeadIds([]);
   };
 
   const openCreateTaskModal = () => {
-    setNewQuestions([]);
+    setWizardStep(1);
+    setWizardWorkflowId('');
+    setWizardAgentId('');
+    setWizardAgents([]);
+    setWizardSelectedLeadIds([]);
+    setWizardNewContacts([]);
+    setWizardContactSearch('');
+    setWizardNewName('');
+    setWizardNewPhone('');
+    setWizardContactTab('existing');
     setShowCreateModal(true);
+
+    // Fetch agents with outbound support
+    setWizardAgentsLoading(true);
+    apiFetch('/api/agents')
+      .then(r => r.json())
+      .then((data: WizardAgent[]) => {
+        setWizardAgents(Array.isArray(data) ? data : []);
+      })
+      .catch(() => setWizardAgents([]))
+      .finally(() => setWizardAgentsLoading(false));
   };
 
   const handleInitiateVobizCall = async (lead: Lead) => {
@@ -1987,247 +2001,453 @@ Currently on question ${nextIndex} out of ${selectedTask.questions.length}. Next
         </div>
       )}
       </div>
-      {/* MODAL: Assign New Daily Dialing Task */}
-      {showCreateModal && (
-        <Modal
-          open
-          onClose={() => setShowCreateModal(false)}
-          title="Assign Daily Outbound Dialing Task"
-          subtitle="Set up list criteria, type specific sequential questions, and activate call audio recording."
-          maxWidth="max-w-3xl"
-        >
-            <form onSubmit={handleCreateTask} className="space-y-5">
-              {/* Task Name */}
-              <div className="space-y-1.5">
-                <label className="text-xs font-bold block" style={{ color: 'var(--text-secondary)' }}>Task Name / Campaign Theme</label>
-                <input
-                  type="text"
-                  required
-                  placeholder="e.g. Daily Pre-Qualification Callback List"
-                  value={newTaskName}
-                  onChange={(e) => setNewTaskName(e.target.value)}
-                  className="w-full border border-[var(--border)] rounded-xl px-4 py-2.5 text-xs text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
-                />
-              </div>
+      {/* MODAL: Assign New Dialing Task — 4-step wizard */}
+      {showCreateModal && (() => {
+        const workflowsWithQuestions = flows.filter(f => (f.variables ?? []).length > 0);
+        const agentsWithOutbound = wizardAgents.filter(a => a.outboundNumber);
+        const selectedWorkflow = flows.find(f => f.id === wizardWorkflowId);
+        const selectedAgent = wizardAgents.find(a => a.id === wizardAgentId);
+        const totalContacts = wizardSelectedLeadIds.length + wizardNewContacts.length;
 
-              {/* Language + assigned team member */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-1.5">
-                  <label className="text-xs font-bold block" style={{ color: 'var(--text-secondary)' }}>Call Language</label>
-                  <select
-                    value={newTaskLanguage}
-                    onChange={(e) => setNewTaskLanguage(e.target.value)}
-                    className="w-full border border-[var(--border)] rounded-xl px-4 py-2.5 text-xs text-[var(--text-primary)] focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
-                  >
-                    {TASK_LANGUAGE_OPTIONS.map((lang) => (
-                      <option key={lang} value={lang}>{lang}</option>
-                    ))}
-                  </select>
-                  {newTaskLanguage !== DEFAULT_TASK_LANGUAGE && (
-                    <p className="text-[10px] text-amber-600">
-                      Non-default languages use a generic fluency instruction — voice naturalness won't yet match the hand-tuned Tamil default.
-                    </p>
-                  )}
-                </div>
-                <div className="space-y-1.5">
-                  <label className="text-xs font-bold block" style={{ color: 'var(--text-secondary)' }}>Assign to Team Member</label>
-                  <select
-                    value={newTaskAssignedMemberId}
-                    onChange={(e) => setNewTaskAssignedMemberId(e.target.value)}
-                    className="w-full border border-[var(--border)] rounded-xl px-4 py-2.5 text-xs text-[var(--text-primary)] focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
-                  >
-                    <option value="">None — no callback contact shared</option>
-                    {teamMembers.map((m) => (
-                      <option key={m.id} value={m.id}>{m.name}{m.phone ? ` (${m.phone})` : ' (no phone on file)'}</option>
-                    ))}
-                  </select>
-                </div>
-              </div>
+        const STEPS = [
+          { num: 1, label: 'Workflow' },
+          { num: 2, label: 'Agent' },
+          { num: 3, label: 'Contacts' },
+          { num: 4, label: 'Review' },
+        ];
 
-              {/* Star Health quoting toggle — insurance-only, opt-in per task */}
-              {isInsurance && (
-                <div className="flex items-start gap-2 border border-[var(--border)] rounded-xl px-4 py-2.5">
-                  <input
-                    type="checkbox"
-                    id="starhealth-enabled"
-                    checked={newStarhealthEnabled}
-                    onChange={(e) => setNewStarhealthEnabled(e.target.checked)}
-                    className="mt-0.5"
-                  />
-                  <label htmlFor="starhealth-enabled" className="text-xs" style={{ color: 'var(--text-secondary)' }}>
-                    <span className="font-bold text-[var(--text-secondary)] block">Enable Star Health quoting</span>
-                    During this task's calls, the AI will collect quote details (pincode, family, ages, pre-existing disease) and read back a live Star Health quote, or send it afterward if it isn't ready during the call.
-                  </label>
-                </div>
-              )}
-
-              {/* Define Questions sequential flow */}
-              <div className="space-y-2">
-                <label className="text-xs font-bold block" style={{ color: 'var(--text-secondary)' }}>Questions Questionnaire (Sequential Flow)</label>
-                <p className="text-[11px] text-[var(--text-muted)] leading-normal">
-                  Our virtual voice assistant, {agentDisplayName}, will ask these questions one by one. It automatically processes the caller speech, records the timeline, and advances to the next question.
-                </p>
-
-                {tasks.length > 0 && (
-                  <select
-                    value=""
-                    onChange={(e) => {
-                      const sourceTask = tasks.find((t) => t.id === e.target.value);
-                      if (sourceTask) setNewQuestions([...sourceTask.questions]);
-                    }}
-                    className="w-full bg-[var(--bg-surface)] border border-[var(--border)] rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-blue-500" style={{ color: 'var(--text-secondary)' }}
-                  >
-                    <option value="">Copy questions from an existing task…</option>
-                    {tasks.map((t) => (
-                      <option key={t.id} value={t.id}>{t.name} ({t.questions.length} question{t.questions.length === 1 ? '' : 's'})</option>
-                    ))}
-                  </select>
-                )}
-
-                {isInsurance && (
-                  <button
-                    type="button"
-                    onClick={() => setNewQuestions([...SUPER_STAR_QUESTIONS])}
-                    className="w-full flex items-center justify-center gap-1.5 border border-amber-200 bg-amber-50 hover:bg-amber-100 text-amber-700 text-xs font-bold rounded-lg px-3 py-2 cursor-pointer"
-                  >
-                    ⭐ Load Super Star Questions ({SUPER_STAR_QUESTIONS.length} questions)
-                  </button>
-                )}
-
-                {/* Question List */}
-                <div className="space-y-2 max-h-32 overflow-y-auto bg-[var(--bg-subtle)] p-3 rounded-xl border border-[var(--border)]">
-                  {newQuestions.map((q, idx) => (
-                    <div key={idx} className="flex items-center justify-between gap-2 bg-[var(--bg-surface)] px-3 py-1.5 rounded-lg border border-[var(--border)]">
-                      <span className="text-[10px] font-mono text-[var(--text-muted)] shrink-0">Q{idx + 1}:</span>
-                      <p className="text-xs text-[var(--text-secondary)] truncate flex-1 font-medium">{q}</p>
-                      <button
-                        type="button"
-                        onClick={() => handleRemoveQuestion(idx)}
-                        className="text-[10px] text-rose-500 font-bold hover:underline cursor-pointer"
-                      >
-                        Remove
-                      </button>
+        return (
+          <Modal
+            open
+            onClose={() => setShowCreateModal(false)}
+            title="Assign Dialing Task"
+            subtitle="Pick a workflow, assign an outbound agent, and load your contact list."
+            maxWidth="max-w-2xl"
+          >
+            {/* Step progress indicator */}
+            <div className="flex items-center gap-1 mb-6">
+              {STEPS.map((s, idx) => (
+                <React.Fragment key={s.num}>
+                  <div className="flex items-center gap-1.5">
+                    <div className={`h-6 w-6 rounded-full flex items-center justify-center text-[10px] font-bold shrink-0 transition-all ${
+                      wizardStep > s.num
+                        ? 'bg-blue-600 text-white'
+                        : wizardStep === s.num
+                        ? 'bg-blue-600 text-white ring-2 ring-blue-200'
+                        : 'bg-[var(--bg-subtle)] text-[var(--text-muted)]'
+                    }`}>
+                      {wizardStep > s.num ? <Check className="h-3 w-3" /> : s.num}
                     </div>
-                  ))}
-                  {newQuestions.length === 0 && (
-                    <p className="text-xs text-[var(--text-muted)] italic text-center py-2">No questions defined yet. Please add at least one question below.</p>
-                  )}
-                </div>
-
-                {/* Add Question row */}
-                <div className="flex gap-2">
-                  <input
-                    type="text"
-                    placeholder="Type a new survey question (e.g., Do you currently rent or own?)"
-                    value={tempQuestionInput}
-                    onChange={(e) => setTempQuestionInput(e.target.value)}
-                    className="flex-1 border border-[var(--border)] rounded-xl px-3.5 py-2 text-xs text-[var(--text-primary)]"
-                  />
-                  <button
-                    type="button"
-                    onClick={handleAddQuestion}
-                    className="px-4 py-2 text-xs font-bold rounded-xl cursor-pointer shrink-0" style={{background:'var(--panel-bg)',color:'var(--panel-text)',border:'1px solid var(--panel-border)'}}
-                  >
-                    Add Question
-                  </button>
-                </div>
-              </div>
-
-              {/* Select Leads checklist */}
-              <div className="space-y-2">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                  <label className="text-xs font-bold block" style={{ color: 'var(--text-secondary)' }}>Select Target Numbers / Leads ({selectedFormLeadIds.length} chosen)</label>
-                  <div className="flex items-center space-x-2">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const filtered = leadsDatabase.filter((lead) => {
-                          const query = modalLeadSearch.toLowerCase();
-                          return lead.name.toLowerCase().includes(query) || lead.phone.includes(query) || lead.source.toLowerCase().includes(query);
-                        }).map((l) => l.id);
-                        setSelectedFormLeadIds(Array.from(new Set([...selectedFormLeadIds, ...filtered])));
-                      }}
-                      className="text-[10px] text-blue-600 font-semibold hover:underline cursor-pointer"
-                    >
-                      Select All Filtered
-                    </button>
-                    <span className="text-xs" style={{ color: 'var(--text-muted)' }}>|</span>
-                    <button
-                      type="button"
-                      onClick={() => setSelectedFormLeadIds([])}
-                      className="text-[10px] text-[var(--text-muted)] font-semibold hover:underline cursor-pointer"
-                    >
-                      Deselect All
-                    </button>
+                    <span className={`text-xs font-semibold hidden sm:block ${wizardStep === s.num ? 'text-blue-600' : 'text-[var(--text-muted)]'}`}>{s.label}</span>
                   </div>
+                  {idx < STEPS.length - 1 && (
+                    <div className={`flex-1 h-0.5 mx-1 rounded-full transition-all ${wizardStep > s.num ? 'bg-blue-600' : 'bg-[var(--border)]'}`} />
+                  )}
+                </React.Fragment>
+              ))}
+            </div>
+
+            {/* ── Step 1: Select Workflow ───────────────────────────────────── */}
+            {wizardStep === 1 && (
+              <div className="space-y-4">
+                <div>
+                  <h3 className="text-sm font-bold text-[var(--text-primary)]">Select a Workflow</h3>
+                  <p className="text-xs text-[var(--text-muted)] mt-0.5">Choose a workflow that contains question tasks for the AI agent to ask during calls.</p>
                 </div>
 
-                {/* Search filter for task creation */}
-                <SearchInput
-                  value={modalLeadSearch}
-                  onChange={setModalLeadSearch}
-                  placeholder="Filter contacts by name, phone or source (e.g., CSV Bulk Upload)..."
-                />
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 max-h-36 overflow-y-auto bg-[var(--bg-subtle)] p-3 rounded-xl border border-[var(--border)]">
-                  {leadsDatabase
-                    .filter((lead) => {
-                      const query = modalLeadSearch.toLowerCase();
-                      return lead.name.toLowerCase().includes(query) || lead.phone.includes(query) || lead.source.toLowerCase().includes(query);
-                    })
-                    .map((lead) => {
-                      const isChecked = selectedFormLeadIds.includes(lead.id);
+                {workflowsWithQuestions.length === 0 ? (
+                  <div className="text-center py-10 border border-dashed border-[var(--border)] rounded-xl bg-[var(--bg-subtle)]/50 space-y-2">
+                    <HelpCircle className="h-7 w-7 text-[var(--text-muted)] mx-auto" />
+                    <p className="text-xs font-semibold text-[var(--text-muted)]">No workflows with questions found.</p>
+                    <p className="text-[11px] text-[var(--text-muted)]">Go to Workflows, create a workflow and add question variables — then come back here.</p>
+                  </div>
+                ) : (
+                  <div className="space-y-2 max-h-72 overflow-y-auto pr-1">
+                    {workflowsWithQuestions.map(flow => {
+                      const qCount = (flow.variables ?? []).length;
+                      const isSelected = wizardWorkflowId === flow.id;
                       return (
                         <button
+                          key={flow.id}
                           type="button"
-                          key={lead.id}
-                          onClick={() => handleToggleLeadSelection(lead.id)}
-                          className={`p-2.5 rounded-xl text-left border transition-all flex items-center justify-between cursor-pointer ${
-                            isChecked
-                              ? 'border-blue-600 bg-blue-50/45 shadow-sm'
-                              : 'border-white bg-[var(--bg-surface)] hover:bg-[var(--bg-subtle)]'
+                          onClick={() => setWizardWorkflowId(flow.id)}
+                          className={`w-full text-left p-4 rounded-xl border transition-all cursor-pointer ${
+                            isSelected
+                              ? 'border-blue-500 bg-blue-50/40 shadow-sm'
+                              : 'border-[var(--border)] bg-[var(--bg-surface)] hover:border-blue-300 hover:bg-[var(--bg-subtle)]'
                           }`}
                         >
-                          <div className="space-y-0.5 truncate max-w-[180px]">
-                            <p className="text-xs font-bold text-[var(--text-primary)] truncate">{lead.name}</p>
-                            <p className="text-[10px] text-[var(--text-muted)] font-mono truncate">{lead.phone} • {lead.source}</p>
-                          </div>
-                          <div className={`h-4.5 w-4.5 rounded-full border flex items-center justify-center shrink-0 ${
-                            isChecked ? 'border-blue-600 bg-blue-600 text-white' : 'border-[var(--border)] bg-[var(--bg-surface)]'
-                          }`}>
-                            {isChecked && <Check className="h-3 w-3" />}
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm font-bold text-[var(--text-primary)] truncate">{flow.name}</p>
+                              {flow.description && (
+                                <p className="text-xs text-[var(--text-muted)] mt-0.5 line-clamp-1">{flow.description}</p>
+                              )}
+                              <div className="flex flex-wrap gap-1.5 mt-2">
+                                {(flow.variables ?? []).slice(0, 3).map((v, i) => (
+                                  <span key={i} className="text-[10px] bg-[var(--bg-subtle)] border border-[var(--border)] px-2 py-0.5 rounded-full text-[var(--text-muted)]">
+                                    {v.questionText ? `Q${i+1}: ${v.questionText.slice(0, 40)}${v.questionText.length > 40 ? '…' : ''}` : v.name}
+                                  </span>
+                                ))}
+                                {qCount > 3 && (
+                                  <span className="text-[10px] text-[var(--text-muted)]">+{qCount - 3} more</span>
+                                )}
+                              </div>
+                            </div>
+                            <div className="flex flex-col items-end gap-1.5 shrink-0">
+                              <span className="text-[10px] font-bold text-blue-600 bg-blue-50 border border-blue-100 px-2 py-0.5 rounded-full">{qCount} question{qCount !== 1 ? 's' : ''}</span>
+                              {flow.active && (
+                                <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 border border-emerald-100 px-2 py-0.5 rounded-full">Active</span>
+                              )}
+                              <div className={`h-5 w-5 rounded-full border-2 flex items-center justify-center ${isSelected ? 'border-blue-600 bg-blue-600' : 'border-[var(--border)]'}`}>
+                                {isSelected && <Check className="h-3 w-3 text-white" />}
+                              </div>
+                            </div>
                           </div>
                         </button>
                       );
                     })}
-                  {leadsDatabase.filter((lead) => {
-                    const query = modalLeadSearch.toLowerCase();
-                    return lead.name.toLowerCase().includes(query) || lead.phone.includes(query) || lead.source.toLowerCase().includes(query);
-                  }).length === 0 && (
-                    <p className="text-xs text-[var(--text-muted)] italic text-center col-span-2 py-4">No contacts match the filter query.</p>
-                  )}
+                  </div>
+                )}
+
+                <div className="flex justify-end pt-2 border-t border-[var(--border)]">
+                  <button
+                    type="button"
+                    disabled={!wizardWorkflowId}
+                    onClick={() => setWizardStep(2)}
+                    className="flex items-center gap-1.5 px-5 py-2 text-xs font-bold text-white bg-blue-600 hover:bg-blue-500 disabled:opacity-40 disabled:cursor-not-allowed rounded-xl cursor-pointer transition-all"
+                  >
+                    Next: Select Agent <ChevronRight className="h-3.5 w-3.5" />
+                  </button>
                 </div>
               </div>
+            )}
 
-              {/* Submit Buttons */}
-              <div className="flex items-center justify-end gap-3 pt-3 border-t border-[var(--border)]">
-                <button
-                  type="button"
-                  onClick={() => setShowCreateModal(false)}
-                  className="px-4 py-2 text-xs font-bold text-[var(--text-muted)] hover:text-[var(--text-secondary)] bg-[var(--bg-subtle)] hover:bg-[var(--bg-subtle)] rounded-xl cursor-pointer"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="px-5 py-2 text-xs font-bold text-white bg-blue-600 hover:bg-blue-500 rounded-xl cursor-pointer"
-                >
-                  Create & Load Dialing Task
-                </button>
+            {/* ── Step 2: Select Agent ──────────────────────────────────────── */}
+            {wizardStep === 2 && (
+              <div className="space-y-4">
+                <div>
+                  <h3 className="text-sm font-bold text-[var(--text-primary)]">Select an Agent</h3>
+                  <p className="text-xs text-[var(--text-muted)] mt-0.5">Only agents with an outbound number assigned are shown — configure outbound numbers in Agent Studio.</p>
+                </div>
+
+                {wizardAgentsLoading ? (
+                  <div className="flex items-center justify-center py-10 gap-2 text-[var(--text-muted)]">
+                    <RefreshCw className="h-4 w-4 animate-spin" />
+                    <span className="text-xs">Loading agents…</span>
+                  </div>
+                ) : agentsWithOutbound.length === 0 ? (
+                  <div className="text-center py-10 border border-dashed border-[var(--border)] rounded-xl bg-[var(--bg-subtle)]/50 space-y-2">
+                    <HelpCircle className="h-7 w-7 text-[var(--text-muted)] mx-auto" />
+                    <p className="text-xs font-semibold text-[var(--text-muted)]">No agents with outbound support found.</p>
+                    <p className="text-[11px] text-[var(--text-muted)]">In Agent Studio, open an agent and assign an outbound caller number to it.</p>
+                  </div>
+                ) : (
+                  <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
+                    {agentsWithOutbound.map(agent => {
+                      const isSelected = wizardAgentId === agent.id;
+                      return (
+                        <button
+                          key={agent.id}
+                          type="button"
+                          onClick={() => setWizardAgentId(agent.id)}
+                          className={`w-full text-left p-4 rounded-xl border transition-all cursor-pointer ${
+                            isSelected
+                              ? 'border-blue-500 bg-blue-50/40 shadow-sm'
+                              : 'border-[var(--border)] bg-[var(--bg-surface)] hover:border-blue-300 hover:bg-[var(--bg-subtle)]'
+                          }`}
+                        >
+                          <div className="flex items-center justify-between gap-3">
+                            <div className="flex items-center gap-3 min-w-0">
+                              <div className={`h-9 w-9 rounded-xl flex items-center justify-center text-sm font-bold shrink-0 ${isSelected ? 'bg-blue-100 text-blue-700' : 'bg-[var(--bg-subtle)] text-[var(--text-muted)]'}`}>
+                                {agent.name.charAt(0).toUpperCase()}
+                              </div>
+                              <div className="min-w-0">
+                                <p className="text-sm font-bold text-[var(--text-primary)] truncate">{agent.name}</p>
+                                <div className="flex items-center gap-1.5 mt-0.5">
+                                  <PhoneCall className="h-3 w-3 text-emerald-500 shrink-0" />
+                                  <span className="text-[10px] font-mono text-emerald-600 truncate">{agent.outboundNumber?.number}</span>
+                                  {agent.activeVoice && (
+                                    <>
+                                      <span className="text-[var(--text-muted)] text-[10px]">•</span>
+                                      <span className="text-[10px] text-[var(--text-muted)]">{agent.activeVoice}</span>
+                                    </>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                            <div className={`h-5 w-5 rounded-full border-2 flex items-center justify-center shrink-0 ${isSelected ? 'border-blue-600 bg-blue-600' : 'border-[var(--border)]'}`}>
+                              {isSelected && <Check className="h-3 w-3 text-white" />}
+                            </div>
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+
+                <div className="flex items-center justify-between pt-2 border-t border-[var(--border)]">
+                  <button type="button" onClick={() => setWizardStep(1)} className="flex items-center gap-1 px-4 py-2 text-xs font-semibold text-[var(--text-muted)] hover:text-[var(--text-secondary)] rounded-xl cursor-pointer">
+                    <ChevronLeft className="h-3.5 w-3.5" /> Back
+                  </button>
+                  <button
+                    type="button"
+                    disabled={!wizardAgentId}
+                    onClick={() => setWizardStep(3)}
+                    className="flex items-center gap-1.5 px-5 py-2 text-xs font-bold text-white bg-blue-600 hover:bg-blue-500 disabled:opacity-40 disabled:cursor-not-allowed rounded-xl cursor-pointer transition-all"
+                  >
+                    Next: Add Contacts <ChevronRight className="h-3.5 w-3.5" />
+                  </button>
+                </div>
               </div>
-            </form>
-        </Modal>
-      )}
+            )}
+
+            {/* ── Step 3: Add Contacts ──────────────────────────────────────── */}
+            {wizardStep === 3 && (
+              <div className="space-y-4">
+                <div>
+                  <h3 className="text-sm font-bold text-[var(--text-primary)]">Add Contacts <span className="text-blue-600">({totalContacts} selected)</span></h3>
+                  <p className="text-xs text-[var(--text-muted)] mt-0.5">Select from your contact database or add new contacts manually. You can mix both.</p>
+                </div>
+
+                {/* Tab switcher */}
+                <div className="flex gap-1 p-1 bg-[var(--bg-subtle)] rounded-xl w-fit">
+                  {(['existing', 'new'] as const).map(tab => (
+                    <button
+                      key={tab}
+                      type="button"
+                      onClick={() => setWizardContactTab(tab)}
+                      className={`px-4 py-1.5 text-xs font-semibold rounded-lg transition-all cursor-pointer capitalize ${wizardContactTab === tab ? 'bg-[var(--bg-surface)] text-[var(--text-primary)] shadow-sm' : 'text-[var(--text-muted)]'}`}
+                    >
+                      {tab === 'existing' ? `From Database (${leadsDatabase.length})` : 'Add New'}
+                    </button>
+                  ))}
+                </div>
+
+                {wizardContactTab === 'existing' && (
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <SearchInput
+                        value={wizardContactSearch}
+                        onChange={setWizardContactSearch}
+                        placeholder="Search by name, phone or source…"
+                      />
+                      <div className="flex items-center gap-2 ml-2 shrink-0">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const ids = leadsDatabase
+                              .filter(l => {
+                                const q = wizardContactSearch.toLowerCase();
+                                return l.name.toLowerCase().includes(q) || l.phone.includes(q) || l.source.toLowerCase().includes(q);
+                              })
+                              .map(l => l.id);
+                            setWizardSelectedLeadIds(prev => Array.from(new Set([...prev, ...ids])));
+                          }}
+                          className="text-[10px] text-blue-600 font-semibold hover:underline cursor-pointer whitespace-nowrap"
+                        >
+                          Select All
+                        </button>
+                        <span className="text-[var(--text-muted)] text-xs">|</span>
+                        <button
+                          type="button"
+                          onClick={() => setWizardSelectedLeadIds([])}
+                          className="text-[10px] text-[var(--text-muted)] font-semibold hover:underline cursor-pointer whitespace-nowrap"
+                        >
+                          Clear
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-48 overflow-y-auto bg-[var(--bg-subtle)] p-2.5 rounded-xl border border-[var(--border)]">
+                      {leadsDatabase.filter(l => {
+                        const q = wizardContactSearch.toLowerCase();
+                        return l.name.toLowerCase().includes(q) || l.phone.includes(q) || (l.source || '').toLowerCase().includes(q);
+                      }).map(lead => {
+                        const checked = wizardSelectedLeadIds.includes(lead.id);
+                        return (
+                          <button
+                            key={lead.id}
+                            type="button"
+                            onClick={() => setWizardSelectedLeadIds(prev =>
+                              checked ? prev.filter(id => id !== lead.id) : [...prev, lead.id]
+                            )}
+                            className={`p-2.5 rounded-lg text-left border transition-all flex items-center justify-between cursor-pointer ${
+                              checked ? 'border-blue-500 bg-blue-50/40' : 'border-[var(--border)] bg-[var(--bg-surface)] hover:bg-[var(--bg-subtle)]'
+                            }`}
+                          >
+                            <div className="min-w-0">
+                              <p className="text-xs font-bold text-[var(--text-primary)] truncate">{lead.name}</p>
+                              <p className="text-[10px] text-[var(--text-muted)] font-mono truncate">{lead.phone}</p>
+                            </div>
+                            <div className={`h-4 w-4 rounded border-2 flex items-center justify-center shrink-0 ${checked ? 'border-blue-600 bg-blue-600' : 'border-[var(--border)]'}`}>
+                              {checked && <Check className="h-2.5 w-2.5 text-white" />}
+                            </div>
+                          </button>
+                        );
+                      })}
+                      {leadsDatabase.filter(l => {
+                        const q = wizardContactSearch.toLowerCase();
+                        return l.name.toLowerCase().includes(q) || l.phone.includes(q) || (l.source || '').toLowerCase().includes(q);
+                      }).length === 0 && (
+                        <p className="col-span-2 text-xs text-[var(--text-muted)] italic text-center py-4">No contacts match your search.</p>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {wizardContactTab === 'new' && (
+                  <div className="space-y-3">
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        placeholder="Full name"
+                        value={wizardNewName}
+                        onChange={e => setWizardNewName(e.target.value)}
+                        className="flex-1 border border-[var(--border)] rounded-xl px-3.5 py-2 text-xs text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none focus:border-blue-500"
+                      />
+                      <input
+                        type="tel"
+                        placeholder="Phone number"
+                        value={wizardNewPhone}
+                        onChange={e => setWizardNewPhone(e.target.value)}
+                        className="flex-1 border border-[var(--border)] rounded-xl px-3.5 py-2 text-xs text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none focus:border-blue-500"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (!wizardNewName.trim() || !wizardNewPhone.trim()) return;
+                          setWizardNewContacts(prev => [...prev, { name: wizardNewName.trim(), phone: wizardNewPhone.trim() }]);
+                          setWizardNewName('');
+                          setWizardNewPhone('');
+                        }}
+                        className="px-3.5 py-2 bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold rounded-xl cursor-pointer shrink-0 transition-all"
+                      >
+                        <Plus className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+
+                    {wizardNewContacts.length > 0 ? (
+                      <div className="space-y-1.5 max-h-40 overflow-y-auto bg-[var(--bg-subtle)] p-2.5 rounded-xl border border-[var(--border)]">
+                        {wizardNewContacts.map((c, i) => (
+                          <div key={i} className="flex items-center justify-between bg-[var(--bg-surface)] px-3 py-2 rounded-lg border border-[var(--border)]">
+                            <div>
+                              <p className="text-xs font-bold text-[var(--text-primary)]">{c.name}</p>
+                              <p className="text-[10px] text-[var(--text-muted)] font-mono">{c.phone}</p>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => setWizardNewContacts(prev => prev.filter((_, idx) => idx !== i))}
+                              className="text-rose-400 hover:text-rose-600 cursor-pointer"
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-xs text-[var(--text-muted)] italic">No new contacts added yet. Fill in the fields above and click +.</p>
+                    )}
+                  </div>
+                )}
+
+                <div className="flex items-center justify-between pt-2 border-t border-[var(--border)]">
+                  <button type="button" onClick={() => setWizardStep(2)} className="flex items-center gap-1 px-4 py-2 text-xs font-semibold text-[var(--text-muted)] hover:text-[var(--text-secondary)] rounded-xl cursor-pointer">
+                    <ChevronLeft className="h-3.5 w-3.5" /> Back
+                  </button>
+                  <button
+                    type="button"
+                    disabled={totalContacts === 0}
+                    onClick={() => setWizardStep(4)}
+                    className="flex items-center gap-1.5 px-5 py-2 text-xs font-bold text-white bg-blue-600 hover:bg-blue-500 disabled:opacity-40 disabled:cursor-not-allowed rounded-xl cursor-pointer transition-all"
+                  >
+                    Review Task <ChevronRight className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* ── Step 4: Review + Create ───────────────────────────────────── */}
+            {wizardStep === 4 && selectedWorkflow && (
+              <div className="space-y-4">
+                <div>
+                  <h3 className="text-sm font-bold text-[var(--text-primary)]">Review & Create</h3>
+                  <p className="text-xs text-[var(--text-muted)] mt-0.5">Confirm the details below, then create the dialing task.</p>
+                </div>
+
+                <div className="space-y-3 bg-[var(--bg-subtle)] rounded-xl p-4 border border-[var(--border)]">
+                  {/* Workflow summary */}
+                  <div className="flex items-start gap-3 pb-3 border-b border-[var(--border)]">
+                    <div className="h-8 w-8 rounded-lg bg-blue-100 flex items-center justify-center shrink-0">
+                      <ChevronRight className="h-4 w-4 text-blue-600" />
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-[10px] font-bold uppercase tracking-widest text-[var(--text-muted)]">Workflow</p>
+                      <p className="text-sm font-bold text-[var(--text-primary)] mt-0.5">{selectedWorkflow.name}</p>
+                      <p className="text-xs text-[var(--text-muted)] mt-0.5">{(selectedWorkflow.variables ?? []).length} questions</p>
+                      <div className="flex flex-col gap-1 mt-1.5">
+                        {(selectedWorkflow.variables ?? []).map((v, i) => (
+                          <p key={i} className="text-[11px] text-[var(--text-secondary)]">
+                            <span className="font-mono text-[var(--text-muted)]">Q{i+1}</span> {v.questionText || v.name}
+                          </p>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Agent summary */}
+                  <div className="flex items-start gap-3 pb-3 border-b border-[var(--border)]">
+                    <div className="h-8 w-8 rounded-lg bg-violet-100 flex items-center justify-center shrink-0">
+                      <span className="text-sm font-bold text-violet-700">{selectedAgent?.name.charAt(0).toUpperCase()}</span>
+                    </div>
+                    <div>
+                      <p className="text-[10px] font-bold uppercase tracking-widest text-[var(--text-muted)]">Agent</p>
+                      <p className="text-sm font-bold text-[var(--text-primary)] mt-0.5">{selectedAgent?.name ?? '—'}</p>
+                      {selectedAgent?.outboundNumber && (
+                        <p className="text-xs text-emerald-600 font-mono mt-0.5">{selectedAgent.outboundNumber.number}</p>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Contacts summary */}
+                  <div className="flex items-start gap-3">
+                    <div className="h-8 w-8 rounded-lg bg-emerald-100 flex items-center justify-center shrink-0">
+                      <FileSpreadsheet className="h-4 w-4 text-emerald-600" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-[10px] font-bold uppercase tracking-widest text-[var(--text-muted)]">Contacts</p>
+                      <p className="text-sm font-bold text-[var(--text-primary)] mt-0.5">{totalContacts} contact{totalContacts !== 1 ? 's' : ''} to dial</p>
+                      {wizardSelectedLeadIds.length > 0 && (
+                        <p className="text-xs text-[var(--text-muted)] mt-0.5">{wizardSelectedLeadIds.length} from database</p>
+                      )}
+                      {wizardNewContacts.length > 0 && (
+                        <div className="mt-1.5 space-y-1">
+                          {wizardNewContacts.map((c, i) => (
+                            <p key={i} className="text-[11px] text-[var(--text-secondary)]">{c.name} — {c.phone}</p>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-between pt-2 border-t border-[var(--border)]">
+                  <button type="button" onClick={() => setWizardStep(3)} className="flex items-center gap-1 px-4 py-2 text-xs font-semibold text-[var(--text-muted)] hover:text-[var(--text-secondary)] rounded-xl cursor-pointer">
+                    <ChevronLeft className="h-3.5 w-3.5" /> Back
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleCreateTask}
+                    className="flex items-center gap-1.5 px-6 py-2.5 text-xs font-bold text-white bg-blue-600 hover:bg-blue-500 rounded-xl cursor-pointer transition-all shadow-md"
+                  >
+                    <PhoneCall className="h-3.5 w-3.5" /> Create & Load Dialing Task
+                  </button>
+                </div>
+              </div>
+            )}
+          </Modal>
+        );
+      })()}
 
     </PageShell>
   );

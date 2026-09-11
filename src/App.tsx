@@ -706,6 +706,7 @@ export default function App() {
             companyName={orgSettings.workspaceName}
             teamMembers={teamMembers}
             industry={orgSettings.industry}
+            flows={questionFlows}
           />
         );
       case 'loans':
