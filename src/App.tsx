@@ -10,7 +10,6 @@ import { TAB_TO_FLAG } from './features/feature-flags/registry';
 import {
   Lead,
   Workflow,
-  Campaign,
   CallLog,
   Loan,
   VirtualNumber,
@@ -41,7 +40,6 @@ import LeadManagementView from './components/LeadManagementView';
 import WorkflowsView from './features/workflows/WorkflowsView';
 import { QuestionFlow } from './features/workflows/types';
 import { useFeatureFlags } from './features/feature-flags/FeatureFlagContext';
-import CampaignView from './components/CampaignView';
 import DialerSimulator from './components/DialerSimulator';
 import LoanLifecycleView from './components/LoanLifecycleView';
 import SettingsView from './components/SettingsView';
@@ -228,7 +226,6 @@ export default function App() {
     leads:         'lead-crm',
     contacts:      'contact-directory',
     workflows:     'workflow-builder',
-    campaigns:     'ai-campaigns',
     dialer:        'voice-simulator',
     'call-logs':   'call-logs',
     reports:       'reports',
@@ -284,9 +281,6 @@ export default function App() {
   );
   const [workflows, setWorkflows] = useState<Workflow[]>(() =>
     loadFromStorage<Workflow[]>('chiefx_workflows', [])
-  );
-  const [campaigns, setCampaigns] = useState<Campaign[]>(() =>
-    loadFromStorage<Campaign[]>('chiefx_campaigns', [])
   );
   const [callLogs, setCallLogs] = useState<CallLog[]>(() =>
     loadFromStorage<CallLog[]>('chiefx_calllogs', [])
@@ -361,7 +355,6 @@ export default function App() {
       const [
         resLeads,
         resWorkflows,
-        resCampaigns,
         resCallLogs,
         resLoans,
         resNumbers,
@@ -372,7 +365,6 @@ export default function App() {
       ] = await Promise.all([
         apiFetch('/api/leads').then(r => r.json()).catch(() => null),
         apiFetch('/api/workflows').then(r => r.json()).catch(() => null),
-        apiFetch('/api/campaigns').then(r => r.json()).catch(() => null),
         apiFetch('/api/call-logs').then(r => r.json()).catch(() => null),
         apiFetch('/api/loans').then(r => r.json()).catch(() => null),
         apiFetch('/api/settings/numbers').then(r => r.json()).catch(() => null),
@@ -384,7 +376,6 @@ export default function App() {
 
       if (Array.isArray(resLeads)) setLeads(resLeads);
       if (Array.isArray(resWorkflows)) setWorkflows(resWorkflows);
-      if (Array.isArray(resCampaigns)) setCampaigns(resCampaigns);
       if (Array.isArray(resCallLogs)) setCallLogs(resCallLogs);
       if (Array.isArray(resLoans)) setLoans(resLoans);
       if (Array.isArray(resNumbers)) setVirtualNumbers(resNumbers);
@@ -425,13 +416,13 @@ export default function App() {
     const lastUserId = localStorage.getItem('chiefx_last_user_id');
     if (lastUserId !== kcUser.id) {
       const CRM_KEYS = [
-        'chiefx_leads', 'chiefx_workflows', 'chiefx_campaigns',
+        'chiefx_leads', 'chiefx_workflows',
         'chiefx_calllogs', 'chiefx_loans', 'chiefx_numbers',
         'chiefx_team', 'chiefx_org', 'chiefx_dialer_tasks', 'chiefx_question_flows',
         'chiefx_feature_flags',
       ];
       CRM_KEYS.forEach(k => localStorage.removeItem(k));
-      setLeads([]); setWorkflows([]); setCampaigns([]); setCallLogs([]);
+      setLeads([]); setWorkflows([]); setCallLogs([]);
       setLoans([]); setVirtualNumbers([]); setTeamMembers([]);
       setOrgSettings(EMPTY_ORG_SETTINGS); setDialerTasks([]); setQuestionFlows([]);
     }
@@ -496,7 +487,7 @@ export default function App() {
   // Redirect if a non-lending org lands on a lending-only route or a retired route.
   useEffect(() => {
     const isLending = !orgSettings.industry || orgSettings.industry === 'lending';
-    const lendingOnlyTabs = new Set(['leads', 'campaigns', 'loans']);
+    const lendingOnlyTabs = new Set(['leads', 'loans']);
     if ((!isLending && lendingOnlyTabs.has(activeTab)) || activeTab === 'objects') {
       navigate('/', { replace: true });
     }
@@ -572,9 +563,6 @@ export default function App() {
   useEffect(() => { saveToStorage('chiefx_workflows', workflows); }, [workflows]);
   useDebouncedSync('/api/workflows/sync', workflows, hasLoaded);
 
-  useEffect(() => { saveToStorage('chiefx_campaigns', campaigns); }, [campaigns]);
-  useDebouncedSync('/api/campaigns/sync', campaigns, hasLoaded);
-
   useEffect(() => { saveToStorage('chiefx_calllogs', callLogs); }, [callLogs]);
   useDebouncedSync('/api/call-logs/sync', callLogs, hasLoaded);
 
@@ -628,7 +616,7 @@ export default function App() {
 
     // Find the first sidebar tab the user can actually see
     const orderedTabs = [
-      'dashboard', 'leads', 'contacts', 'workflows', 'campaigns',
+      'dashboard', 'leads', 'contacts', 'workflows',
       'dialer', 'call-logs', 'reports', 'inbox', 'agent-studio',
       'compliance', 'knowledge', 'enquiries', 'audit-log', 'billing', 'loans',
     ];
@@ -674,7 +662,6 @@ export default function App() {
         return (
           <DashboardView
             leads={leads}
-            campaigns={campaigns}
             callLogs={callLogs}
             loans={loans}
             orgSettings={orgSettings}
@@ -708,15 +695,6 @@ export default function App() {
           <WorkflowsView
             flows={questionFlows}
             setFlows={setQuestionFlows}
-          />
-        );
-      case 'campaigns':
-        return (
-          <CampaignView
-            campaigns={campaigns}
-            setCampaigns={setCampaigns}
-            workflows={workflows}
-            totalLeadsCount={leads.length}
           />
         );
       case 'dialer':

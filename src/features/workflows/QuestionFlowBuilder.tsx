@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useRef } from 'react';
+import React, { useState, useCallback, useRef, useEffect } from 'react';
 import {
   ReactFlow,
   Background,
@@ -76,6 +76,38 @@ export default function QuestionFlowBuilder({ flow, allFlows, onChange }: Props)
   const [varPanelOpen, setVarPanelOpen] = useState(false);
   const reactFlowWrapper = useRef<HTMLDivElement>(null);
 
+  // Keep a ref to onChange so the sync effect doesn't need it as a dependency
+  const onChangeRef = useRef(onChange);
+  onChangeRef.current = onChange;
+
+  // Keep a stable ref to the flow id so we can detect flow switches
+  const flowIdRef = useRef(flow.id);
+  // Tracks whether the component has finished its initial render
+  const isMounted = useRef(false);
+
+  // Re-initialize diagram when switching to a different flow
+  useEffect(() => {
+    if (flow.id !== flowIdRef.current) {
+      flowIdRef.current = flow.id;
+      isMounted.current = false; // suppress the sync effect for this reset
+      setRfNodes(toRFNodes(flow.nodes));
+      setRfEdges(toRFEdges(flow.edges));
+    }
+  }, [flow.id, flow.nodes, flow.edges, setRfNodes, setRfEdges]);
+
+  // Live-sync diagram state to parent so view switches preserve edits
+  useEffect(() => {
+    if (!isMounted.current) { isMounted.current = true; return; }
+    const updated: QuestionFlow = {
+      ...flow,
+      nodes: fromRFNodes(rfNodes),
+      edges: fromRFEdges(rfEdges),
+      updatedAt: new Date().toISOString(),
+    };
+    onChangeRef.current(updated);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rfNodes, rfEdges]);
+
   const handleVarsChange = (vars: WorkflowVariable[]) => {
     onChange({ ...flow, nodes: fromRFNodes(rfNodes), edges: fromRFEdges(rfEdges), variables: vars, updatedAt: new Date().toISOString() });
   };
@@ -127,13 +159,7 @@ export default function QuestionFlowBuilder({ flow, allFlows, onChange }: Props)
   };
 
   const handleSave = () => {
-    const updatedFlow: QuestionFlow = {
-      ...flow,
-      nodes: fromRFNodes(rfNodes),
-      edges: fromRFEdges(rfEdges),
-      updatedAt: new Date().toISOString(),
-    };
-    onChange(updatedFlow);
+    // State is already live-synced to parent; trigger visual confirmation
     setSaved(true);
     setTimeout(() => setSaved(false), 2000);
   };

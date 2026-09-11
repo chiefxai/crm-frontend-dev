@@ -5,7 +5,6 @@ import {
   GitBranch,
   PhoneCall,
   Settings,
-  Briefcase,
   Layers,
   Contact,
   Building2,
@@ -43,7 +42,7 @@ interface SidebarProps {
   industry: string;
 }
 
-const LENDING_ONLY_TAB_IDS = new Set(['leads', 'campaigns', 'loans']);
+const LENDING_ONLY_TAB_IDS = new Set(['leads', 'loans']);
 
 interface SubItem { id: string; label: string; icon: React.ElementType; }
 interface SidebarGroup { tabId: string; label: string; icon: React.ElementType; subItems: SubItem[]; }
@@ -247,7 +246,6 @@ export default function Sidebar({
     { id: 'leads',        label: 'Lead CRM',          icon: Users },
     { id: 'contacts',     label: 'Contact Directory', icon: Contact },
     { id: 'workflows',    label: 'Workflow Builder',  icon: GitBranch },
-    { id: 'campaigns',    label: 'AI Campaigns',      icon: Briefcase },
     { id: 'dialer',       label: 'Voice Simulator',   icon: PhoneCall },
     { id: 'call-logs',    label: 'Call Logs',         icon: History },
     { id: 'reports',      label: 'Reports',           icon: BarChart3 },

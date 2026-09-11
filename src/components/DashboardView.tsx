@@ -23,7 +23,7 @@ import {
   Bar,
 } from 'recharts';
 import { apiFetch } from '../lib/api';
-import { Lead, Loan, Campaign, CallLog, OrganizationSettings } from '../types';
+import { Lead, Loan, CallLog, OrganizationSettings } from '../types';
 import { COST_PER_MINUTE_INR_FALLBACK, formatInr } from '../lib/pricing';
 import PageShell from './ui/PageShell';
 import Widget from './ui/Widget';
@@ -35,7 +35,6 @@ import KpiCard from './ui/KpiCard';
 interface DashboardViewProps {
   leads: Lead[];
   loans: Loan[];
-  campaigns: Campaign[];
   callLogs: CallLog[];
   orgSettings: OrganizationSettings;
   costPerMinuteInr?: number;
@@ -82,7 +81,6 @@ const CHART_TOOLTIP = {
 export default function DashboardView({
   leads,
   loans,
-  campaigns,
   callLogs,
   orgSettings,
   costPerMinuteInr = COST_PER_MINUTE_INR_FALLBACK,
@@ -106,7 +104,7 @@ export default function DashboardView({
       const res = await fetch('/api/gemini/insights', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ leads, loans, campaigns, platformMode: orgSettings.industry || 'lending' }),
+        body: JSON.stringify({ leads, loans, platformMode: orgSettings.industry || 'lending' }),
       });
       const data = await res.json();
       if (data.success) {
@@ -127,14 +125,8 @@ export default function DashboardView({
 
   const isLending = !orgSettings.industry || orgSettings.industry === 'lending';
   const primaryObject = metrics?.objectMetrics?.[0] || null;
-  const activeCampaignsCount = campaigns.filter(c => c.status === 'Running').length;
   const totalLeadsCount = leads.length;
   const outstandingPortfolio = loans.reduce((s, l) => s + l.amount, 0);
-  const totalCampaignCalled = campaigns.reduce((s, c) => s + c.calledLeads, 0);
-  const totalCampaignSuccess = campaigns.reduce((s, c) => s + c.successfulCalls, 0);
-  const aiConversionRate = totalCampaignCalled > 0
-    ? Math.round((totalCampaignSuccess / totalCampaignCalled) * 100)
-    : 0;
   const daysLeft = Math.max(0, Math.round(
     (new Date(orgSettings.billingPeriodEnd).getTime() - Date.now()) / (1000 * 60 * 60 * 24)
   ));
@@ -216,16 +208,6 @@ export default function DashboardView({
         badgeColor="green"
       />
 
-      <KpiCard
-        colSpan={3}
-        icon={PhoneCall}
-        iconBg="#f0fdf4"
-        iconColor="#16a34a"
-        label="AI Call Conversion"
-        value={`${aiConversionRate}%`}
-        badge="Peak Live"
-        badgeColor="blue"
-      />
 
       <KpiCard
         colSpan={3}
@@ -425,10 +407,6 @@ export default function DashboardView({
               <p className="text-lg font-bold text-emerald-500 mt-1">
                 {metrics?.positiveSentimentPct != null ? `Positive (${metrics.positiveSentimentPct}%)` : 'No data yet'}
               </p>
-            </div>
-            <div className="rounded-xl p-3" style={{ background: 'var(--panel-surface)' }}>
-              <p className="text-[10px] uppercase tracking-wider font-mono" style={{ color: 'var(--panel-muted)' }}>Active Campaigns</p>
-              <p className="text-lg font-bold text-blue-500 mt-1">{activeCampaignsCount}</p>
             </div>
           </div>
         </div>
