@@ -28,8 +28,9 @@ export default function EnquiriesView() {
 
   const load = () => {
     apiFetch('/api/enquiries')
-      .then(r => r.json())
+      .then(r => r.ok ? r.json() : [])
       .then((list: Enquiry[]) => setEnquiries(Array.isArray(list) ? list : []))
+      .catch(() => [])
       .finally(() => setLoading(false));
   };
 
