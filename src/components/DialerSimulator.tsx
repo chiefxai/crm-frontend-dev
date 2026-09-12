@@ -32,7 +32,7 @@ import {
   History,
   PhoneForwarded
 } from 'lucide-react';
-import { Lead, CallLog, VirtualNumber, TeamMember } from '../types';
+import { Lead, CallLog, VirtualNumber, TeamMember, ContactGroup } from '../types';
 import { QuestionFlow } from '../features/workflows/types';
 import PageShell from './ui/PageShell';
 import Widget from './ui/Widget';
@@ -87,6 +87,8 @@ export const TASK_LANGUAGE_OPTIONS = [
   'English'
 ];
 export const DEFAULT_TASK_LANGUAGE = TASK_LANGUAGE_OPTIONS[0];
+
+const NO_GROUP_FILTER = '__no_group__';
 
 // Super Star Health Insurance tele-script question bank — the AI asks
 // these one by one, same sequential-flow mechanism as any other task's
@@ -284,6 +286,8 @@ Real Tamil speakers do not say the "correct" written form of a word. They contra
   const [wizardNewName, setWizardNewName] = useState('');
   const [wizardNewPhone, setWizardNewPhone] = useState('');
   const [wizardContactTab, setWizardContactTab] = useState<'existing' | 'new'>('existing');
+  const [wizardContactGroups, setWizardContactGroups] = useState<ContactGroup[]>([]);
+  const [wizardGroupFilter, setWizardGroupFilter] = useState('All');
 
   // Call simulator live states
   const [activeLead, setActiveLead] = useState<Lead | null>(null);
@@ -464,6 +468,7 @@ Real Tamil speakers do not say the "correct" written form of a word. They contra
     setWizardNewName('');
     setWizardNewPhone('');
     setWizardContactTab('existing');
+    setWizardGroupFilter('All');
     setShowCreateModal(true);
 
     // Fetch agents with outbound support
@@ -475,6 +480,12 @@ Real Tamil speakers do not say the "correct" written form of a word. They contra
       })
       .catch(() => setWizardAgents([]))
       .finally(() => setWizardAgentsLoading(false));
+
+    // Fetch contact groups for the "select by group" shortcut
+    apiFetch('/api/contact-groups')
+      .then(r => r.json())
+      .then((data: ContactGroup[]) => setWizardContactGroups(Array.isArray(data) ? data : []))
+      .catch(() => setWizardContactGroups([]));
   };
 
   const handleInitiateVobizCall = async (lead: Lead) => {
@@ -2018,6 +2029,13 @@ Currently on question ${nextIndex} out of ${selectedTask.questions.length}. Next
         const selectedWorkflow = flows.find(f => f.id === wizardWorkflowId);
         const selectedAgent = wizardAgents.find(a => a.id === wizardAgentId);
         const totalContacts = wizardSelectedLeadIds.length + wizardNewContacts.length;
+        const matchesWizardContactFilter = (lead: Lead) => {
+          const q = wizardContactSearch.toLowerCase();
+          const matchesSearch = lead.name.toLowerCase().includes(q) || lead.phone.includes(q) || (lead.source || '').toLowerCase().includes(q);
+          const matchesGroup = wizardGroupFilter === 'All'
+            || (wizardGroupFilter === NO_GROUP_FILTER ? (lead.groupIds || []).length === 0 : (lead.groupIds || []).includes(wizardGroupFilter));
+          return matchesSearch && matchesGroup;
+        };
 
         const STEPS = [
           { num: 1, label: 'Workflow' },
@@ -2236,44 +2254,49 @@ Currently on question ${nextIndex} out of ${selectedTask.questions.length}. Next
 
                 {wizardContactTab === 'existing' && (
                   <div className="space-y-2">
-                    <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
                       <SearchInput
                         value={wizardContactSearch}
                         onChange={setWizardContactSearch}
                         placeholder="Search by name, phone or source…"
                       />
-                      <div className="flex items-center gap-2 ml-2 shrink-0">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            const ids = leadsDatabase
-                              .filter(l => {
-                                const q = wizardContactSearch.toLowerCase();
-                                return l.name.toLowerCase().includes(q) || l.phone.includes(q) || l.source.toLowerCase().includes(q);
-                              })
-                              .map(l => l.id);
-                            setWizardSelectedLeadIds(prev => Array.from(new Set([...prev, ...ids])));
-                          }}
-                          className="text-[10px] text-blue-600 font-semibold hover:underline cursor-pointer whitespace-nowrap"
-                        >
-                          Select All
-                        </button>
-                        <span className="text-[var(--text-muted)] text-xs">|</span>
-                        <button
-                          type="button"
-                          onClick={() => setWizardSelectedLeadIds([])}
-                          className="text-[10px] text-[var(--text-muted)] font-semibold hover:underline cursor-pointer whitespace-nowrap"
-                        >
-                          Clear
-                        </button>
-                      </div>
+                      <select
+                        value={wizardGroupFilter}
+                        onChange={(e) => setWizardGroupFilter(e.target.value)}
+                        className="shrink-0 rounded-xl px-3 py-2 text-xs font-medium focus:outline-none cursor-pointer"
+                        style={{ background: 'var(--bg-subtle)', border: '1px solid var(--border)', color: 'var(--text-secondary)' }}
+                      >
+                        <option value="All">All Groups</option>
+                        <option value={NO_GROUP_FILTER}>No Group</option>
+                        {wizardContactGroups.map(g => (
+                          <option key={g.id} value={g.id}>{g.name}</option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div className="flex items-center justify-end gap-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const ids = leadsDatabase.filter(matchesWizardContactFilter).map(l => l.id);
+                          setWizardSelectedLeadIds(prev => Array.from(new Set([...prev, ...ids])));
+                        }}
+                        className="text-[10px] text-blue-600 font-semibold hover:underline cursor-pointer whitespace-nowrap"
+                      >
+                        {wizardGroupFilter === 'All' ? 'Select All' : 'Select All in Group'}
+                      </button>
+                      <span className="text-[var(--text-muted)] text-xs">|</span>
+                      <button
+                        type="button"
+                        onClick={() => setWizardSelectedLeadIds([])}
+                        className="text-[10px] text-[var(--text-muted)] font-semibold hover:underline cursor-pointer whitespace-nowrap"
+                      >
+                        Clear
+                      </button>
                     </div>
 
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-48 overflow-y-auto bg-[var(--bg-subtle)] p-2.5 rounded-xl border border-[var(--border)]">
-                      {leadsDatabase.filter(l => {
-                        const q = wizardContactSearch.toLowerCase();
-                        return l.name.toLowerCase().includes(q) || l.phone.includes(q) || (l.source || '').toLowerCase().includes(q);
-                      }).map(lead => {
+                      {leadsDatabase.filter(matchesWizardContactFilter).map(lead => {
                         const checked = wizardSelectedLeadIds.includes(lead.id);
                         return (
                           <button
@@ -2296,10 +2319,7 @@ Currently on question ${nextIndex} out of ${selectedTask.questions.length}. Next
                           </button>
                         );
                       })}
-                      {leadsDatabase.filter(l => {
-                        const q = wizardContactSearch.toLowerCase();
-                        return l.name.toLowerCase().includes(q) || l.phone.includes(q) || (l.source || '').toLowerCase().includes(q);
-                      }).length === 0 && (
+                      {leadsDatabase.filter(matchesWizardContactFilter).length === 0 && (
                         <p className="col-span-2 text-xs text-[var(--text-muted)] italic text-center py-4">No contacts match your search.</p>
                       )}
                     </div>
