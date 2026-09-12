@@ -279,7 +279,18 @@ export default function App() {
   // (hidden via CSS instead of unmounted) so navigating back to it shows the
   // data it already loaded instantly instead of remounting the view, losing
   // its state, and flashing its loading spinner again.
+  //
+  // `visitedTabsForRender` folds the current activeTab in synchronously
+  // during render, rather than waiting for the effect below to add it to
+  // state. Doing it only in the effect meant that clicking a sidebar item
+  // you hadn't visited yet rendered a frame with the new tab missing from
+  // the list entirely (URL/activeTab updates immediately; the effect that
+  // adds it to `visitedTabs` only runs after that render commits) — the
+  // previous page's panel had already flipped to hidden, so nothing (or a
+  // blank gap) showed until the follow-up render, which read as the page
+  // header disappearing and reappearing on every first visit.
   const [visitedTabs, setVisitedTabs] = useState<string[]>([activeTab]);
+  const visitedTabsForRender = visitedTabs.includes(activeTab) ? visitedTabs : [...visitedTabs, activeTab];
   useEffect(() => {
     setVisitedTabs(prev => prev.includes(activeTab) ? prev : [...prev, activeTab]);
   }, [activeTab]);
@@ -878,7 +889,7 @@ export default function App() {
             <PageHeaderProvider>
               <PageHeaderBar />
               <div className="flex-1 overflow-hidden flex flex-col min-h-0 relative">
-                {visitedTabs.map(tab => (
+                {visitedTabsForRender.map(tab => (
                   <div
                     key={tab}
                     className="flex-1 flex-col overflow-hidden min-h-0"
