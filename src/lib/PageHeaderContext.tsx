@@ -1,0 +1,36 @@
+import React, { createContext, useContext, useState } from 'react';
+
+export interface PageHeaderConfig {
+  title: string;
+  subtitle?: string;
+  action?: React.ReactNode;
+  toolbar?: React.ReactNode;
+}
+
+interface PageHeaderContextValue {
+  header: PageHeaderConfig | null;
+  setHeader: (header: PageHeaderConfig | null) => void;
+}
+
+const PageHeaderContext = createContext<PageHeaderContextValue | null>(null);
+
+// Holds the current page's header content (title/subtitle/action/toolbar) so
+// it can be rendered by a single, permanently-mounted header bar in App.tsx
+// instead of by each view's own PageShell instance. Views are swapped via a
+// switch statement that unmounts the old view and mounts the new one, so a
+// header rendered *inside* PageShell was being torn down and rebuilt on every
+// tab change; publishing it into this shared slot means only its content
+// updates, not the DOM node itself.
+export function PageHeaderProvider({ children }: { children: React.ReactNode }) {
+  const [header, setHeader] = useState<PageHeaderConfig | null>(null);
+  return (
+    <PageHeaderContext.Provider value={{ header, setHeader }}>
+      {children}
+    </PageHeaderContext.Provider>
+  );
+}
+
+/** Returns null when rendered outside a PageHeaderProvider (e.g. in tests). */
+export function usePageHeaderContext() {
+  return useContext(PageHeaderContext);
+}

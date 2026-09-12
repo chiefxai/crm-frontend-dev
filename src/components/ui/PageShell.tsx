@@ -1,6 +1,7 @@
 import React from 'react';
 import { RefreshCw } from 'lucide-react';
 import { useRefresh } from '../../lib/RefreshContext';
+import { usePageHeaderContext } from '../../lib/PageHeaderContext';
 
 // ── Grid helpers ──────────────────────────────────────────────────────────────
 
@@ -62,6 +63,7 @@ export default function PageShell({ title, subtitle, action, toolbar, children, 
   const contextRefresh = useRefresh();
   const refresh = onRefresh ?? contextRefresh;
   const [spinning, setSpinning] = React.useState(false);
+  const pageHeaderCtx = usePageHeaderContext();
 
   const handleRefresh = () => {
     if (!refresh || spinning) return;
@@ -70,34 +72,48 @@ export default function PageShell({ title, subtitle, action, toolbar, children, 
     setTimeout(() => setSpinning(false), 800);
   };
 
+  // When a PageHeaderProvider is present (the normal app shell), publish this
+  // page's header content into the shared, permanently-mounted header bar
+  // instead of rendering our own — see PageHeaderContext.tsx for why.
+  React.useEffect(() => {
+    if (!pageHeaderCtx) return;
+    pageHeaderCtx.setHeader({ title, subtitle, action, toolbar });
+    return () => pageHeaderCtx.setHeader(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pageHeaderCtx, title, subtitle, action, toolbar]);
+
+  const renderOwnHeader = !pageHeaderCtx;
+
   return (
     <div className={`flex flex-col h-full overflow-hidden ${className}`}>
-      {/* ── Page header ── */}
-      <div className="shrink-0 px-8 py-4 flex items-center justify-between gap-4 border-b border-slate-100 dark:border-[var(--border)] bg-white dark:bg-[var(--bg-surface)]">
-        <div className="min-w-0">
-          <h1 className="text-lg font-semibold tracking-tight text-slate-900 dark:text-[var(--text-primary)] leading-snug truncate">
-            {title}
-          </h1>
-          {subtitle && (
-            <p className="text-xs text-slate-400 dark:text-[var(--text-muted)] mt-0.5 truncate">{subtitle}</p>
-          )}
+      {/* ── Page header (only rendered here when there's no shared header slot) ── */}
+      {renderOwnHeader && (
+        <div className="shrink-0 px-8 py-4 flex items-center justify-between gap-4 border-b border-slate-100 dark:border-[var(--border)] bg-white dark:bg-[var(--bg-surface)]">
+          <div className="min-w-0">
+            <h1 className="text-lg font-semibold tracking-tight text-slate-900 dark:text-[var(--text-primary)] leading-snug truncate">
+              {title}
+            </h1>
+            {subtitle && (
+              <p className="text-xs text-slate-400 dark:text-[var(--text-muted)] mt-0.5 truncate">{subtitle}</p>
+            )}
+          </div>
+          <div className="shrink-0 flex items-center gap-2">
+            {refresh && (
+              <button
+                onClick={handleRefresh}
+                title="Refresh"
+                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 dark:hover:bg-[var(--bg-subtle)] transition-colors"
+              >
+                <RefreshCw className={`h-4 w-4 ${spinning ? 'animate-spin' : ''}`} />
+              </button>
+            )}
+            {action && action}
+          </div>
         </div>
-        <div className="shrink-0 flex items-center gap-2">
-          {refresh && (
-            <button
-              onClick={handleRefresh}
-              title="Refresh"
-              className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 dark:hover:bg-[var(--bg-subtle)] transition-colors"
-            >
-              <RefreshCw className={`h-4 w-4 ${spinning ? 'animate-spin' : ''}`} />
-            </button>
-          )}
-          {action && action}
-        </div>
-      </div>
+      )}
 
-      {/* ── Optional toolbar (filters / search) ── */}
-      {toolbar && (
+      {/* ── Optional toolbar (filters / search) — shown here only in standalone mode ── */}
+      {renderOwnHeader && toolbar && (
         <div className="shrink-0 px-8 py-2.5 border-b border-slate-100 dark:border-[var(--border)] bg-slate-50/60 dark:bg-[var(--bg-subtle)] flex items-center gap-3 flex-wrap">
           {toolbar}
         </div>

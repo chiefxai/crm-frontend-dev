@@ -5,6 +5,8 @@ import { COST_PER_MINUTE_INR_FALLBACK as COST_PER_MINUTE_INR } from './lib/prici
 import { loadFromStorage, saveToStorage } from './lib/storage';
 import { recordToLead, leadToRecordPatch, leadToRecordCreate } from './lib/objectContacts';
 import { RefreshProvider } from './lib/RefreshContext';
+import { PageHeaderProvider } from './lib/PageHeaderContext';
+import PageHeaderBar from './components/ui/PageHeaderBar';
 import { fetchUserFlags, resetUserFlags, subscribe as subscribeFlags, isLoaded as flagsLoaded } from './features/feature-flags/userFlagsStore';
 import { TAB_TO_FLAG } from './features/feature-flags/registry';
 import {
@@ -858,7 +860,12 @@ export default function App() {
         {/* Selected view — 12-col grid host */}
         <div className="flex-1 overflow-hidden flex flex-col min-h-0">
           <RefreshProvider onRefresh={refreshData}>
-            {renderTabContent()}
+            <PageHeaderProvider>
+              <PageHeaderBar />
+              <div className="flex-1 overflow-hidden flex flex-col min-h-0">
+                {renderTabContent()}
+              </div>
+            </PageHeaderProvider>
           </RefreshProvider>
         </div>
       </main>
