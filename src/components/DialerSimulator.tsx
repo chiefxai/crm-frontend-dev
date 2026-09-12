@@ -37,6 +37,7 @@ import { QuestionFlow } from '../features/workflows/types';
 import PageShell from './ui/PageShell';
 import Widget from './ui/Widget';
 import Modal from './ui/Modal';
+import IconButton from './ui/IconButton';
 import KpiCard from './ui/KpiCard';
 import SearchInput from './ui/SearchInput';
 import Button from './ui/Button';
@@ -1329,13 +1330,7 @@ Currently on question ${nextIndex} out of ${selectedTask.questions.length}. Next
           </div>
 
           {dialerMode === 'outbound' && (
-            <button
-              onClick={openCreateTaskModal}
-              className="flex items-center px-4 py-2.5 bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold rounded-xl shadow-md shadow-blue-600/15 transition-all cursor-pointer"
-            >
-              <Plus className="h-4 w-4 mr-1.5" />
-              Assign Dialing Task
-            </button>
+            <IconButton icon={Plus} label="Assign Dialing Task" onClick={openCreateTaskModal} />
           )}
         </div>
       }

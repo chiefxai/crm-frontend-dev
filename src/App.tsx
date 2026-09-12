@@ -765,7 +765,7 @@ export default function App() {
             orgSettings={orgSettings}
             setOrgSettings={setOrgSettings}
             costPerMinuteInr={costPerMinuteInr}
-            activeSubTab={activeSubTab as 'numbers' | 'team' | 'billing' | 'api' | 'features'}
+            activeSubTab={activeSubTab as 'numbers' | 'team' | 'billing' | 'api'}
             setActiveSubTab={setActiveSubTab}
             currentUserEmail={kcUser?.email}
           />

@@ -28,6 +28,7 @@ import Widget from './ui/Widget';
 import KpiCard from './ui/KpiCard';
 import Modal from './ui/Modal';
 import FilterBar from './ui/FilterBar';
+import ActionMenu from './ui/ActionMenu';
 
 
 interface ContactDirectoryViewProps {
@@ -403,29 +404,14 @@ export default function ContactDirectoryView({
       title="Unified Contact Directory"
       subtitle="Build, edit, and bulk upload your client repository. These contacts automatically stream into the outbound Task Assignment channels."
       action={
-        <div className="flex items-center space-x-3">
-          <button
-            onClick={() => setIsGroupsModalOpen(true)}
-            className="flex items-center px-4 py-2 border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-sm font-semibold rounded-xl shadow-sm transition-all cursor-pointer"
-          >
-            <FolderOpen className="h-4 w-4 mr-2 text-blue-600" />
-            Manage Groups
-          </button>
-          <button
-            onClick={() => setIsBulkModalOpen(true)}
-            className="flex items-center px-4 py-2 border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-sm font-semibold rounded-xl shadow-sm transition-all cursor-pointer"
-          >
-            <Upload className="h-4 w-4 mr-2 text-blue-600" />
-            Bulk Upload Contacts
-          </button>
-          <button
-            onClick={openAddModal}
-            className="flex items-center px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white text-sm font-semibold rounded-xl shadow-md shadow-blue-600/10 transition-all cursor-pointer"
-          >
-            <Plus className="h-4 w-4 mr-1.5" />
-            Add Contact
-          </button>
-        </div>
+        <ActionMenu
+          tooltipLabel="Add Contact"
+          items={[
+            { key: 'groups', label: 'Manage Groups', icon: FolderOpen, onClick: () => setIsGroupsModalOpen(true) },
+            { key: 'bulk', label: 'Bulk Upload Contacts', icon: Upload, onClick: () => setIsBulkModalOpen(true) },
+            { key: 'add', label: 'Add Contact', icon: Plus, onClick: openAddModal },
+          ]}
+        />
       }
     >
       {/* KPI Stats Cards */}

@@ -13,3 +13,7 @@ export { default as SectionLabel } from './SectionLabel';
 export { default as Widget } from './Widget';
 export { default as Markdown } from './Markdown';
 export { default as FlagGroupPicker } from './FlagGroupPicker';
+export { default as Tooltip } from './Tooltip';
+export { default as IconButton } from './IconButton';
+export { default as ActionMenu } from './ActionMenu';
+export type { ActionMenuItem } from './ActionMenu';

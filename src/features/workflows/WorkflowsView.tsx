@@ -22,6 +22,7 @@ import WorkflowVariables from './components/WorkflowVariables';
 import PageShell from '../../components/ui/PageShell';
 import Widget from '../../components/ui/Widget';
 import Modal from '../../components/ui/Modal';
+import IconButton from '../../components/ui/IconButton';
 
 function uid(prefix: string) {
   return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
@@ -274,14 +275,7 @@ export default function WorkflowsView({ flows, setFlows }: WorkflowsViewProps) {
     <PageShell
       title="Workflow Builder"
       subtitle="Design question flows with conditional branching — skip, jump, or end based on answers."
-      action={
-        <button
-          onClick={() => setCreating(true)}
-          className="flex items-center gap-1.5 px-4 py-2 bg-blue-600 text-white text-xs font-semibold rounded-xl hover:bg-blue-700 transition-colors"
-        >
-          <Plus className="h-3.5 w-3.5" /> New Workflow
-        </button>
-      }
+      action={<IconButton icon={Plus} label="New Workflow" onClick={() => setCreating(true)} />}
     >
       <Widget colSpan={12} showHeader={false} padding="none">
         {flows.length === 0 ? (

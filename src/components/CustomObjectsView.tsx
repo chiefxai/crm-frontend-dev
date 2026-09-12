@@ -4,6 +4,7 @@ import { apiFetch } from '../lib/api';
 import PageShell from './ui/PageShell';
 import Widget from './ui/Widget';
 import Modal from './ui/Modal';
+import ActionMenu from './ui/ActionMenu';
 
 interface ObjectField {
   id: string;
@@ -312,20 +313,13 @@ export default function CustomObjectsView() {
       subtitle={selectedObject?.description || undefined}
       layout="fill"
       action={
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => { setBulkText(''); setBulkResult(null); setShowBulkModal(true); }}
-            className="flex items-center gap-1.5 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 text-sm font-medium px-4 py-2 rounded-xl transition-colors"
-          >
-            <Upload className="h-4 w-4" /> Bulk Upload
-          </button>
-          <button
-            onClick={openCreateModal}
-            className="flex items-center gap-1.5 bg-blue-600 hover:bg-blue-500 text-white text-sm font-medium px-4 py-2 rounded-xl transition-colors"
-          >
-            <Plus className="h-4 w-4" /> New {selectedObject?.label.replace(/s$/, '')}
-          </button>
-        </div>
+        <ActionMenu
+          tooltipLabel={`New ${selectedObject?.label.replace(/s$/, '') || 'Record'}`}
+          items={[
+            { key: 'bulk', label: 'Bulk Upload', icon: Upload, onClick: () => { setBulkText(''); setBulkResult(null); setShowBulkModal(true); } },
+            { key: 'new', label: `New ${selectedObject?.label.replace(/s$/, '') || 'Record'}`, icon: Plus, onClick: openCreateModal },
+          ]}
+        />
       }
     >
 

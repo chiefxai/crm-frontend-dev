@@ -3,7 +3,6 @@ import {
   Briefcase,
   Play,
   Pause,
-  Plus,
   BarChart,
   GitBranch,
   RefreshCw,
@@ -17,6 +16,7 @@ import {
 import PageShell from './ui/PageShell';
 import Widget from './ui/Widget';
 import Modal from './ui/Modal';
+import IconButton from './ui/IconButton';
 import { Campaign, CampaignStatus, Workflow } from '../types';
 
 interface CampaignViewProps {
@@ -137,15 +137,7 @@ export default function CampaignView({
       title="AI Campaign Outbound Dock"
       subtitle="Initialize automated call-center loops, track live connection funnels, and trigger dialers."
       layout="fill"
-      action={
-        <button
-          onClick={() => setIsLaunchModalOpen(true)}
-          className="flex items-center px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white text-sm font-semibold rounded-xl shadow-md shadow-blue-600/10 transition-all cursor-pointer"
-        >
-          <FolderPlus className="h-4.5 w-4.5 mr-1.5" />
-          Launch AI Campaign
-        </button>
-      }
+      action={<IconButton icon={FolderPlus} label="Launch AI Campaign" onClick={() => setIsLaunchModalOpen(true)} />}
     >
       <div className="overflow-y-auto px-8 pb-8 pt-6 space-y-6">
       {/* Campaigns list & Telemetry split */}

@@ -7,6 +7,7 @@ import { formatInr } from '../lib/pricing';
 import { FEATURE_REGISTRY } from '../features/feature-flags/registry';
 import Modal from '../components/ui/Modal';
 import FlagGroupPicker from '../components/ui/FlagGroupPicker';
+import IconButton from '../components/ui/IconButton';
 
 type SortKey = 'name' | 'industry' | 'subscriptionPlan' | 'memberCount' | 'leadCount' | 'createdAt';
 
@@ -263,13 +264,12 @@ export default function OrganizationsPage() {
             className="w-full bg-white border border-slate-200 rounded-xl pl-9 pr-4 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-amber-500"
           />
         </div>
-        <button
+        <IconButton
+          icon={Plus}
+          label="Create Workspace"
           onClick={() => setShowCreate(true)}
-          className="flex items-center gap-2 px-4 py-2 bg-amber-500 hover:bg-amber-400 text-white text-sm font-medium rounded-xl"
-        >
-          <Plus className="h-4 w-4" />
-          Create Workspace
-        </button>
+          className="!bg-amber-500 hover:!bg-amber-400"
+        />
       </div>
 
       <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden">

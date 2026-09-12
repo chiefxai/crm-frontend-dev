@@ -6,6 +6,7 @@ import {
 import { apiFetch } from '../lib/api';
 import PageShell from './ui/PageShell';
 import Modal from './ui/Modal';
+import IconButton from './ui/IconButton';
 import Markdown from './ui/Markdown';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -289,14 +290,7 @@ export default function AgentStudioView() {
     <PageShell
       title="Agent Studio"
       subtitle="Create AI calling agents — each with its own voice, persona, and phone number."
-      action={
-        <button
-          onClick={openCreate}
-          className="flex items-center gap-1.5 px-4 py-2 bg-indigo-600 text-white text-xs font-semibold rounded-xl hover:bg-indigo-700 transition-colors"
-        >
-          <Plus className="h-3.5 w-3.5" /> New Agent
-        </button>
-      }
+      action={<IconButton icon={Plus} label="New Agent" onClick={openCreate} />}
     >
       {/* ── Agent list ── */}
       <div className="col-span-12">

@@ -5,6 +5,7 @@ import PageShell from './ui/PageShell';
 import Widget from './ui/Widget';
 import Button from './ui/Button';
 import Modal from './ui/Modal';
+import IconButton from './ui/IconButton';
 
 interface KnowledgeDocument { id: string; title: string; chunkCount: number; createdAt: string; }
 interface SearchResult { content: string; documentTitle: string; }
@@ -72,7 +73,7 @@ export default function KnowledgeBaseView() {
     <PageShell
       title="Knowledge Base"
       subtitle="Documents your AI agent can search when answering calls, WhatsApp, and Instagram messages."
-      action={<Button icon={Plus} variant="primary" size="sm" onClick={() => setShowAdd(true)}>Add Document</Button>}
+      action={<IconButton icon={Plus} label="Add Document" onClick={() => setShowAdd(true)} />}
     >
       {/* Documents list */}
       <Widget colSpan={6} title="Documents" subtitle="Facts your AI agent can reference during conversations." icon={BookOpen} accent="#2563eb" padding="md">

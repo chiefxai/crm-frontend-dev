@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
+import Tooltip from './ui/Tooltip';
 import {
   LayoutDashboard,
   Users,
@@ -21,7 +22,6 @@ import {
   ChevronRight,
   Phone,
   Key,
-  Star,
   Scale,
   Globe,
   UserCheck,
@@ -68,7 +68,6 @@ const SIDEBAR_GROUPS: SidebarGroup[] = [
       { id: 'team',     label: 'Staff & Teams',   icon: Users },
       { id: 'billing',  label: 'Billing & Usage', icon: CreditCard },
       { id: 'api',      label: 'API Keys',         icon: Key },
-      { id: 'features', label: 'Feature Access',  icon: Star },
     ],
   },
 ];
@@ -86,33 +85,12 @@ const INDUSTRY_TAGLINES: Record<string, string> = {
 };
 
 // ── Tooltip (flat items in collapsed mode) ────────────────────────────────────
+// Thin wrapper over the shared ui/Tooltip — kept as its own name since
+// every call site below already uses <CollapsedTooltip>, and this is just
+// that component pinned to the sidebar's "always appears to the right"
+// requirement instead of every call site repeating side="right".
 function CollapsedTooltip({ label, children }: { label: string; children: React.ReactNode }) {
-  const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
-  const ref = useRef<HTMLDivElement>(null);
-
-  const handleEnter = () => {
-    if (ref.current) {
-      const r = ref.current.getBoundingClientRect();
-      setPos({ top: r.top + r.height / 2, left: r.right + 12 });
-    }
-  };
-
-  return (
-    <div ref={ref} className="relative flex" onMouseEnter={handleEnter} onMouseLeave={() => setPos(null)}>
-      {children}
-      {pos && (
-        <div
-          className="fixed z-[9999] pointer-events-none"
-          style={{ top: pos.top, left: pos.left, transform: 'translateY(-50%)' }}
-        >
-          <div className="theme-tooltip text-xs font-medium px-2.5 py-1.5 rounded-lg shadow-lg whitespace-nowrap">
-            {label}
-            <div className="theme-tooltip-arrow-left absolute right-full top-1/2 -translate-y-1/2 border-4 border-transparent" />
-          </div>
-        </div>
-      )}
-    </div>
-  );
+  return <Tooltip label={label} side="right">{children}</Tooltip>;
 }
 
 // ── Flyout panel (group items in collapsed mode) ──────────────────────────────

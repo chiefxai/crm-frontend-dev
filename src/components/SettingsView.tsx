@@ -24,9 +24,9 @@ import {
 import { apiFetch } from '../lib/api';
 import { VirtualNumber, TeamMember, OrganizationSettings, UserRole } from '../types';
 import { COST_PER_MINUTE_INR_FALLBACK, formatInr } from '../lib/pricing';
-import FeatureFlagsPanel from '../features/feature-flags/FeatureFlagsPanel';
 import { FEATURE_REGISTRY } from '../features/feature-flags/registry';
 import FlagGroupPicker from './ui/FlagGroupPicker';
+import IconButton from './ui/IconButton';
 import PageShell from './ui/PageShell';
 import Widget from './ui/Widget';
 import Modal from './ui/Modal';
@@ -39,7 +39,7 @@ interface SettingsViewProps {
   orgSettings: OrganizationSettings;
   setOrgSettings: React.Dispatch<React.SetStateAction<OrganizationSettings>>;
   costPerMinuteInr?: number;
-  activeSubTab?: 'numbers' | 'team' | 'billing' | 'api' | 'features';
+  activeSubTab?: 'numbers' | 'team' | 'billing' | 'api';
   setActiveSubTab?: (sub: string) => void;
   currentUserEmail?: string;
 }
@@ -96,9 +96,9 @@ export default function SettingsView({
   currentUserEmail,
 }: SettingsViewProps) {
   // Use prop-controlled sub-tab when provided (driven by sidebar), fall back to internal state.
-  const [_internalSubTab, _setInternalSubTab] = useState<'numbers' | 'team' | 'billing' | 'api' | 'features'>('numbers');
-  const subTab = (activeSubTabProp as 'numbers' | 'team' | 'billing' | 'api' | 'features') || _internalSubTab;
-  const setSubTab = (v: 'numbers' | 'team' | 'billing' | 'api' | 'features') => {
+  const [_internalSubTab, _setInternalSubTab] = useState<'numbers' | 'team' | 'billing' | 'api'>('numbers');
+  const subTab = (activeSubTabProp as 'numbers' | 'team' | 'billing' | 'api') || _internalSubTab;
+  const setSubTab = (v: 'numbers' | 'team' | 'billing' | 'api') => {
     _setInternalSubTab(v);
     setActiveSubTabProp?.(v);
   };
@@ -730,14 +730,7 @@ export default function SettingsView({
                 accent="#6366f1"
                 padding="none"
                 scrollable
-                action={
-                  <button
-                    onClick={() => setShowAddStaff(true)}
-                    className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white transition-all cursor-pointer"
-                  >
-                    <Plus className="h-3.5 w-3.5" /> Add Member
-                  </button>
-                }
+                action={<IconButton icon={Plus} label="Add Member" onClick={() => setShowAddStaff(true)} />}
               >
                 <table className="w-full text-left">
                   <thead className="sticky top-0 z-10" style={{ background: 'var(--bg-surface)' }}>
@@ -1022,13 +1015,6 @@ export default function SettingsView({
                   </table>
                 )}
               </Widget>
-            </div>
-          )}
-
-          {/* Subtab: Feature Flags */}
-          {subTab === 'features' && (
-            <div className="bg-slate-50 p-6 rounded-2xl border border-slate-100 shadow-sm">
-              <FeatureFlagsPanel />
             </div>
           )}
 
