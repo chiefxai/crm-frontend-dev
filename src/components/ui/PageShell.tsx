@@ -82,10 +82,18 @@ export default function PageShell({ title, subtitle, action, toolbar, children, 
   // can exist at once — only the currently active one may touch the shared
   // header, or a hidden page's own re-renders (e.g. a polling interval)
   // would stomp on the visible page's title.
+  //
+  // Deliberately no cleanup here: whichever tab becomes active always
+  // re-publishes its own header in the same render pass (its `isActiveTab`
+  // flips to true, which is in this effect's deps), so the outgoing page's
+  // header is naturally overwritten rather than needing to be cleared first.
+  // A clearing cleanup would instead set it to null on every re-run of this
+  // effect — including React 18 StrictMode's dev-only double-invoke of a
+  // fresh mount (setup → cleanup → setup), which made the header visibly
+  // flash blank on every first visit to a page in development.
   React.useEffect(() => {
     if (!pageHeaderCtx || !isActiveTab) return;
     pageHeaderCtx.setHeader({ title, subtitle, action, toolbar, onRefresh: refresh });
-    return () => pageHeaderCtx.setHeader(null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pageHeaderCtx, isActiveTab, title, subtitle, action, toolbar, refresh]);
 

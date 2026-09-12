@@ -8,6 +8,7 @@ import { RefreshProvider } from './lib/RefreshContext';
 import { PageHeaderProvider } from './lib/PageHeaderContext';
 import PageHeaderBar from './components/ui/PageHeaderBar';
 import { ActiveTabProvider } from './lib/ActiveTabContext';
+import PageShell from './components/ui/PageShell';
 import { fetchUserFlags, resetUserFlags, subscribe as subscribeFlags, isLoaded as flagsLoaded } from './features/feature-flags/userFlagsStore';
 import { TAB_TO_FLAG } from './features/feature-flags/registry';
 import {
@@ -673,19 +674,21 @@ export default function App() {
       const hasAnyAccess = grantedFlags.length > 0 ||
         ['Organization Admin', 'Super Admin'].includes(dbRole);
       return (
-        <div className="flex flex-col items-center justify-center h-full py-24 text-center px-6">
-          <div className="h-16 w-16 rounded-2xl bg-slate-100 flex items-center justify-center mb-5">
-            <svg className="h-8 w-8 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z" />
-            </svg>
+        <PageShell title="No Access">
+          <div className="col-span-12 flex flex-col items-center justify-center h-full py-24 text-center px-6">
+            <div className="h-16 w-16 rounded-2xl bg-slate-100 flex items-center justify-center mb-5">
+              <svg className="h-8 w-8 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z" />
+              </svg>
+            </div>
+            <h2 className="text-lg font-semibold text-slate-700 mb-2">No Access</h2>
+            <p className="text-sm text-slate-400 max-w-xs">
+              {hasAnyAccess
+                ? "You don't have access to this feature. Contact your Organization Admin to request access."
+                : "Your account has no feature access yet. Please contact your Organization Admin to get started."}
+            </p>
           </div>
-          <h2 className="text-lg font-semibold text-slate-700 mb-2">No Access</h2>
-          <p className="text-sm text-slate-400 max-w-xs">
-            {hasAnyAccess
-              ? "You don't have access to this feature. Contact your Organization Admin to request access."
-              : "Your account has no feature access yet. Please contact your Organization Admin to get started."}
-          </p>
-        </div>
+        </PageShell>
       );
     }
     switch (tab) {
@@ -786,9 +789,9 @@ export default function App() {
         );
       default:
         return (
-          <div className="p-8 font-sans">
-            <h2 className="text-xl font-bold">Content under active construction</h2>
-          </div>
+          <PageShell title="Content under active construction">
+            <div className="col-span-12 p-8 font-sans" />
+          </PageShell>
         );
     }
   };
