@@ -50,6 +50,7 @@ interface WizardAgent {
   outboundNumber?: { id: string; number: string } | null;
   activeVoice?: string;
   language?: string;
+  active?: boolean;
 }
 
 interface DialerSimulatorProps {
@@ -2012,8 +2013,8 @@ Currently on question ${nextIndex} out of ${selectedTask.questions.length}. Next
       </div>
       {/* MODAL: Assign New Dialing Task — 4-step wizard */}
       {showCreateModal && (() => {
-        const workflowsWithQuestions = flows.filter(f => (f.variables ?? []).length > 0);
-        const agentsWithOutbound = wizardAgents.filter(a => a.outboundNumber);
+        const workflowsWithQuestions = flows.filter(f => (f.variables ?? []).length > 0 && f.active);
+        const agentsWithOutbound = wizardAgents.filter(a => a.outboundNumber && (a.active ?? true));
         const selectedWorkflow = flows.find(f => f.id === wizardWorkflowId);
         const selectedAgent = wizardAgents.find(a => a.id === wizardAgentId);
         const totalContacts = wizardSelectedLeadIds.length + wizardNewContacts.length;
@@ -2061,14 +2062,14 @@ Currently on question ${nextIndex} out of ${selectedTask.questions.length}. Next
               <div className="space-y-4">
                 <div>
                   <h3 className="text-sm font-bold text-[var(--text-primary)]">Select a Workflow</h3>
-                  <p className="text-xs text-[var(--text-muted)] mt-0.5">Choose a workflow that contains question tasks for the AI agent to ask during calls.</p>
+                  <p className="text-xs text-[var(--text-muted)] mt-0.5">Only active workflows with question tasks are shown — activate a workflow in Workflow Builder to make it available here.</p>
                 </div>
 
                 {workflowsWithQuestions.length === 0 ? (
                   <div className="text-center py-10 border border-dashed border-[var(--border)] rounded-xl bg-[var(--bg-subtle)]/50 space-y-2">
                     <HelpCircle className="h-7 w-7 text-[var(--text-muted)] mx-auto" />
-                    <p className="text-xs font-semibold text-[var(--text-muted)]">No workflows with questions found.</p>
-                    <p className="text-[11px] text-[var(--text-muted)]">Go to Workflows, create a workflow and add question variables — then come back here.</p>
+                    <p className="text-xs font-semibold text-[var(--text-muted)]">No active workflows with questions found.</p>
+                    <p className="text-[11px] text-[var(--text-muted)]">Go to Workflows, create a workflow, add question variables, and mark it active — then come back here.</p>
                   </div>
                 ) : (
                   <div className="space-y-2 max-h-72 overflow-y-auto pr-1">
@@ -2137,7 +2138,7 @@ Currently on question ${nextIndex} out of ${selectedTask.questions.length}. Next
               <div className="space-y-4">
                 <div>
                   <h3 className="text-sm font-bold text-[var(--text-primary)]">Select an Agent</h3>
-                  <p className="text-xs text-[var(--text-muted)] mt-0.5">Only agents with an outbound number assigned are shown — configure outbound numbers in Agent Studio.</p>
+                  <p className="text-xs text-[var(--text-muted)] mt-0.5">Only active agents with an outbound number assigned are shown — configure and enable agents in Agent Studio.</p>
                 </div>
 
                 {wizardAgentsLoading ? (
@@ -2148,8 +2149,8 @@ Currently on question ${nextIndex} out of ${selectedTask.questions.length}. Next
                 ) : agentsWithOutbound.length === 0 ? (
                   <div className="text-center py-10 border border-dashed border-[var(--border)] rounded-xl bg-[var(--bg-subtle)]/50 space-y-2">
                     <HelpCircle className="h-7 w-7 text-[var(--text-muted)] mx-auto" />
-                    <p className="text-xs font-semibold text-[var(--text-muted)]">No agents with outbound support found.</p>
-                    <p className="text-[11px] text-[var(--text-muted)]">In Agent Studio, open an agent and assign an outbound caller number to it.</p>
+                    <p className="text-xs font-semibold text-[var(--text-muted)]">No active agents with outbound support found.</p>
+                    <p className="text-[11px] text-[var(--text-muted)]">In Agent Studio, open an agent, assign an outbound caller number, and make sure it's enabled.</p>
                   </div>
                 ) : (
                   <div className="space-y-2 max-h-64 overflow-y-auto pr-1">

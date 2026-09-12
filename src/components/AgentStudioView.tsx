@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import {
   Sparkles, Send, Loader2, Mic, Check, Plus, Trash2, Edit2,
-  Phone, PhoneOff, Bot, Zap,
+  Phone, PhoneOff, Bot, Zap, ToggleRight, ToggleLeft,
 } from 'lucide-react';
 import { apiFetch } from '../lib/api';
 import PageShell from './ui/PageShell';
@@ -31,6 +31,7 @@ interface Agent {
   assignedNumber?: VirtualNumber | null;   // inbound (exclusive)
   outboundNumber?: VirtualNumber | null;   // outbound (shared)
   outboundNumberId?: string | null;
+  active?: boolean;
 }
 
 type SaveStatus = 'idle' | 'saving' | 'saved' | 'error';
@@ -207,6 +208,25 @@ export default function AgentStudioView() {
     } finally { setDeletingId(null); }
   };
 
+  const [togglingId, setTogglingId] = useState<string | null>(null);
+  const handleToggleActive = async (agent: Agent) => {
+    const nextActive = !(agent.active ?? true);
+    setTogglingId(agent.id);
+    setAgents(prev => prev.map(a => a.id === agent.id ? { ...a, active: nextActive } : a));
+    try {
+      const res = await apiFetch(`/api/agents/${agent.id}/active`, {
+        method: 'PATCH',
+        body: JSON.stringify({ active: nextActive }),
+      });
+      if (!res.ok) throw new Error((await res.json()).error || 'Failed to update agent status');
+    } catch (err: any) {
+      setAgents(prev => prev.map(a => a.id === agent.id ? { ...a, active: agent.active } : a));
+      alert(err.message || 'Failed to update agent status');
+    } finally {
+      setTogglingId(null);
+    }
+  };
+
   const handleApplyPreset = async (presetName: string) => {
     setApplyingPreset(presetName);
     try {
@@ -293,13 +313,32 @@ export default function AgentStudioView() {
                           <Bot className="h-5 w-5 text-white" />
                         </div>
                         <div className="min-w-0">
-                          <p className="text-sm font-bold text-slate-800 truncate leading-tight">{agent.name}</p>
+                          <div className="flex items-center gap-1.5">
+                            <p className="text-sm font-bold text-slate-800 truncate leading-tight">{agent.name}</p>
+                            <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full shrink-0 ${
+                              (agent.active ?? true) ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-400'
+                            }`}>
+                              {(agent.active ?? true) ? 'ACTIVE' : 'PAUSED'}
+                            </span>
+                          </div>
                           <p className="text-[11px] text-slate-400 mt-0.5 flex items-center gap-1">
                             <Mic className="h-3 w-3" /> {agent.activeVoice}
                           </p>
                         </div>
                       </div>
                       <div className="flex items-center gap-1 shrink-0">
+                        <button
+                          onClick={() => handleToggleActive(agent)}
+                          disabled={togglingId === agent.id}
+                          className="p-1.5 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors disabled:opacity-50"
+                          title={(agent.active ?? true) ? 'Disable agent' : 'Enable agent'}
+                        >
+                          {togglingId === agent.id
+                            ? <Loader2 className="h-4.5 w-4.5 animate-spin" />
+                            : (agent.active ?? true)
+                              ? <ToggleRight className="h-4.5 w-4.5 text-emerald-600" />
+                              : <ToggleLeft className="h-4.5 w-4.5" />}
+                        </button>
                         <button
                           onClick={() => openEdit(agent)}
                           className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
