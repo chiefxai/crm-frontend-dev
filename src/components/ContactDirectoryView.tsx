@@ -142,6 +142,7 @@ export default function ContactDirectoryView({
   const [pastedData, setPastedData] = useState('');
   const [parsedPreview, setParsedPreview] = useState<Partial<Lead>[]>([]);
   const [parsingError, setParsingError] = useState<string | null>(null);
+  const [bulkGroupId, setBulkGroupId] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Filter contacts
@@ -379,6 +380,7 @@ export default function ContactDirectoryView({
         tags: ['Bulk Uploaded'],
         createdAt: new Date().toISOString(),
         notes: item.notes || 'Bulk uploaded via CSV parser.',
+        groupIds: bulkGroupId ? [bulkGroupId] : [],
         financialInfo: {
           employer: item.financialInfo?.employer || 'Unspecified',
           monthlyIncome: item.financialInfo?.monthlyIncome || 5000,
@@ -392,6 +394,7 @@ export default function ContactDirectoryView({
     setIsBulkModalOpen(false);
     setPastedData('');
     setParsedPreview([]);
+    setBulkGroupId('');
     alert(`Successfully parsed and bulk uploaded ${finalLeadsToImport.length} contacts! These are now fully available in your task assignment pool.`);
   };
 
@@ -814,7 +817,7 @@ export default function ContactDirectoryView({
       {isBulkModalOpen && (
         <Modal
           open
-          onClose={() => setIsBulkModalOpen(false)}
+          onClose={() => { setIsBulkModalOpen(false); setBulkGroupId(''); }}
           title={<div className="flex items-center space-x-2"><Database className="h-5 w-5 text-blue-600" /><span>Bulk Upload Contacts Database</span></div>}
           maxWidth="max-w-3xl"
         >
@@ -839,6 +842,24 @@ export default function ContactDirectoryView({
                   <div className="text-[10px] font-mono text-slate-500 bg-slate-50 p-2 border border-slate-200 rounded-xl truncate">
                     Loaded: {pastedData.split('\n').length} lines
                   </div>
+                )}
+              </div>
+
+              {/* Assign all uploaded contacts to a group */}
+              <div>
+                <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1.5">Add to Group (optional)</label>
+                <select
+                  value={bulkGroupId}
+                  onChange={(e) => setBulkGroupId(e.target.value)}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-blue-500"
+                >
+                  <option value="">No group</option>
+                  {contactGroups.map((g) => (
+                    <option key={g.id} value={g.id}>{g.name}</option>
+                  ))}
+                </select>
+                {contactGroups.length === 0 && (
+                  <p className="text-[10px] text-slate-400 italic mt-1">No groups yet — create one via "Manage Groups".</p>
                 )}
               </div>
 
@@ -887,7 +908,7 @@ export default function ContactDirectoryView({
               <div className="flex space-x-2">
                 <button
                   type="button"
-                  onClick={() => setIsBulkModalOpen(false)}
+                  onClick={() => { setIsBulkModalOpen(false); setBulkGroupId(''); }}
                   className="px-4 py-2 border border-slate-200 text-slate-500 text-xs font-semibold rounded-xl hover:bg-slate-100 cursor-pointer"
                 >
                   Cancel
