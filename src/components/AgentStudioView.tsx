@@ -1,12 +1,13 @@
 import React, { useEffect, useRef, useState } from 'react';
 import {
   Sparkles, Send, Loader2, Mic, Check, Plus, Trash2, Edit2,
-  Phone, PhoneOff, Bot, Zap, ToggleRight, ToggleLeft, BookOpen, FileText,
+  Phone, PhoneOff, Bot, Zap, ToggleRight, ToggleLeft, BookOpen, FileText, MoreVertical,
 } from 'lucide-react';
 import { apiFetch } from '../lib/api';
 import PageShell from './ui/PageShell';
 import Modal from './ui/Modal';
 import IconButton from './ui/IconButton';
+import ActionMenu from './ui/ActionMenu';
 import Markdown from './ui/Markdown';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -341,36 +342,23 @@ export default function AgentStudioView() {
                           </p>
                         </div>
                       </div>
-                      <div className="flex items-center gap-1 shrink-0">
-                        <button
-                          onClick={() => handleToggleActive(agent)}
-                          disabled={togglingId === agent.id}
-                          className="p-1.5 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors disabled:opacity-50"
-                          title={(agent.active ?? true) ? 'Disable agent' : 'Enable agent'}
-                        >
-                          {togglingId === agent.id
-                            ? <Loader2 className="h-4.5 w-4.5 animate-spin" />
-                            : (agent.active ?? true)
-                              ? <ToggleRight className="h-4.5 w-4.5 text-emerald-600" />
-                              : <ToggleLeft className="h-4.5 w-4.5" />}
-                        </button>
-                        <button
-                          onClick={() => openEdit(agent)}
-                          className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
-                          title="Edit"
-                        >
-                          <Edit2 className="h-3.5 w-3.5" />
-                        </button>
-                        <button
-                          onClick={() => handleDelete(agent.id)}
-                          disabled={deletingId === agent.id}
-                          className="p-1.5 text-slate-400 hover:text-rose-500 hover:bg-rose-50 rounded-lg transition-colors disabled:opacity-50"
-                          title="Delete"
-                        >
-                          {deletingId === agent.id
-                            ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                            : <Trash2 className="h-3.5 w-3.5" />}
-                        </button>
+                      <div className="shrink-0">
+                        <ActionMenu
+                          tooltipLabel="Options"
+                          triggerIcon={MoreVertical}
+                          triggerVariant="ghost"
+                          loading={togglingId === agent.id || deletingId === agent.id}
+                          items={[
+                            {
+                              key: 'toggle',
+                              label: (agent.active ?? true) ? 'Disable Agent' : 'Enable Agent',
+                              icon: (agent.active ?? true) ? ToggleLeft : ToggleRight,
+                              onClick: () => handleToggleActive(agent),
+                            },
+                            { key: 'edit', label: 'Edit', icon: Edit2, onClick: () => openEdit(agent) },
+                            { key: 'delete', label: 'Delete', icon: Trash2, danger: true, onClick: () => handleDelete(agent.id) },
+                          ]}
+                        />
                       </div>
                     </div>
 
@@ -392,49 +380,36 @@ export default function AgentStudioView() {
                     </div>
 
                     {/* Inbound + Outbound number badges */}
-                    <div className="mt-auto space-y-1.5">
+                    <div className="mt-auto grid grid-cols-2 gap-1.5">
                       {agent.assignedNumber ? (
-                        <div className="flex items-center gap-2 px-3 py-2 bg-emerald-50 border border-emerald-200 rounded-xl">
-                          <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse shrink-0" />
+                        <div className="flex items-center gap-1.5 px-2 py-1.5 bg-emerald-50 border border-emerald-200 rounded-lg min-w-0">
+                          <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse shrink-0" />
                           <div className="min-w-0">
-                            <p className="text-[9px] font-semibold text-emerald-500 uppercase tracking-wider mb-0.5">Inbound</p>
-                            <p className="text-xs font-bold text-emerald-700 truncate">{agent.assignedNumber.number}</p>
-                            {(agent.assignedNumber.friendlyName ?? agent.assignedNumber.friendly_name) && (
-                              <p className="text-[10px] text-emerald-500 truncate">{agent.assignedNumber.friendlyName ?? agent.assignedNumber.friendly_name}</p>
-                            )}
+                            <p className="text-[8px] font-semibold text-emerald-500 uppercase tracking-wider leading-tight">In</p>
+                            <p className="text-[11px] font-bold text-emerald-700 truncate leading-tight">{agent.assignedNumber.number}</p>
                           </div>
                         </div>
                       ) : (
-                        <div className="flex items-center gap-2 px-3 py-2 bg-slate-50 border border-dashed border-slate-300 rounded-xl">
-                          <PhoneOff className="h-3.5 w-3.5 text-slate-400 shrink-0" />
-                          <p className="text-[11px] text-slate-400">No inbound number</p>
+                        <div className="flex items-center gap-1.5 px-2 py-1.5 bg-slate-50 border border-dashed border-slate-300 rounded-lg min-w-0">
+                          <PhoneOff className="h-3 w-3 text-slate-400 shrink-0" />
+                          <p className="text-[10px] text-slate-400 truncate">No inbound</p>
                         </div>
                       )}
                       {agent.outboundNumber ? (
-                        <div className="flex items-center gap-2 px-3 py-2 bg-violet-50 border border-violet-200 rounded-xl">
+                        <div className="flex items-center gap-1.5 px-2 py-1.5 bg-violet-50 border border-violet-200 rounded-lg min-w-0">
                           <Zap className="h-3 w-3 text-violet-500 shrink-0" />
                           <div className="min-w-0">
-                            <p className="text-[9px] font-semibold text-violet-500 uppercase tracking-wider mb-0.5">Outbound</p>
-                            <p className="text-xs font-bold text-violet-700 truncate">{agent.outboundNumber.number}</p>
+                            <p className="text-[8px] font-semibold text-violet-500 uppercase tracking-wider leading-tight">Out</p>
+                            <p className="text-[11px] font-bold text-violet-700 truncate leading-tight">{agent.outboundNumber.number}</p>
                           </div>
                         </div>
                       ) : (
-                        <div className="flex items-center gap-2 px-3 py-2 bg-slate-50 border border-dashed border-slate-300 rounded-xl">
+                        <div className="flex items-center gap-1.5 px-2 py-1.5 bg-slate-50 border border-dashed border-slate-300 rounded-lg min-w-0">
                           <Zap className="h-3 w-3 text-slate-400 shrink-0" />
-                          <p className="text-[11px] text-slate-400">Org default outbound</p>
+                          <p className="text-[10px] text-slate-400 truncate">Org default</p>
                         </div>
                       )}
                     </div>
-                  </div>
-
-                  {/* Footer action */}
-                  <div className="px-5 pb-4">
-                    <button
-                      onClick={() => openEdit(agent)}
-                      className="w-full py-2 text-xs font-semibold text-indigo-600 bg-indigo-50 hover:bg-indigo-100 rounded-xl transition-colors border border-indigo-100"
-                    >
-                      Configure Agent
-                    </button>
                   </div>
                 </div>
               ))}
