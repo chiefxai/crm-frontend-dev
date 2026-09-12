@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import {
   Sparkles, Send, Loader2, Mic, Check, Plus, Trash2, Edit2,
-  Phone, PhoneOff, Bot, Zap, ToggleRight, ToggleLeft,
+  Phone, PhoneOff, Bot, Zap, ToggleRight, ToggleLeft, BookOpen, FileText,
 } from 'lucide-react';
 import { apiFetch } from '../lib/api';
 import PageShell from './ui/PageShell';
@@ -19,6 +19,13 @@ interface VirtualNumber {
   agent_id?: string | null; // from listNumbersWithAgent (snake_case)
 }
 
+interface KnowledgeDocument {
+  id: string;
+  title: string;
+  chunkCount: number;
+  createdAt: string;
+}
+
 interface Agent {
   id: string;
   name: string;
@@ -32,6 +39,10 @@ interface Agent {
   outboundNumber?: VirtualNumber | null;   // outbound (shared)
   outboundNumberId?: string | null;
   active?: boolean;
+  // Knowledge base scope: 'all' (whole org KB, default), 'specific'
+  // (only knowledgeBaseDocumentIds), or 'none' (disabled for this agent).
+  knowledgeBaseMode?: 'all' | 'specific' | 'none';
+  knowledgeBaseDocumentIds?: string[];
 }
 
 type SaveStatus = 'idle' | 'saving' | 'saved' | 'error';
@@ -69,6 +80,8 @@ function emptyForm(): Omit<Agent, 'id'> {
     language: 'en', // kept for API compatibility, not shown in form
     assignedNumber: null,
     outboundNumber: null,
+    knowledgeBaseMode: 'all',
+    knowledgeBaseDocumentIds: [],
   };
 }
 
@@ -77,6 +90,7 @@ function emptyForm(): Omit<Agent, 'id'> {
 export default function AgentStudioView() {
   const [agents, setAgents] = useState<Agent[]>([]);
   const [numbers, setNumbers] = useState<VirtualNumber[]>([]);
+  const [knowledgeDocs, setKnowledgeDocs] = useState<KnowledgeDocument[]>([]);
   const [loading, setLoading] = useState(true);
   const [editingAgent, setEditingAgent] = useState<Agent | null>(null);
   const [creating, setCreating] = useState(false);
@@ -95,12 +109,14 @@ export default function AgentStudioView() {
   const loadData = async () => {
     setLoading(true);
     try {
-      const [agentsRes, numsRes] = await Promise.all([
+      const [agentsRes, numsRes, docsRes] = await Promise.all([
         apiFetch('/api/agents').then(r => r.json()),
         apiFetch('/api/settings/numbers').then(r => r.json()),
+        apiFetch('/api/knowledge/documents').then(r => r.json()).catch(() => []),
       ]);
       setAgents(Array.isArray(agentsRes) ? agentsRes : []);
       setNumbers(Array.isArray(numsRes) ? numsRes : []);
+      setKnowledgeDocs(Array.isArray(docsRes) ? docsRes : []);
     } catch { /* silent */ }
     finally { setLoading(false); }
   };
@@ -130,6 +146,8 @@ export default function AgentStudioView() {
       language: agent.language,
       assignedNumber: agent.assignedNumber ?? null,
       outboundNumber: agent.outboundNumber ?? null,
+      knowledgeBaseMode: agent.knowledgeBaseMode ?? 'all',
+      knowledgeBaseDocumentIds: agent.knowledgeBaseDocumentIds ?? [],
     });
     setEditingAgent(agent);
     setCreating(false);
@@ -151,6 +169,7 @@ export default function AgentStudioView() {
             name: form.name, systemPrompt: form.systemPrompt,
             activeVoice: form.activeVoice, emotion: form.emotion,
             speed: form.speed, friendliness: form.friendliness, language: form.language,
+            knowledgeBaseMode: form.knowledgeBaseMode, knowledgeBaseDocumentIds: form.knowledgeBaseDocumentIds,
           }),
         });
         if (!res.ok) throw new Error((await res.json()).error || 'Create failed');
@@ -162,6 +181,7 @@ export default function AgentStudioView() {
             name: form.name, systemPrompt: form.systemPrompt,
             activeVoice: form.activeVoice, emotion: form.emotion,
             speed: form.speed, friendliness: form.friendliness, language: form.language,
+            knowledgeBaseMode: form.knowledgeBaseMode, knowledgeBaseDocumentIds: form.knowledgeBaseDocumentIds,
           }),
         });
         if (!res.ok) throw new Error((await res.json()).error || 'Update failed');
@@ -661,6 +681,125 @@ export default function AgentStudioView() {
                 ))}
               </div>
             )}
+          </div>
+
+          <div className="border-t border-slate-100" />
+
+          {/* Knowledge Base — connect to the whole org KB, specific documents, or none */}
+          <div>
+            <div className="flex items-center gap-2 mb-1">
+              <BookOpen className="h-4 w-4 text-emerald-500" />
+              <p className="text-xs font-semibold text-slate-700 uppercase tracking-widest">Knowledge Base</p>
+            </div>
+            <p className="text-[10px] text-slate-400 mb-3">
+              What this agent can reference when answering caller questions.
+            </p>
+            <div className="space-y-2">
+              <button
+                type="button"
+                onClick={() => setForm(f => ({ ...f, knowledgeBaseMode: 'all' }))}
+                className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl border-2 text-left transition-all cursor-pointer ${
+                  form.knowledgeBaseMode === 'all' ? 'border-emerald-400 bg-emerald-50' : 'border-slate-200 bg-white hover:border-emerald-300 hover:bg-emerald-50/40'
+                }`}
+              >
+                <div className={`h-8 w-8 rounded-lg flex items-center justify-center shrink-0 ${form.knowledgeBaseMode === 'all' ? 'bg-emerald-100' : 'bg-slate-100'}`}>
+                  <BookOpen className={`h-4 w-4 ${form.knowledgeBaseMode === 'all' ? 'text-emerald-600' : 'text-slate-400'}`} />
+                </div>
+                <div>
+                  <p className="text-sm font-semibold text-slate-800">Full Knowledge Base</p>
+                  <p className="text-[10px] text-slate-400">Every document in the org's knowledge base</p>
+                </div>
+                {form.knowledgeBaseMode === 'all' && (
+                  <div className="ml-auto h-4 w-4 rounded-full bg-emerald-500 flex items-center justify-center shrink-0">
+                    <Check className="h-2.5 w-2.5 text-white" />
+                  </div>
+                )}
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setForm(f => ({ ...f, knowledgeBaseMode: 'specific' }))}
+                className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl border-2 text-left transition-all cursor-pointer ${
+                  form.knowledgeBaseMode === 'specific' ? 'border-emerald-400 bg-emerald-50' : 'border-slate-200 bg-white hover:border-emerald-300 hover:bg-emerald-50/40'
+                }`}
+              >
+                <div className={`h-8 w-8 rounded-lg flex items-center justify-center shrink-0 ${form.knowledgeBaseMode === 'specific' ? 'bg-emerald-100' : 'bg-slate-100'}`}>
+                  <FileText className={`h-4 w-4 ${form.knowledgeBaseMode === 'specific' ? 'text-emerald-600' : 'text-slate-400'}`} />
+                </div>
+                <div>
+                  <p className="text-sm font-semibold text-slate-800">Specific Documents</p>
+                  <p className="text-[10px] text-slate-400">
+                    {(form.knowledgeBaseDocumentIds?.length ?? 0) > 0
+                      ? `${form.knowledgeBaseDocumentIds!.length} document${form.knowledgeBaseDocumentIds!.length === 1 ? '' : 's'} selected`
+                      : 'Choose which documents to use below'}
+                  </p>
+                </div>
+                {form.knowledgeBaseMode === 'specific' && (
+                  <div className="ml-auto h-4 w-4 rounded-full bg-emerald-500 flex items-center justify-center shrink-0">
+                    <Check className="h-2.5 w-2.5 text-white" />
+                  </div>
+                )}
+              </button>
+
+              {form.knowledgeBaseMode === 'specific' && (
+                <div className="ml-4 pl-4 border-l-2 border-emerald-100 space-y-1.5">
+                  {knowledgeDocs.length === 0 ? (
+                    <p className="text-[11px] text-slate-400 italic py-2">
+                      No documents uploaded yet. Add some in <span className="font-semibold">Knowledge Base</span>.
+                    </p>
+                  ) : (
+                    knowledgeDocs.map(doc => {
+                      const selected = (form.knowledgeBaseDocumentIds ?? []).includes(doc.id);
+                      return (
+                        <button
+                          key={doc.id}
+                          type="button"
+                          onClick={() => setForm(f => {
+                            const current = f.knowledgeBaseDocumentIds ?? [];
+                            return {
+                              ...f,
+                              knowledgeBaseDocumentIds: current.includes(doc.id)
+                                ? current.filter(id => id !== doc.id)
+                                : [...current, doc.id],
+                            };
+                          })}
+                          className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-lg border text-left transition-all cursor-pointer ${
+                            selected ? 'border-emerald-300 bg-emerald-50/60' : 'border-slate-200 bg-white hover:border-emerald-200'
+                          }`}
+                        >
+                          <div className={`h-4 w-4 rounded border flex items-center justify-center shrink-0 ${selected ? 'bg-emerald-500 border-emerald-500' : 'border-slate-300'}`}>
+                            {selected && <Check className="h-2.5 w-2.5 text-white" />}
+                          </div>
+                          <span className="text-xs font-medium text-slate-700 truncate flex-1">{doc.title}</span>
+                          <span className="text-[10px] text-slate-400 shrink-0">{doc.chunkCount} chunk{doc.chunkCount === 1 ? '' : 's'}</span>
+                        </button>
+                      );
+                    })
+                  )}
+                </div>
+              )}
+
+              <button
+                type="button"
+                onClick={() => setForm(f => ({ ...f, knowledgeBaseMode: 'none' }))}
+                className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl border-2 text-left transition-all cursor-pointer ${
+                  form.knowledgeBaseMode === 'none' ? 'border-slate-400 bg-slate-50' : 'border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50'
+                }`}
+              >
+                <div className="h-8 w-8 rounded-lg bg-slate-100 flex items-center justify-center shrink-0">
+                  <BookOpen className="h-4 w-4 text-slate-400" />
+                </div>
+                <div>
+                  <p className="text-sm font-semibold text-slate-600">None</p>
+                  <p className="text-[10px] text-slate-400">This agent won't reference the knowledge base at all</p>
+                </div>
+                {form.knowledgeBaseMode === 'none' && (
+                  <div className="ml-auto h-4 w-4 rounded-full bg-slate-500 flex items-center justify-center">
+                    <Check className="h-2.5 w-2.5 text-white" />
+                  </div>
+                )}
+              </button>
+            </div>
           </div>
 
           <div className="border-t border-slate-100" />
