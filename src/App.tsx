@@ -57,6 +57,15 @@ import NotificationBell, { AppNotification } from './components/NotificationBell
 
 // Debounced sync: collapses multiple rapid state changes into one POST.
 // Without this, setting 8 state vars at load triggers 8 simultaneous syncs.
+//
+// Only checked for network-level failures (.catch on a rejected fetch) —
+// never checked res.ok, so a non-2xx response (e.g. a real DB write error)
+// was completely silent: the local state change (a workflow toggle, a
+// team edit, etc.) looked like it worked because the UI updates
+// optimistically, but nothing actually persisted server-side and no error
+// ever surfaced anywhere. Now logs loudly on a failed sync so a stuck
+// backend write is at least visible in the console instead of only ever
+// showing up as "changes don't survive a reload."
 function useDebouncedSync(url: string, data: any, enabled: boolean, delay = 800) {
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => {
@@ -67,7 +76,14 @@ function useDebouncedSync(url: string, data: any, enabled: boolean, delay = 800)
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(data),
-      }).catch(err => console.error(`Sync error ${url}:`, err));
+      })
+        .then(async (res) => {
+          if (!res.ok) {
+            const body = await res.json().catch(() => ({}));
+            console.error(`Sync failed ${url}: ${res.status} ${body.error || res.statusText}`);
+          }
+        })
+        .catch(err => console.error(`Sync error ${url}:`, err));
     }, delay);
     return () => { if (timer.current) clearTimeout(timer.current); };
   }, [data, enabled]);
