@@ -21,6 +21,15 @@ export interface Lead {
   // True when the last score came from the offline fallback algorithm
   // (Gemini unavailable/unconfigured), not a real AI assessment.
   scoreDegraded?: boolean;
+  // Contact Directory groups this contact belongs to — zero, one, or many.
+  // Undefined/empty means "no group" (solo contact).
+  groupIds?: string[];
+}
+
+export interface ContactGroup {
+  id: string;
+  name: string;
+  createdAt: string;
 }
 
 export type CampaignStatus = 'Draft' | 'Running' | 'Paused' | 'Completed';

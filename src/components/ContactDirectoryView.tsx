@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   Users,
   Plus,
@@ -16,10 +16,12 @@ import {
   Mail,
   Building,
   CheckCircle2,
-  Sparkles
+  Sparkles,
+  FolderOpen,
+  Settings2
 } from 'lucide-react';
-import { Lead, CallLog } from '../types';
-import { getPlayableRecordingUrl } from '../lib/api';
+import { Lead, CallLog, ContactGroup } from '../types';
+import { apiFetch, getPlayableRecordingUrl } from '../lib/api';
 import { formatPhone } from '../lib/phone';
 import PageShell from './ui/PageShell';
 import Widget from './ui/Widget';
@@ -34,6 +36,8 @@ interface ContactDirectoryViewProps {
   industry?: string;
   callLogs?: CallLog[];
 }
+
+const NO_GROUP = '__no_group__';
 
 export default function ContactDirectoryView({
   leads,
@@ -53,6 +57,69 @@ export default function ContactDirectoryView({
   const [searchTerm, setSearchTerm] = useState('');
   const [sourceFilter, setSourceFilter] = useState('All');
   const [statusFilter, setStatusFilter] = useState('All');
+  const [groupFilter, setGroupFilter] = useState('All');
+
+  // Groups
+  const [contactGroups, setContactGroups] = useState<ContactGroup[]>([]);
+  const [isGroupsModalOpen, setIsGroupsModalOpen] = useState(false);
+  const [newGroupName, setNewGroupName] = useState('');
+  const [renamingGroupId, setRenamingGroupId] = useState<string | null>(null);
+  const [renameGroupValue, setRenameGroupValue] = useState('');
+  const [formGroupIds, setFormGroupIds] = useState<string[]>([]);
+
+  useEffect(() => {
+    apiFetch('/api/contact-groups')
+      .then(r => r.json())
+      .then(data => setContactGroups(Array.isArray(data) ? data : []))
+      .catch(() => setContactGroups([]));
+  }, []);
+
+  const groupNameById = (id: string) => contactGroups.find(g => g.id === id)?.name || 'Unknown Group';
+
+  const handleCreateGroup = async () => {
+    const name = newGroupName.trim();
+    if (!name) return;
+    try {
+      const res = await apiFetch('/api/contact-groups', { method: 'POST', body: JSON.stringify({ name }) });
+      if (!res.ok) { alert((await res.json()).error || 'Failed to create group'); return; }
+      const group = await res.json();
+      setContactGroups(prev => [...prev, group]);
+      setNewGroupName('');
+    } catch {
+      alert('Network error — check your connection.');
+    }
+  };
+
+  const handleRenameGroup = async (id: string) => {
+    const name = renameGroupValue.trim();
+    if (!name) return;
+    try {
+      const res = await apiFetch(`/api/contact-groups/${id}`, { method: 'PATCH', body: JSON.stringify({ name }) });
+      if (!res.ok) { alert((await res.json()).error || 'Failed to rename group'); return; }
+      const updated = await res.json();
+      setContactGroups(prev => prev.map(g => g.id === id ? updated : g));
+      setRenamingGroupId(null);
+      setRenameGroupValue('');
+    } catch {
+      alert('Network error — check your connection.');
+    }
+  };
+
+  const handleDeleteGroup = async (id: string, name: string) => {
+    if (!confirm(`Delete group "${name}"? Contacts in this group become ungrouped — they are not deleted.`)) return;
+    try {
+      const res = await apiFetch(`/api/contact-groups/${id}`, { method: 'DELETE' });
+      if (!res.ok) { alert((await res.json()).error || 'Failed to delete group'); return; }
+      setContactGroups(prev => prev.filter(g => g.id !== id));
+      setLeads(prev => prev.map(l => (l.groupIds || []).includes(id)
+        ? { ...l, groupIds: (l.groupIds || []).filter(g => g !== id) }
+        : l
+      ));
+      if (groupFilter === id) setGroupFilter('All');
+    } catch {
+      alert('Network error — check your connection.');
+    }
+  };
 
   // Modals state
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
@@ -86,7 +153,9 @@ export default function ContactDirectoryView({
       (lead.financialInfo?.employer || '').toLowerCase().includes(searchTerm.toLowerCase());
     const matchesSource = sourceFilter === 'All' || lead.source === sourceFilter;
     const matchesStatus = statusFilter === 'All' || lead.status === statusFilter;
-    return matchesSearch && matchesSource && matchesStatus;
+    const matchesGroup = groupFilter === 'All'
+      || (groupFilter === NO_GROUP ? (lead.groupIds || []).length === 0 : (lead.groupIds || []).includes(groupFilter));
+    return matchesSearch && matchesSource && matchesStatus && matchesGroup;
   });
 
   // Unique sources for filter dropdown
@@ -113,6 +182,7 @@ export default function ContactDirectoryView({
     setFormCredit('720');
     setFormDti('0.25');
     setFormNotes('Registered individually.');
+    setFormGroupIds([]);
     setIsAddModalOpen(true);
   };
 
@@ -129,7 +199,12 @@ export default function ContactDirectoryView({
     setFormCredit((lead.financialInfo?.creditScore || 720).toString());
     setFormDti((lead.financialInfo?.debtToIncome || 0.25).toString());
     setFormNotes(lead.notes || '');
+    setFormGroupIds(lead.groupIds || []);
     setIsAddModalOpen(true);
+  };
+
+  const toggleFormGroup = (groupId: string) => {
+    setFormGroupIds(prev => prev.includes(groupId) ? prev.filter(g => g !== groupId) : [...prev, groupId]);
   };
 
   // Submit single/edited lead
@@ -152,6 +227,7 @@ export default function ContactDirectoryView({
             amountRequested: parseFloat(formAmount) || 0,
             source: formSource,
             notes: formNotes,
+            groupIds: formGroupIds,
             financialInfo: {
               employer: formEmployer || 'Self-Employed',
               monthlyIncome: parseFloat(formIncome) || 0,
@@ -164,7 +240,8 @@ export default function ContactDirectoryView({
       });
       setLeads(updatedLeads);
     } else {
-      // Create mode
+      // Create mode — no group selected means "no group" (solo contact),
+      // addable to one later from the edit modal.
       const newLead: Lead = {
         id: `L-${100 + leads.length + 1}`,
         name: formName,
@@ -177,6 +254,7 @@ export default function ContactDirectoryView({
         tags: ['Unassigned'],
         createdAt: new Date().toISOString(),
         notes: formNotes,
+        groupIds: formGroupIds,
         financialInfo: {
           employer: formEmployer || 'Self-Employed',
           monthlyIncome: parseFloat(formIncome) || 0,
@@ -324,6 +402,13 @@ export default function ContactDirectoryView({
       action={
         <div className="flex items-center space-x-3">
           <button
+            onClick={() => setIsGroupsModalOpen(true)}
+            className="flex items-center px-4 py-2 border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-sm font-semibold rounded-xl shadow-sm transition-all cursor-pointer"
+          >
+            <FolderOpen className="h-4 w-4 mr-2 text-blue-600" />
+            Manage Groups
+          </button>
+          <button
             onClick={() => setIsBulkModalOpen(true)}
             className="flex items-center px-4 py-2 border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-sm font-semibold rounded-xl shadow-sm transition-all cursor-pointer"
           >
@@ -377,6 +462,17 @@ export default function ContactDirectoryView({
                 { label: 'Unqualified', value: 'Unqualified' },
               ],
             },
+            {
+              key: 'group',
+              label: 'Group',
+              value: groupFilter,
+              onChange: setGroupFilter,
+              options: [
+                { label: 'All Groups', value: 'All' },
+                { label: 'No Group', value: NO_GROUP },
+                ...contactGroups.map((g) => ({ label: g.name, value: g.id })),
+              ],
+            },
           ]}
         />
       </Widget>
@@ -394,6 +490,7 @@ export default function ContactDirectoryView({
                 {isLending && <th className="py-4 px-6">Employment & Wages</th>}
                 {isLending && <th className="py-4 px-6">Credit / DTI</th>}
                 <th className="py-4 px-6">Source</th>
+                <th className="py-4 px-6">Groups</th>
                 <th className="py-4 px-6 text-right">Actions</th>
               </tr>
             </thead>
@@ -446,6 +543,19 @@ export default function ContactDirectoryView({
                       {lead.source}
                     </span>
                   </td>
+                  <td className="py-4 px-6">
+                    {(lead.groupIds || []).length === 0 ? (
+                      <span className="text-[10px] text-slate-300 italic">No group</span>
+                    ) : (
+                      <div className="flex flex-wrap gap-1 max-w-[160px]">
+                        {(lead.groupIds || []).map((gid) => (
+                          <span key={gid} className="px-2 py-0.5 text-[9px] bg-indigo-50 border border-indigo-200 rounded text-indigo-600 font-medium">
+                            {groupNameById(gid)}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </td>
                   <td className="py-4 px-6 text-right">
                     <div className="flex items-center justify-end space-x-1">
                       <button
@@ -468,7 +578,7 @@ export default function ContactDirectoryView({
               ))}
               {filteredLeads.length === 0 && (
                 <tr>
-                  <td colSpan={8} className="py-12 text-center text-slate-400 italic">
+                  <td colSpan={9} className="py-12 text-center text-slate-400 italic">
                     No contacts found in the directory database matching search criteria. Click "Add Contact" or "Bulk Upload" to populate.
                   </td>
                 </tr>
@@ -652,6 +762,35 @@ export default function ContactDirectoryView({
                 </div>
               </div>
 
+              <div className="border-t border-slate-100 pt-3">
+                <label className="block text-[10px] font-bold text-slate-500 uppercase mb-2">
+                  Group{formGroupIds.length > 0 ? ` (${formGroupIds.length} selected)` : ' — leave unchecked for no group'}
+                </label>
+                {contactGroups.length === 0 ? (
+                  <p className="text-[11px] text-slate-400 italic">
+                    No groups yet. Click "Manage Groups" to create one.
+                  </p>
+                ) : (
+                  <div className="flex flex-wrap gap-2">
+                    {contactGroups.map((g) => {
+                      const active = formGroupIds.includes(g.id);
+                      return (
+                        <button
+                          key={g.id}
+                          type="button"
+                          onClick={() => toggleFormGroup(g.id)}
+                          className={`px-3 py-1.5 text-xs font-semibold rounded-lg border transition-all cursor-pointer ${
+                            active ? 'bg-indigo-600 border-indigo-600 text-white' : 'bg-white border-slate-200 text-slate-600 hover:border-indigo-300'
+                          }`}
+                        >
+                          {g.name}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+
               <div className="flex items-center justify-end space-x-2 pt-4 border-t border-slate-100">
                 <button
                   type="button"
@@ -766,6 +905,95 @@ export default function ContactDirectoryView({
                 </button>
               </div>
             </div>
+        </Modal>
+      )}
+
+      {/* MODAL: Manage Groups */}
+      {isGroupsModalOpen && (
+        <Modal
+          open
+          onClose={() => { setIsGroupsModalOpen(false); setRenamingGroupId(null); setRenameGroupValue(''); }}
+          title={<div className="flex items-center space-x-2"><Settings2 className="h-5 w-5 text-blue-600" /><span>Manage Contact Groups</span></div>}
+          maxWidth="max-w-lg"
+        >
+          <div className="p-6 space-y-5">
+            <div className="flex items-center gap-2">
+              <input
+                type="text"
+                value={newGroupName}
+                onChange={(e) => setNewGroupName(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter') handleCreateGroup(); }}
+                placeholder="New group name, e.g. VIP Customers"
+                className="flex-1 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-blue-500"
+              />
+              <button
+                type="button"
+                onClick={handleCreateGroup}
+                disabled={!newGroupName.trim()}
+                className="px-4 py-2 bg-blue-600 hover:bg-blue-500 disabled:bg-slate-300 disabled:cursor-not-allowed text-white text-xs font-semibold rounded-lg cursor-pointer flex items-center gap-1"
+              >
+                <Plus className="h-3.5 w-3.5" /> Create
+              </button>
+            </div>
+
+            {contactGroups.length === 0 ? (
+              <p className="text-xs text-slate-400 italic text-center py-6">No groups yet — create one above.</p>
+            ) : (
+              <div className="space-y-2 max-h-80 overflow-y-auto">
+                {contactGroups.map((g) => {
+                  const memberCount = leads.filter(l => (l.groupIds || []).includes(g.id)).length;
+                  return (
+                    <div key={g.id} className="flex items-center justify-between gap-2 p-3 bg-slate-50 border border-slate-200 rounded-xl">
+                      {renamingGroupId === g.id ? (
+                        <input
+                          autoFocus
+                          type="text"
+                          value={renameGroupValue}
+                          onChange={(e) => setRenameGroupValue(e.target.value)}
+                          onKeyDown={(e) => { if (e.key === 'Enter') handleRenameGroup(g.id); if (e.key === 'Escape') setRenamingGroupId(null); }}
+                          className="flex-1 bg-white border border-slate-300 rounded-lg px-2 py-1 text-xs focus:outline-none"
+                        />
+                      ) : (
+                        <div className="min-w-0">
+                          <p className="text-sm font-semibold text-slate-800 truncate">{g.name}</p>
+                          <p className="text-[10px] text-slate-400">{memberCount} contact{memberCount === 1 ? '' : 's'}</p>
+                        </div>
+                      )}
+                      <div className="flex items-center gap-1 shrink-0">
+                        {renamingGroupId === g.id ? (
+                          <button
+                            type="button"
+                            onClick={() => handleRenameGroup(g.id)}
+                            className="p-1.5 hover:bg-emerald-100 hover:text-emerald-600 rounded-lg text-slate-400 transition-all cursor-pointer"
+                            title="Save"
+                          >
+                            <Check className="h-4 w-4" />
+                          </button>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => { setRenamingGroupId(g.id); setRenameGroupValue(g.name); }}
+                            className="p-1.5 hover:bg-slate-200 hover:text-blue-600 rounded-lg text-slate-400 transition-all cursor-pointer"
+                            title="Rename"
+                          >
+                            <Edit className="h-3.5 w-3.5" />
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteGroup(g.id, g.name)}
+                          className="p-1.5 hover:bg-rose-100 hover:text-rose-600 rounded-lg text-slate-400 transition-all cursor-pointer"
+                          title="Delete group"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
         </Modal>
       )}
     </PageShell>
