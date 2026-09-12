@@ -31,6 +31,7 @@ import Button from './ui/Button';
 import DataTable, { Column } from './ui/DataTable';
 import EmptyState from './ui/EmptyState';
 import KpiCard from './ui/KpiCard';
+import Markdown from './ui/Markdown';
 
 interface DashboardViewProps {
   leads: Lead[];
@@ -401,7 +402,7 @@ export default function DashboardView({
             </div>
           ) : (
             <div
-              className="leading-relaxed font-mono text-xs p-5 rounded-xl"
+              className="leading-relaxed text-xs p-5 rounded-xl"
               style={{ color: 'var(--panel-muted)', background: 'var(--panel-surface)', border: '1px solid var(--panel-border)' }}
             >
               {insights && insightsDegraded && (
@@ -409,9 +410,13 @@ export default function DashboardView({
                   ⚠ Estimated — AI analysis temporarily unavailable, showing a generic brief
                 </div>
               )}
-              <span style={{ color: 'var(--panel-text)' }}>
-                {insights || 'Strategic advice database is empty. Click "Refresh AI Model" to prompt the advisor.'}
-              </span>
+              {insights ? (
+                <Markdown variant="panel">{insights}</Markdown>
+              ) : (
+                <span style={{ color: 'var(--panel-text)' }}>
+                  Strategic advice database is empty. Click "Refresh AI Model" to prompt the advisor.
+                </span>
+              )}
             </div>
           )}
 
