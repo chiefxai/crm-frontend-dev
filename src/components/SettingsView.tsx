@@ -22,6 +22,7 @@ import {
   X,
 } from 'lucide-react';
 import { apiFetch } from '../lib/api';
+import { useRefresh } from '../lib/RefreshContext';
 import { VirtualNumber, TeamMember, OrganizationSettings, UserRole } from '../types';
 import { COST_PER_MINUTE_INR_FALLBACK, formatInr } from '../lib/pricing';
 import { FEATURE_REGISTRY } from '../features/feature-flags/registry';
@@ -106,12 +107,14 @@ export default function SettingsView({
   const [showProviderForm, setShowProviderForm] = useState(false);
   const [showAddStaff, setShowAddStaff] = useState(false);
   const [auditLogs, setAuditLogs] = useState<AuditEntry[]>([]);
-  useEffect(() => {
-    if (subTab !== 'api') return;
+  const loadAuditLogs = () => {
     apiFetch('/api/audit-log')
       .then((r) => r.json())
       .then((list: AuditEntry[]) => setAuditLogs(Array.isArray(list) ? list : []))
       .catch(() => setAuditLogs([]));
+  };
+  useEffect(() => {
+    if (subTab === 'api') loadAuditLogs();
   }, [subTab]);
 
 
@@ -420,8 +423,15 @@ export default function SettingsView({
     }
   };
 
+  const globalRefresh = useRefresh();
+  const handlePageRefresh = () => {
+    if (subTab === 'numbers') loadChannels();
+    else if (subTab === 'api') loadAuditLogs();
+    globalRefresh?.();
+  };
+
   return (
-    <PageShell title="Administration" subtitle="Configure virtual telephone lines, distribute agent permissions, and manage security settings.">
+    <PageShell title="Administration" subtitle="Configure virtual telephone lines, distribute agent permissions, and manage security settings." onRefresh={handlePageRefresh}>
       <div className="col-span-12 space-y-6">
 
           {/* Subtab: Virtual numbers */}

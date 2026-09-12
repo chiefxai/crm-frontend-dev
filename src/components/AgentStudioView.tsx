@@ -291,6 +291,7 @@ export default function AgentStudioView() {
     <PageShell
       title="Agent Studio"
       subtitle="Create AI calling agents — each with its own voice, persona, and phone number."
+      onRefresh={() => loadData()}
       action={<IconButton icon={Plus} label="New Agent" onClick={openCreate} />}
     >
       {/* ── Agent list ── */}

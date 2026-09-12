@@ -55,17 +55,20 @@ export default function AuditLogView() {
   const [entries, setEntries] = useState<AuditEntry[]>([]);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
+  const loadEntries = (showSpinner = false) => {
+    if (showSpinner) setLoading(true);
     apiFetch('/api/audit-log')
       .then(r => r.json())
       .then((list: AuditEntry[]) => setEntries(Array.isArray(list) ? list : []))
-      .finally(() => setLoading(false));
-  }, []);
+      .finally(() => { if (showSpinner) setLoading(false); });
+  };
+
+  useEffect(() => { loadEntries(true); }, []);
 
   if (loading) return <div className="flex items-center justify-center h-full text-slate-400"><Loader2 className="h-5 w-5 animate-spin mr-2" /> Loading…</div>;
 
   return (
-    <PageShell title="Audit Log" subtitle="Admin actions across this organization — who changed what, and when.">
+    <PageShell title="Audit Log" subtitle="Admin actions across this organization — who changed what, and when." onRefresh={() => loadEntries()}>
       <Widget colSpan={12} title="Activity History" subtitle="All admin-level actions are recorded below." icon={ScrollText} accent="#7c3aed" padding="none" scrollable>
         {entries.length === 0
           ? <EmptyState icon={ScrollText} heading="No admin actions recorded yet" />

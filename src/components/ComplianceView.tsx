@@ -17,17 +17,18 @@ export default function ComplianceView() {
   const [adding, setAdding] = useState(false);
   const [savingWindow, setSavingWindow] = useState(false);
 
-  const loadAll = () => {
+  const loadAll = (showSpinner = false) => {
+    if (showSpinner) setLoading(true);
     Promise.all([
       apiFetch('/api/compliance/dnc').then(r => r.json()),
       apiFetch('/api/compliance/calling-window').then(r => r.json()),
     ]).then(([dncList, win]) => {
       setDnc(Array.isArray(dncList) ? dncList : []);
       setWindow(win);
-    }).finally(() => setLoading(false));
+    }).finally(() => { if (showSpinner) setLoading(false); });
   };
 
-  useEffect(loadAll, []);
+  useEffect(() => { loadAll(true); }, []);
 
   const handleAddDnc = async () => {
     if (!newPhone.trim()) return;
@@ -55,7 +56,7 @@ export default function ComplianceView() {
   if (loading || !window_) return <div className="flex items-center justify-center h-full text-slate-400"><Loader2 className="h-5 w-5 animate-spin mr-2" /> Loading…</div>;
 
   return (
-    <PageShell title="Compliance" subtitle="Do-Not-Call list and calling-hour restrictions for outbound AI calls.">
+    <PageShell title="Compliance" subtitle="Do-Not-Call list and calling-hour restrictions for outbound AI calls." onRefresh={() => loadAll()}>
       {/* Calling window */}
       <Widget colSpan={6} title="Calling Window" subtitle="Restrict outbound AI calls to specific hours." icon={Clock} accent="#2563eb" padding="md">
         <label className="flex items-center gap-2 text-sm text-slate-600 mb-4">

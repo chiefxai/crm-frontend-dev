@@ -5,6 +5,8 @@ export interface PageHeaderConfig {
   subtitle?: string;
   action?: React.ReactNode;
   toolbar?: React.ReactNode;
+  /** Reloads just this page's own data. Falls back to the app-wide refresh when omitted. */
+  onRefresh?: () => void;
 }
 
 interface PageHeaderContextValue {

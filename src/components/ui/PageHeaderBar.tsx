@@ -1,19 +1,22 @@
 import React from 'react';
 import { RefreshCw } from 'lucide-react';
-import { useRefresh } from '../../lib/RefreshContext';
 import { usePageHeaderContext } from '../../lib/PageHeaderContext';
 
 // Permanently-mounted counterpart to PageShell's header markup — rendered
 // once in App.tsx so switching tabs (which unmounts/remounts the whole view,
 // PageShell included) only swaps the title/subtitle/action content here
 // instead of tearing down and rebuilding the header DOM itself.
+//
+// The refresh button calls the CURRENT page's own onRefresh (published by
+// PageShell, defaulting to the app-wide refresh when a page doesn't supply
+// one) — not a fixed handler — so it always reloads whatever page is showing.
 export default function PageHeaderBar() {
   const ctx = usePageHeaderContext();
-  const refresh = useRefresh();
   const [spinning, setSpinning] = React.useState(false);
 
   const header = ctx?.header;
   if (!header) return null;
+  const refresh = header.onRefresh;
 
   const handleRefresh = () => {
     if (!refresh || spinning) return;

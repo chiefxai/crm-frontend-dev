@@ -23,6 +23,7 @@ import {
 import { Lead, CallLog, ContactGroup } from '../types';
 import { apiFetch, getPlayableRecordingUrl } from '../lib/api';
 import { formatPhone } from '../lib/phone';
+import { useRefresh } from '../lib/RefreshContext';
 import PageShell from './ui/PageShell';
 import Widget from './ui/Widget';
 import KpiCard from './ui/KpiCard';
@@ -68,12 +69,17 @@ export default function ContactDirectoryView({
   const [renameGroupValue, setRenameGroupValue] = useState('');
   const [formGroupIds, setFormGroupIds] = useState<string[]>([]);
 
-  useEffect(() => {
+  const loadGroups = () => {
     apiFetch('/api/contact-groups')
       .then(r => r.json())
       .then(data => setContactGroups(Array.isArray(data) ? data : []))
       .catch(() => setContactGroups([]));
-  }, []);
+  };
+
+  useEffect(loadGroups, []);
+
+  const refreshLeads = useRefresh();
+  const handlePageRefresh = () => { loadGroups(); refreshLeads?.(); };
 
   const groupNameById = (id: string) => contactGroups.find(g => g.id === id)?.name || 'Unknown Group';
 
@@ -403,6 +409,7 @@ export default function ContactDirectoryView({
     <PageShell
       title="Unified Contact Directory"
       subtitle="Build, edit, and bulk upload your client repository. These contacts automatically stream into the outbound Task Assignment channels."
+      onRefresh={handlePageRefresh}
       action={
         <ActionMenu
           tooltipLabel="Add Contact"

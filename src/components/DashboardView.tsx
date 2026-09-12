@@ -91,12 +91,14 @@ export default function DashboardView({
   const [loadingInsights, setLoadingInsights] = useState(false);
   const [metrics, setMetrics] = useState<DashboardMetrics | null>(null);
 
-  useEffect(() => {
+  const loadMetrics = () => {
     apiFetch('/api/dashboard/metrics')
       .then(r => { if (!r.ok) throw new Error(); return r.json(); })
       .then((data: DashboardMetrics) => setMetrics(data))
       .catch(err => console.error('Failed to load dashboard metrics:', err));
-  }, [leads.length, loans.length, callLogs.length]);
+  };
+
+  useEffect(loadMetrics, [leads.length, loans.length, callLogs.length]);
 
   const fetchAIInsights = async () => {
     setLoadingInsights(true);
@@ -202,6 +204,7 @@ export default function DashboardView({
           Refresh AI Model
         </Button>
       }
+      onRefresh={loadMetrics}
     >
       {/* ── Row 1: KPI tiles ── */}
 

@@ -136,6 +136,7 @@ export default function UnifiedInboxView() {
       title="Unified Inbox"
       subtitle="WhatsApp and Instagram conversations in one place."
       layout="fill"
+      onRefresh={loadAll}
       action={<Button icon={Settings} variant="secondary" size="sm" onClick={() => setShowSettings(true)}>Channels</Button>}
     >
       {channels.length === 0 && (

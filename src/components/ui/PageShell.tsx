@@ -77,10 +77,10 @@ export default function PageShell({ title, subtitle, action, toolbar, children, 
   // instead of rendering our own — see PageHeaderContext.tsx for why.
   React.useEffect(() => {
     if (!pageHeaderCtx) return;
-    pageHeaderCtx.setHeader({ title, subtitle, action, toolbar });
+    pageHeaderCtx.setHeader({ title, subtitle, action, toolbar, onRefresh: refresh });
     return () => pageHeaderCtx.setHeader(null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pageHeaderCtx, title, subtitle, action, toolbar]);
+  }, [pageHeaderCtx, title, subtitle, action, toolbar, refresh]);
 
   const renderOwnHeader = !pageHeaderCtx;
 

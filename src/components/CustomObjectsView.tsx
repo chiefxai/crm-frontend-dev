@@ -176,7 +176,7 @@ export default function CustomObjectsView() {
 
   const selectedObject = objects.find((o) => o.key === selectedKey) || null;
 
-  useEffect(() => {
+  const loadRecords = () => {
     if (!selectedKey) return;
     setRecordsLoading(true);
     apiFetch(`/api/objects/${selectedKey}/records`)
@@ -184,7 +184,9 @@ export default function CustomObjectsView() {
       .then((list: ObjectRecord[]) => setRecords(list))
       .catch(() => setRecords([]))
       .finally(() => setRecordsLoading(false));
-  }, [selectedKey]);
+  };
+
+  useEffect(loadRecords, [selectedKey]);
 
   const visibleRecords = records.filter((r) => {
     if (!searchTerm.trim()) return true;
@@ -312,6 +314,7 @@ export default function CustomObjectsView() {
       title={selectedObject?.label || 'Contacts'}
       subtitle={selectedObject?.description || undefined}
       layout="fill"
+      onRefresh={loadRecords}
       action={
         <ActionMenu
           tooltipLabel={`New ${selectedObject?.label.replace(/s$/, '') || 'Record'}`}

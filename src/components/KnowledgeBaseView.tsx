@@ -23,14 +23,15 @@ export default function KnowledgeBaseView() {
   const [uploading, setUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const loadDocuments = () => {
+  const loadDocuments = (showSpinner = false) => {
+    if (showSpinner) setLoading(true);
     apiFetch('/api/knowledge/documents')
       .then(r => r.json())
       .then((list: KnowledgeDocument[]) => setDocuments(Array.isArray(list) ? list : []))
-      .finally(() => setLoading(false));
+      .finally(() => { if (showSpinner) setLoading(false); });
   };
 
-  useEffect(loadDocuments, []);
+  useEffect(() => { loadDocuments(true); }, []);
 
   const handleAdd = async () => {
     if (!title.trim() || !text.trim()) return;
@@ -74,6 +75,7 @@ export default function KnowledgeBaseView() {
       title="Knowledge Base"
       subtitle="Documents your AI agent can search when answering calls, WhatsApp, and Instagram messages."
       action={<IconButton icon={Plus} label="Add Document" onClick={() => setShowAdd(true)} />}
+      onRefresh={() => loadDocuments()}
     >
       {/* Documents list */}
       <Widget colSpan={6} title="Documents" subtitle="Facts your AI agent can reference during conversations." icon={BookOpen} accent="#2563eb" padding="md">

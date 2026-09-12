@@ -26,15 +26,16 @@ export default function EnquiriesView() {
   const [loading, setLoading] = useState(true);
   const [updatingId, setUpdatingId] = useState<string | null>(null);
 
-  const load = () => {
+  const load = (showSpinner = false) => {
+    if (showSpinner) setLoading(true);
     apiFetch('/api/enquiries')
       .then(r => r.ok ? r.json() : [])
       .then((list: Enquiry[]) => setEnquiries(Array.isArray(list) ? list : []))
       .catch(() => [])
-      .finally(() => setLoading(false));
+      .finally(() => { if (showSpinner) setLoading(false); });
   };
 
-  useEffect(load, []);
+  useEffect(() => { load(true); }, []);
 
   const handleMarkStatus = async (id: string, status: Enquiry['status']) => {
     setUpdatingId(id);
@@ -49,7 +50,7 @@ export default function EnquiriesView() {
   const openCount = enquiries.filter(e => e.status === 'new').length;
 
   return (
-    <PageShell title="Enquiries" subtitle={`Callers who asked something mid-call and need a follow-up — ${openCount} still open.`}>
+    <PageShell title="Enquiries" subtitle={`Callers who asked something mid-call and need a follow-up — ${openCount} still open.`} onRefresh={() => load()}>
       <Widget colSpan={12} title="Open Enquiries" subtitle="Click an action to update the status of each enquiry." icon={MessageCircleQuestion} accent="#f59e0b" padding="none" scrollable>
         {enquiries.length === 0
           ? <EmptyState icon={MessageCircleQuestion} heading="No enquiries captured yet" message="Enquiries from AI calls will appear here automatically." />
