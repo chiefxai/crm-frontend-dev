@@ -109,8 +109,8 @@ export default function AgentStudioView() {
 
   const savedRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const loadData = async () => {
-    setLoading(true);
+  const loadData = async (showSpinner = false) => {
+    if (showSpinner) setLoading(true);
     try {
       const [agentsRes, numsRes, docsRes] = await Promise.all([
         apiFetch('/api/agents').then(r => r.json()),
@@ -121,10 +121,10 @@ export default function AgentStudioView() {
       setNumbers(Array.isArray(numsRes) ? numsRes : []);
       setKnowledgeDocs(Array.isArray(docsRes) ? docsRes : []);
     } catch { /* silent */ }
-    finally { setLoading(false); }
+    finally { if (showSpinner) setLoading(false); }
   };
 
-  useEffect(() => { loadData(); }, []);
+  useEffect(() => { loadData(true); }, []);
 
   const getAgentId = (n: VirtualNumber) => n.agentId ?? n.agent_id ?? null;
   const freeNumbers = (editingId: string | null) =>
