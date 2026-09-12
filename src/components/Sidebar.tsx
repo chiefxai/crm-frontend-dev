@@ -44,6 +44,12 @@ interface SidebarProps {
 
 const LENDING_ONLY_TAB_IDS = new Set(['loans']);
 
+// Synthetic key for the "Dashboard" group's own expand/collapse + flyout
+// state — not a real routable tab, just a Set/Map key (see DASHBOARD_GROUP
+// usage below), so it can share the exact same generic toggleGroup()/
+// expandedGroups state the Company Profile / Administration groups use.
+const DASHBOARD_GROUP_KEY = 'dashboard-group';
+
 interface SubItem { id: string; label: string; icon: React.ElementType; }
 interface SidebarGroup { tabId: string; label: string; icon: React.ElementType; subItems: SubItem[]; }
 
@@ -191,9 +197,11 @@ export default function Sidebar({
     setFlyoutGroup(null);
   };
 
-  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(
-    () => new Set(SIDEBAR_GROUPS.filter(g => g.tabId === activeTab).map(g => g.tabId))
-  );
+  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(() => {
+    const initial = new Set(SIDEBAR_GROUPS.filter(g => g.tabId === activeTab).map(g => g.tabId));
+    if (activeTab === 'dashboard' || activeTab === 'reports') initial.add(DASHBOARD_GROUP_KEY);
+    return initial;
+  });
 
   // Which group flyout is open in collapsed mode, plus its anchor rect
   const [flyoutGroup, setFlyoutGroup] = useState<string | null>(null);
@@ -220,12 +228,10 @@ export default function Sidebar({
   const tagline = INDUSTRY_TAGLINES[industry] || 'AI CRM Platform';
 
   const allMenuItems = [
-    { id: 'dashboard',    label: 'Executive Desk',    icon: LayoutDashboard },
     { id: 'contacts',     label: 'Contact Directory', icon: Contact },
     { id: 'workflows',    label: 'Workflow Builder',  icon: GitBranch },
     { id: 'dialer',       label: 'Voice Simulator',   icon: PhoneCall },
     { id: 'call-logs',    label: 'Call Logs',         icon: History },
-    { id: 'reports',      label: 'Reports',           icon: BarChart3 },
     { id: 'inbox',        label: 'Unified Inbox',     icon: Inbox },
     { id: 'agent-studio', label: 'Agent Studio',      icon: Sparkles },
     { id: 'compliance',   label: 'Compliance',        icon: ShieldBan },
@@ -240,6 +246,20 @@ export default function Sidebar({
     const flagKey = TAB_TO_FLAG[item.id];
     if (flagKey && !isEnabled(flagKey)) return false;
     return true;
+  });
+
+  // "Dashboard" section — groups the two overview-style pages (Executive
+  // Desk, Reports) under one collapsible header, same visual treatment as
+  // the Company Profile / Administration groups below. Each item still
+  // routes exactly like it did as a flat item (setActiveTab(id) directly —
+  // no shared parent tab/subTab), so App.tsx's routing, TAB_TO_SLUG, and
+  // the flag-gated redirect logic for these two pages are untouched.
+  const dashboardSubItems = [
+    { id: 'dashboard', label: 'Executive Desk', icon: LayoutDashboard },
+    { id: 'reports',   label: 'Reports',        icon: BarChart3 },
+  ].filter((item) => {
+    const flagKey = TAB_TO_FLAG[item.id];
+    return !flagKey || isEnabled(flagKey);
   });
 
   const navBtnCls = (isActive: boolean) =>
@@ -317,6 +337,93 @@ export default function Sidebar({
         {!collapsed && (
           <p className="px-2 text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">Workspace</p>
         )}
+
+        {/* Dashboard group — Executive Desk + Reports, collapsible like Company Profile / Administration */}
+        {dashboardSubItems.length > 0 && (() => {
+          const isGroupActive = activeTab === 'dashboard' || activeTab === 'reports';
+          const isExpanded = expandedGroups.has(DASHBOARD_GROUP_KEY) && !collapsed;
+          const ChevronIcon = isExpanded ? ChevronDown : ChevronRight;
+          const flyoutOpen = collapsed && flyoutGroup === DASHBOARD_GROUP_KEY;
+
+          const groupBtn = (
+            <button
+              id="nav-dashboard-group"
+              onClick={(e) => toggleGroup(DASHBOARD_GROUP_KEY, e.currentTarget)}
+              className={navBtnCls(isGroupActive)}
+              style={navBtnStyle(isGroupActive)}
+            >
+              <LayoutDashboard className={iconCls(isGroupActive)} style={iconStyle(isGroupActive)} />
+              {!collapsed && (
+                <>
+                  <span className="flex-1 text-left truncate min-w-0">Dashboard</span>
+                  <ChevronIcon className="h-3.5 w-3.5 shrink-0" style={{ color: isGroupActive ? '#ffffff99' : 'var(--text-muted)' }} />
+                </>
+              )}
+            </button>
+          );
+
+          return (
+            <div className="relative">
+              {collapsed ? <CollapsedTooltip label="Dashboard">{groupBtn}</CollapsedTooltip> : groupBtn}
+
+              {flyoutOpen && flyoutRect && (
+                <div
+                  className="fixed z-[9999] rounded-xl shadow-2xl py-2"
+                  style={{
+                    top: Math.min(flyoutRect.top, window.innerHeight - (dashboardSubItems.length * 44 + 56)),
+                    left: flyoutRect.right + 8,
+                    minWidth: 200,
+                    background: 'var(--bg-surface)',
+                    border: '1px solid var(--border)',
+                    color: 'var(--text-primary)',
+                  }}
+                >
+                  <div className="px-4 py-2 mb-1" style={{ borderBottom: '1px solid var(--border)' }}>
+                    <span className="text-[10px] font-bold uppercase tracking-widest" style={{ color: 'var(--text-muted)' }}>Dashboard</span>
+                  </div>
+                  {dashboardSubItems.map((sub) => {
+                    const SubIcon = sub.icon;
+                    const isActive = activeTab === sub.id;
+                    return (
+                      <button
+                        key={sub.id}
+                        onClick={() => { setActiveTab(sub.id); setFlyoutGroup(null); setFlyoutRect(null); }}
+                        className={`w-full flex items-center gap-3 px-4 py-2.5 text-sm font-medium transition-colors ${
+                          isActive ? 'bg-blue-600 text-white' : 'hover:bg-[var(--bg-subtle)]'
+                        }`}
+                        style={isActive ? {} : { color: 'var(--text-secondary)' }}
+                      >
+                        <SubIcon className={`h-4 w-4 shrink-0 ${isActive ? 'text-white' : ''}`} style={isActive ? {} : { color: 'var(--text-muted)' }} />
+                        {sub.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+
+              {isExpanded && (
+                <div className="mt-1.5 space-y-1.5">
+                  {dashboardSubItems.map((sub) => {
+                    const SubIcon = sub.icon;
+                    const isActive = activeTab === sub.id;
+                    return (
+                      <button
+                        key={sub.id}
+                        id={`nav-dashboard-group-${sub.id}`}
+                        onClick={() => { setActiveTab(sub.id); setFlyoutGroup(null); }}
+                        className={subBtnCls(isActive)}
+                        style={subBtnStyle(isActive)}
+                      >
+                        <SubIcon className="h-4 w-4 mr-3 shrink-0" style={iconStyle(isActive)} />
+                        <span className="truncate min-w-0 flex-1 text-left">{sub.label}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          );
+        })()}
 
         {/* Flat menu items */}
         {menuItems.map((item) => {
