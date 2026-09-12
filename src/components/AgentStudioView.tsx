@@ -276,14 +276,6 @@ export default function AgentStudioView() {
     if (res.ok) setPreviewReply((await res.json()).reply);
   };
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center h-full text-slate-400">
-        <Loader2 className="h-5 w-5 animate-spin mr-2" /> Loading…
-      </div>
-    );
-  }
-
   const isModalOpen = creating || !!editingAgent;
   const assignableNumbers = freeNumbers(editingAgent?.id ?? null);
 
@@ -296,7 +288,11 @@ export default function AgentStudioView() {
     >
       {/* ── Agent list ── */}
       <div className="col-span-12">
-          {agents.length === 0 ? (
+          {loading ? (
+            <div className="flex items-center justify-center py-20 text-slate-400">
+              <Loader2 className="h-5 w-5 animate-spin mr-2" /> Loading…
+            </div>
+          ) : agents.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-20 text-center">
               <div className="h-16 w-16 rounded-2xl bg-indigo-50 flex items-center justify-center mb-4">
                 <Bot className="h-8 w-8 text-indigo-400" />

@@ -68,8 +68,6 @@ export default function KnowledgeBaseView() {
     if (res.ok) setResults(await res.json());
   };
 
-  if (loading) return <div className="flex items-center justify-center h-full text-slate-400"><Loader2 className="h-5 w-5 animate-spin mr-2" /> Loading…</div>;
-
   return (
     <PageShell
       title="Knowledge Base"
@@ -77,6 +75,10 @@ export default function KnowledgeBaseView() {
       action={<IconButton icon={Plus} label="Add Document" onClick={() => setShowAdd(true)} />}
       onRefresh={() => loadDocuments()}
     >
+      {loading ? (
+        <div className="col-span-12 flex items-center justify-center py-20 text-slate-400"><Loader2 className="h-5 w-5 animate-spin mr-2" /> Loading…</div>
+      ) : (
+      <>
       {/* Documents list */}
       <Widget colSpan={6} title="Documents" subtitle="Facts your AI agent can reference during conversations." icon={BookOpen} accent="#2563eb" padding="md">
         {documents.length === 0 && <p className="text-xs text-slate-400 mb-2">No documents yet. Add one to give your agent real facts to answer from.</p>}
@@ -123,6 +125,8 @@ export default function KnowledgeBaseView() {
             )
         )}
       </Widget>
+      </>
+      )}
 
       {/* Add document modal */}
       <Modal open={showAdd} onClose={() => setShowAdd(false)} title="Add Document">

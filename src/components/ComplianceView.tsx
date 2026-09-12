@@ -53,10 +53,12 @@ export default function ComplianceView() {
     else alert((await res.json()).error || 'Failed to save');
   };
 
-  if (loading || !window_) return <div className="flex items-center justify-center h-full text-slate-400"><Loader2 className="h-5 w-5 animate-spin mr-2" /> Loading…</div>;
-
   return (
     <PageShell title="Compliance" subtitle="Do-Not-Call list and calling-hour restrictions for outbound AI calls." onRefresh={() => loadAll()}>
+      {loading || !window_ ? (
+        <div className="col-span-12 flex items-center justify-center py-20 text-slate-400"><Loader2 className="h-5 w-5 animate-spin mr-2" /> Loading…</div>
+      ) : (
+        <>
       {/* Calling window */}
       <Widget colSpan={6} title="Calling Window" subtitle="Restrict outbound AI calls to specific hours." icon={Clock} accent="#2563eb" padding="md">
         <label className="flex items-center gap-2 text-sm text-slate-600 mb-4">
@@ -104,6 +106,8 @@ export default function ComplianceView() {
           ))}
         </div>
       </Widget>
+        </>
+      )}
     </PageShell>
   );
 }

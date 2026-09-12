@@ -129,8 +129,6 @@ export default function UnifiedInboxView() {
     else alert((await res.json()).error || 'Failed to analyze conversation');
   };
 
-  if (loading) return <div className="flex items-center justify-center h-full text-slate-400"><Loader2 className="h-5 w-5 animate-spin mr-2" /> Loading…</div>;
-
   return (
     <PageShell
       title="Unified Inbox"
@@ -139,6 +137,10 @@ export default function UnifiedInboxView() {
       onRefresh={loadAll}
       action={<Button icon={Settings} variant="secondary" size="sm" onClick={() => setShowSettings(true)}>Channels</Button>}
     >
+      {loading ? (
+        <div className="flex-1 flex items-center justify-center text-slate-400"><Loader2 className="h-5 w-5 animate-spin mr-2" /> Loading…</div>
+      ) : (
+      <>
       {channels.length === 0 && (
         <div className="mx-8 mt-4 bg-blue-50 border border-blue-100 rounded-xl p-4 text-sm text-blue-800 shrink-0">
           No channels connected yet. Click <strong>Channels</strong> above to connect WhatsApp or Instagram.
@@ -221,6 +223,8 @@ export default function UnifiedInboxView() {
           }
         </div>
       </div>
+      </>
+      )}
 
       {showSettings && <ChannelSettingsModal channels={channels} onClose={() => setShowSettings(false)} onSaved={() => { setShowSettings(false); loadAll(); }} />}
     </PageShell>

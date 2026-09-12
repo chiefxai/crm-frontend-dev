@@ -45,12 +45,13 @@ export default function EnquiriesView() {
     } finally { setUpdatingId(null); }
   };
 
-  if (loading) return <div className="flex items-center justify-center h-full text-slate-400"><Loader2 className="h-5 w-5 animate-spin mr-2" /> Loading…</div>;
-
   const openCount = enquiries.filter(e => e.status === 'new').length;
 
   return (
     <PageShell title="Enquiries" subtitle={`Callers who asked something mid-call and need a follow-up — ${openCount} still open.`} onRefresh={() => load()}>
+      {loading ? (
+        <div className="col-span-12 flex items-center justify-center py-20 text-slate-400"><Loader2 className="h-5 w-5 animate-spin mr-2" /> Loading…</div>
+      ) : (
       <Widget colSpan={12} title="Open Enquiries" subtitle="Click an action to update the status of each enquiry." icon={MessageCircleQuestion} accent="#f59e0b" padding="none" scrollable>
         {enquiries.length === 0
           ? <EmptyState icon={MessageCircleQuestion} heading="No enquiries captured yet" message="Enquiries from AI calls will appear here automatically." />
@@ -100,6 +101,7 @@ export default function EnquiriesView() {
           )
         }
       </Widget>
+      )}
     </PageShell>
   );
 }
