@@ -13,6 +13,7 @@ import Button from './ui/Button';
 import Badge from './ui/Badge';
 import FilterBar from './ui/FilterBar';
 import EmptyState from './ui/EmptyState';
+import Markdown from './ui/Markdown';
 
 interface CallLogsViewProps {
   callLogs: CallLog[];
@@ -277,9 +278,9 @@ export default function CallLogsView({ callLogs, costPerMinuteInr, leads = [] }:
             {selected.summary && (
               <div>
                 <h4 className="text-[10px] font-bold uppercase tracking-widest mb-2" style={{ color: 'var(--text-muted)' }}>AI Summary</h4>
-                <p className="text-xs leading-relaxed rounded-xl p-3 border" style={{ background: 'var(--bg-subtle)', borderColor: 'var(--border)', color: 'var(--text-secondary)' }}>
-                  {selected.summary}
-                </p>
+                <div className="rounded-xl p-3 border" style={{ background: 'var(--bg-subtle)', borderColor: 'var(--border)' }}>
+                  <Markdown>{selected.summary}</Markdown>
+                </div>
               </div>
             )}
 

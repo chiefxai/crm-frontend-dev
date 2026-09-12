@@ -6,6 +6,7 @@ import {
 import { apiFetch } from '../lib/api';
 import PageShell from './ui/PageShell';
 import Modal from './ui/Modal';
+import Markdown from './ui/Markdown';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -829,7 +830,7 @@ export default function AgentStudioView() {
             </div>
             {previewReply && (
               <div className="mt-3 bg-indigo-50 border border-indigo-100 rounded-xl px-4 py-3 text-sm text-indigo-900">
-                {previewReply}
+                <Markdown>{previewReply}</Markdown>
               </div>
             )}
           </div>
