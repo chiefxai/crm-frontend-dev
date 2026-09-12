@@ -7,6 +7,7 @@ import { recordToLead, leadToRecordPatch, leadToRecordCreate } from './lib/objec
 import { RefreshProvider } from './lib/RefreshContext';
 import { PageHeaderProvider } from './lib/PageHeaderContext';
 import PageHeaderBar from './components/ui/PageHeaderBar';
+import { ActiveTabProvider } from './lib/ActiveTabContext';
 import { fetchUserFlags, resetUserFlags, subscribe as subscribeFlags, isLoaded as flagsLoaded } from './features/feature-flags/userFlagsStore';
 import { TAB_TO_FLAG } from './features/feature-flags/registry';
 import {
@@ -272,6 +273,15 @@ export default function App() {
     settings: 'numbers',
   };
   const activeSubTab = subSlug || DEFAULT_SUB_TAB[activeTab] || '';
+
+  // Keep-alive tab rendering: once a tab has been visited, keep it mounted
+  // (hidden via CSS instead of unmounted) so navigating back to it shows the
+  // data it already loaded instantly instead of remounting the view, losing
+  // its state, and flashing its loading spinner again.
+  const [visitedTabs, setVisitedTabs] = useState<string[]>([activeTab]);
+  useEffect(() => {
+    setVisitedTabs(prev => prev.includes(activeTab) ? prev : [...prev, activeTab]);
+  }, [activeTab]);
 
   const setActiveTab = (tab: string) => {
     const s = TAB_TO_SLUG[tab] || tab;
@@ -651,9 +661,11 @@ export default function App() {
     // If nothing is accessible, stay on current route — renderTabContent shows no-access UI.
   }, [flagsReady, activeTab, isEnabled]);
 
-  // Switch workspace content
-  const renderTabContent = () => {
-    const flagKey = TAB_TO_FLAG[activeTab];
+  // Renders the view for a given tab (not necessarily the active one — see
+  // the keep-alive rendering below, which keeps previously-visited tabs
+  // mounted so switching back to one doesn't re-run its initial data fetch).
+  const renderTabContent = (tab: string) => {
+    const flagKey = TAB_TO_FLAG[tab];
     // Only block when flags are fully loaded — render content optimistically
     // while flags are still in-flight so the page doesn't flash null → content.
     if (flagKey && !isEnabled(flagKey) && flagsReady) {
@@ -676,7 +688,7 @@ export default function App() {
         </div>
       );
     }
-    switch (activeTab) {
+    switch (tab) {
       case 'dashboard':
         return (
           <DashboardView
@@ -862,8 +874,18 @@ export default function App() {
           <RefreshProvider onRefresh={refreshData}>
             <PageHeaderProvider>
               <PageHeaderBar />
-              <div className="flex-1 overflow-hidden flex flex-col min-h-0">
-                {renderTabContent()}
+              <div className="flex-1 overflow-hidden flex flex-col min-h-0 relative">
+                {visitedTabs.map(tab => (
+                  <div
+                    key={tab}
+                    className="flex-1 flex-col overflow-hidden min-h-0"
+                    style={{ display: tab === activeTab ? 'flex' : 'none' }}
+                  >
+                    <ActiveTabProvider active={tab === activeTab}>
+                      {renderTabContent(tab)}
+                    </ActiveTabProvider>
+                  </div>
+                ))}
               </div>
             </PageHeaderProvider>
           </RefreshProvider>

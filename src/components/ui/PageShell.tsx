@@ -2,6 +2,7 @@ import React from 'react';
 import { RefreshCw } from 'lucide-react';
 import { useRefresh } from '../../lib/RefreshContext';
 import { usePageHeaderContext } from '../../lib/PageHeaderContext';
+import { useIsActiveTab } from '../../lib/ActiveTabContext';
 
 // ── Grid helpers ──────────────────────────────────────────────────────────────
 
@@ -64,6 +65,7 @@ export default function PageShell({ title, subtitle, action, toolbar, children, 
   const refresh = onRefresh ?? contextRefresh;
   const [spinning, setSpinning] = React.useState(false);
   const pageHeaderCtx = usePageHeaderContext();
+  const isActiveTab = useIsActiveTab();
 
   const handleRefresh = () => {
     if (!refresh || spinning) return;
@@ -74,13 +76,18 @@ export default function PageShell({ title, subtitle, action, toolbar, children, 
 
   // When a PageHeaderProvider is present (the normal app shell), publish this
   // page's header content into the shared, permanently-mounted header bar
-  // instead of rendering our own — see PageHeaderContext.tsx for why.
+  // instead of rendering our own — see PageHeaderContext.tsx for why. Views
+  // stay mounted after their first visit (App.tsx keeps hidden tabs alive so
+  // switching back doesn't re-run their initial fetch), so several PageShells
+  // can exist at once — only the currently active one may touch the shared
+  // header, or a hidden page's own re-renders (e.g. a polling interval)
+  // would stomp on the visible page's title.
   React.useEffect(() => {
-    if (!pageHeaderCtx) return;
+    if (!pageHeaderCtx || !isActiveTab) return;
     pageHeaderCtx.setHeader({ title, subtitle, action, toolbar, onRefresh: refresh });
     return () => pageHeaderCtx.setHeader(null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pageHeaderCtx, title, subtitle, action, toolbar, refresh]);
+  }, [pageHeaderCtx, isActiveTab, title, subtitle, action, toolbar, refresh]);
 
   const renderOwnHeader = !pageHeaderCtx;
 
