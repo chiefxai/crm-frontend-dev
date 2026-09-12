@@ -53,7 +53,6 @@ import ComplianceView from './components/ComplianceView';
 import KnowledgeBaseView from './components/KnowledgeBaseView';
 import AuditLogView from './components/AuditLogView';
 import EnquiriesView from './components/EnquiriesView';
-import BillingView from './components/BillingView';
 import NotificationBell, { AppNotification } from './components/NotificationBell';
 
 // Debounced sync: collapses multiple rapid state changes into one POST.
@@ -233,7 +232,6 @@ export default function App() {
     knowledge:     'knowledge-base',
     enquiries:     'enquiries',
     'audit-log':   'audit-log',
-    billing:       'billing',
     loans:         'loan-lifecycle',
     company:       'company-profile',
     settings:      'administration',
@@ -621,7 +619,7 @@ export default function App() {
     const orderedTabs = [
       'dashboard', 'contacts', 'workflows',
       'dialer', 'call-logs', 'reports', 'inbox', 'agent-studio',
-      'compliance', 'knowledge', 'enquiries', 'audit-log', 'billing', 'loans',
+      'compliance', 'knowledge', 'enquiries', 'audit-log', 'loans',
     ];
     const firstAccessible = orderedTabs.find(tab => {
       const fk = TAB_TO_FLAG[tab];
@@ -732,8 +730,6 @@ export default function App() {
         return <EnquiriesView />;
       case 'audit-log':
         return <AuditLogView />;
-      case 'billing':
-        return <BillingView />;
       case 'company':
         return (
           <CompanyProfileView

@@ -254,7 +254,6 @@ export default function Sidebar({
     { id: 'knowledge',    label: 'Knowledge Base',    icon: BookOpen },
     { id: 'enquiries',    label: 'Enquiries',         icon: MessageCircleQuestion },
     { id: 'audit-log',    label: 'Audit Log',         icon: ScrollText },
-    { id: 'billing',      label: 'Billing & Usage',   icon: CreditCard },
     { id: 'loans',        label: 'Loan Lifecycle',    icon: Layers },
   ];
 

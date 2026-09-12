@@ -399,7 +399,6 @@ describe('FeatureFlagContext', () => {
       expect(screen.getByTestId('flag-reports').textContent).toBe('on');
       expect(screen.getByTestId('flag-dialer').textContent).toBe('on');
       expect(screen.getByTestId('flag-workflows').textContent).toBe('off');
-      expect(screen.getByTestId('flag-billing').textContent).toBe('off');
       expect(screen.getByTestId('flag-compliance').textContent).toBe('off');
     });
   });
@@ -859,7 +858,6 @@ describe('Sidebar', () => {
     // Flagged tabs with no grant must be hidden
     expect(screen.queryByText('Reports')).not.toBeInTheDocument();
     expect(screen.queryByText('Workflow Builder')).not.toBeInTheDocument();
-    expect(screen.queryByText('Billing & Usage')).not.toBeInTheDocument();
   });
 
   it('restricted user with reports grant — reports tab appears', async () => {
@@ -882,7 +880,6 @@ describe('Sidebar', () => {
     expect(screen.getByText('Voice Simulator')).toBeInTheDocument();
     expect(screen.getByText('Compliance')).toBeInTheDocument();
     expect(screen.queryByText('Workflow Builder')).not.toBeInTheDocument();
-    expect(screen.queryByText('Billing & Usage')).not.toBeInTheDocument();
   });
 
   it('non-lending org — Lead CRM, AI Campaigns, Loan Lifecycle tabs hidden', async () => {
@@ -997,12 +994,12 @@ describe('SettingsView GrantFeatureAccess', () => {
     render(<GrantFlagsUI />);
 
     fireEvent.click(screen.getByTestId('grant-workflows'));
-    fireEvent.click(screen.getByTestId('grant-billing'));
+    fireEvent.click(screen.getByTestId('grant-compliance'));
     fireEvent.click(screen.getByTestId('grant-dialer'));
 
     expect(screen.getByTestId('count').textContent).toBe('3');
     expect(screen.getByTestId('grant-workflows')).toHaveAttribute('aria-pressed', 'true');
-    expect(screen.getByTestId('grant-billing')).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByTestId('grant-compliance')).toHaveAttribute('aria-pressed', 'true');
     expect(screen.getByTestId('grant-dialer')).toHaveAttribute('aria-pressed', 'true');
     expect(screen.getByTestId('grant-reports')).toHaveAttribute('aria-pressed', 'false');
   });

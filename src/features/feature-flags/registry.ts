@@ -92,13 +92,6 @@ export const FEATURE_REGISTRY: FeatureFlagDef[] = [
     enabledByDefault: true,
   },
   {
-    key: 'billing',
-    label: 'Billing & Usage',
-    description: 'Subscription and usage management',
-    tabId: 'billing',
-    enabledByDefault: true,
-  },
-  {
     key: 'reports',
     label: 'Reports',
     description: 'Analytics and performance reports',
