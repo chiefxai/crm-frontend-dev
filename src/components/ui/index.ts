@@ -12,3 +12,4 @@ export { default as SearchInput } from './SearchInput';
 export { default as SectionLabel } from './SectionLabel';
 export { default as Widget } from './Widget';
 export { default as Markdown } from './Markdown';
+export { default as FlagGroupPicker } from './FlagGroupPicker';

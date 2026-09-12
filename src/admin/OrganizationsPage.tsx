@@ -6,6 +6,7 @@ import OrgDetailPanel from './OrgDetailPanel';
 import { formatInr } from '../lib/pricing';
 import { FEATURE_REGISTRY } from '../features/feature-flags/registry';
 import Modal from '../components/ui/Modal';
+import FlagGroupPicker from '../components/ui/FlagGroupPicker';
 
 type SortKey = 'name' | 'industry' | 'subscriptionPlan' | 'memberCount' | 'leadCount' | 'createdAt';
 
@@ -158,6 +159,11 @@ function CreateWorkspaceModal({ onClose, onCreated }: { onClose: () => void; onC
 
           <div className="border-t border-slate-100 pt-4">
             <p className="text-xs font-medium text-slate-500 mb-2">Feature Access — select what this org can use</p>
+            <FlagGroupPicker
+              availableKeys={FEATURE_REGISTRY.map(f => f.key)}
+              onApply={(keys) => setSelectedFlags(keys)}
+              className="mb-3"
+            />
             <div className="flex flex-wrap gap-2">
               {FEATURE_REGISTRY.map(f => (
                 <button

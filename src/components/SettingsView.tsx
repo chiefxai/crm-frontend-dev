@@ -26,6 +26,7 @@ import { VirtualNumber, TeamMember, OrganizationSettings, UserRole } from '../ty
 import { COST_PER_MINUTE_INR_FALLBACK, formatInr } from '../lib/pricing';
 import FeatureFlagsPanel from '../features/feature-flags/FeatureFlagsPanel';
 import { FEATURE_REGISTRY } from '../features/feature-flags/registry';
+import FlagGroupPicker from './ui/FlagGroupPicker';
 import PageShell from './ui/PageShell';
 import Widget from './ui/Widget';
 import Modal from './ui/Modal';
@@ -821,6 +822,10 @@ export default function SettingsView({
                                 <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
                                   Feature Access — {member.name}
                                 </p>
+                                <FlagGroupPicker
+                                  availableKeys={orgAllowedFlags}
+                                  onApply={(keys) => setEditFlagsValue(keys)}
+                                />
                                 <div className="flex flex-wrap gap-2">
                                   {FEATURE_REGISTRY.filter(f => orgAllowedFlags.includes(f.key)).map((flag) => {
                                     const active = editFlagsValue.includes(flag.key);
@@ -913,6 +918,11 @@ export default function SettingsView({
                           {orgAllowedFlags.length === 0 && (
                             <p className="text-[10px] text-slate-400 mb-2">No features available — super admin has not granted any features to this org.</p>
                           )}
+                          <FlagGroupPicker
+                            availableKeys={orgAllowedFlags}
+                            onApply={(keys) => setNewStaffFeatures(keys)}
+                            className="mb-3"
+                          />
                           <div className="flex flex-wrap gap-2">
                             {FEATURE_REGISTRY.filter(f => orgAllowedFlags.includes(f.key)).map((flag) => {
                               const active = newStaffFeatures.includes(flag.key);

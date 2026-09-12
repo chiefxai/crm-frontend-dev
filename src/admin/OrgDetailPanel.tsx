@@ -6,6 +6,7 @@ import { callCostInr, formatInr } from '../lib/pricing';
 import SlideOver from '../components/ui/SlideOver';
 import Modal from '../components/ui/Modal';
 import { FEATURE_REGISTRY } from '../features/feature-flags/registry';
+import FlagGroupPicker from '../components/ui/FlagGroupPicker';
 
 export default function OrgDetailPanel({ orgId, onClose, onChanged }: { orgId: string; onClose: () => void; onChanged: () => void }) {
   const [detail, setDetail] = useState<OrgDetail | null>(null);
@@ -77,6 +78,25 @@ export default function OrgDetailPanel({ orgId, onClose, onChanged }: { orgId: s
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ featureFlags: updated }),
+      });
+    } catch {
+      setEnabledFlags(prev);
+    } finally {
+      setFlagsBusy(false);
+    }
+  };
+
+  // Applies a flag group as a full replacement of this org's granted flags
+  // — same persist-with-revert pattern as toggleFlag, just for the whole set.
+  const applyFlagGroup = async (keys: string[]) => {
+    const prev = enabledFlags;
+    setEnabledFlags(keys);
+    setFlagsBusy(true);
+    try {
+      await apiFetch(`/api/platform/organizations/${orgId}/features`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ featureFlags: keys }),
       });
     } catch {
       setEnabledFlags(prev);
@@ -409,6 +429,11 @@ export default function OrgDetailPanel({ orgId, onClose, onChanged }: { orgId: s
                   {flagsBusy && <Loader2 className="h-3 w-3 animate-spin ml-1 text-slate-400" />}
                 </h4>
                 <p className="text-[10px] text-slate-400 mb-3">Toggle which app modules this org can access. Org admins can further distribute enabled features to their team.</p>
+                <FlagGroupPicker
+                  availableKeys={FEATURE_REGISTRY.map((f) => f.key)}
+                  onApply={applyFlagGroup}
+                  className="mb-3"
+                />
                 <div className="space-y-2">
                   {FEATURE_REGISTRY.map((f) => {
                     const on = enabledFlags.includes(f.key);
