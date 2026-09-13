@@ -42,7 +42,7 @@ import KpiCard from './ui/KpiCard';
 import SearchInput from './ui/SearchInput';
 import Button from './ui/Button';
 import EmptyState from './ui/EmptyState';
-import { apiFetch, getAuthToken, getApiBase, getPlayableRecordingUrl } from '../lib/api';
+import { apiFetch, getPlayableRecordingUrl } from '../lib/api';
 import { callCostInr, formatInr } from '../lib/pricing';
 
 interface WizardAgent {
@@ -958,73 +958,50 @@ Currently on question ${nextIndex} out of ${selectedTask.questions.length}. Next
   // end_call, or the callee hanging up) — without this, `callState` only
   // ever flipped to 'completed' from a manual "Hang Up" button click, so
   // Continuous Dialer Mode would sit stuck on 'connected' forever for any
-  // call the AI ended on its own, never advancing to the next lead. The
-  // backend already broadcasts a real "call_completed" event once the call
-  // is actually logged (services/vobizProxy.js / twilioProxy.js,
-  // regardless of who hung up) — this just listens for it and matches it
-  // to the lead currently on the line.
+  // call the AI ended on its own, never advancing to the next lead.
   //
-  // This connection is opened ONCE for the whole session rather than being
-  // torn down and reopened every time callState/activeLead changed (the
-  // previous approach) — that reopen-per-call pattern raced a fast-ending
-  // call (voicemail/AMD auto-hangup, "no answer", or any quick hangup)
-  // against the connection actually being open again: EventSource does not
-  // replay missed messages, so if the backend's call_completed event fired
-  // during that brief reconnect window, it was lost forever. callState
-  // would then stay stuck on 'connected' for that lead, and since both
-  // auto-dial-advance effects below require callState === 'completed',
-  // Continuous Dialer Mode would never turn itself off — exactly the
-  // "process never terminates, user has to stop it manually" symptom.
-  // Reading activeLead/callState from refs (instead of the effect's own
-  // closure) lets the connection stay open across every call in the task.
-  const activeLeadRef = useRef(activeLead);
-  useEffect(() => { activeLeadRef.current = activeLead; }, [activeLead]);
-  const callStateRef = useRef(callState);
-  useEffect(() => { callStateRef.current = callState; }, [callState]);
-  // handleHangupCall closes over `tasks`/`extractedAnswers`/etc. and is
-  // redefined every render — a ref kept current on every render (no dep
-  // array) lets the mount-once effect below always call the LATEST version
-  // instead of a stale one frozen at mount time, which would otherwise
-  // compute its task update from a stale `tasks` snapshot and clobber any
-  // other calls' results saved since.
-  const handleHangupCallRef = useRef(handleHangupCall);
-  useEffect(() => { handleHangupCallRef.current = handleHangupCall; });
-
+  // IMPORTANT: this does NOT open its own SSE connection. App.tsx already
+  // maintains the one authenticated EventSource to /api/logs-stream for the
+  // whole app session and folds every "call_completed" event straight into
+  // the shared `callLogs` prop. An earlier version of this effect opened a
+  // second EventSource to that same endpoint here — torn down and reopened
+  // on every callState change, which raced a fast-ending call (voicemail/
+  // AMD auto-hangup, "no answer") against the connection being open again
+  // and could silently lose that event (EventSource never replays missed
+  // messages), leaving callState stuck on 'connected' forever. Making that
+  // connection permanent instead (opened once, closed never) fixed the
+  // race but meant TWO permanent connections to the same endpoint for the
+  // lifetime of the tab — on HTTP/1.1 that can exhaust the browser's
+  // ~6-connections-per-origin limit and starve unrelated requests (like
+  // the data fetch for whatever page you navigate to next), which is
+  // exactly why sidebar navigation stopped responding until a full reload
+  // freed up connections. Watching the already-shared `callLogs` array
+  // avoids a second connection altogether and can't miss events, since
+  // App.tsx's listener is the single point that receives and records them.
+  const processedCallLogIdRef = useRef<string | null>(null);
   useEffect(() => {
-    const token = getAuthToken();
-    if (!token) return;
-
+    if (callState !== 'connected' || !activeLead) return;
+    const latest = callLogs[0];
+    if (!latest || latest.direction !== 'outbound') return;
+    if (processedCallLogIdRef.current === latest.id) return;
     const sanitize = (n: string) => (n || '').replace(/[\s\-\(\)\+]+/g, '');
-
-    const source = new EventSource(`${getApiBase()}/api/logs-stream?token=${encodeURIComponent(token)}`);
-    source.onmessage = (event) => {
-      try {
-        const data = JSON.parse(event.data);
-        if (data.type !== 'call_completed' || !data.callLog) return;
-        const lead = activeLeadRef.current;
-        if (!lead || callStateRef.current === 'completed') return;
-        const log = data.callLog;
-        if (log.direction !== 'outbound') return;
-        // Match on callerNumber (E.164 phone stored separately from display name)
-        // falling back to leadName for older logs that predate the callerNumber column.
-        const logPhone = sanitize(log.callerNumber || log.leadName || '');
-        if (logPhone !== sanitize(lead.phone)) return;
-        handleHangupCallRef.current({
-          recordingUrl: log.recordingUrl,
-          duration: log.duration,
-          sentiment: log.sentiment,
-          summary: log.summary,
-          callId: log.id,
-          transcript: log.transcript,
-          answers: log.answers, // { label, question, answer }[] from lead_responses
-        });
-      } catch {
-        // non-JSON keepalive/init messages — ignore
-      }
-    };
-    return () => source.close();
+    const logPhone = sanitize(latest.callerNumber || latest.leadName || '');
+    if (logPhone !== sanitize(activeLead.phone)) return;
+    processedCallLogIdRef.current = latest.id;
+    handleHangupCall({
+      recordingUrl: latest.recordingUrl,
+      duration: latest.duration,
+      sentiment: latest.sentiment,
+      summary: latest.summary,
+      callId: latest.id,
+      transcript: latest.transcript,
+      // Backend broadcasts this as { label, question, answer }[]; the
+      // shared CallLog type declares `answers` as a plain string map for
+      // other (non-workflow) callers of that type, so it's re-asserted here.
+      answers: latest.answers as unknown as { label?: string; question: string; answer: string }[] | undefined,
+    });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [callLogs, callState, activeLead]);
 
   // Continuous auto-dial: once a call finishes, if autoDialOn is set, move
   // to the next pending lead and place the call immediately — no manual
