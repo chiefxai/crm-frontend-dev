@@ -19,6 +19,8 @@ interface DataTableProps<T> {
   className?: string;
   /** Render inside an existing Card (no outer border/rounding) */
   bare?: boolean;
+  /** Extra classes applied to a specific row's <tr> (e.g. highlighting a call in progress) */
+  rowClassName?: (row: T, index: number) => string;
 }
 
 export default function DataTable<T>({
@@ -30,6 +32,7 @@ export default function DataTable<T>({
   onRowClick,
   className = '',
   bare = false,
+  rowClassName,
 }: DataTableProps<T>) {
   // bare=true: no card chrome, no overflow wrapper (caller's scroll container handles it)
   const wrapper = bare
@@ -70,7 +73,7 @@ export default function DataTable<T>({
                 <tr
                   key={rowKey(row)}
                   onClick={onRowClick ? () => onRowClick(row) : undefined}
-                  className={`border-b border-slate-50 dark:border-[var(--border-subtle)] last:border-0 transition-colors duration-100 ${onRowClick ? 'cursor-pointer hover:bg-slate-50 dark:hover:bg-[var(--bg-subtle)]' : ''}`}
+                  className={`border-b border-slate-50 dark:border-[var(--border-subtle)] last:border-0 transition-colors duration-100 ${onRowClick ? 'cursor-pointer hover:bg-slate-50 dark:hover:bg-[var(--bg-subtle)]' : ''} ${rowClassName ? rowClassName(row, i) : ''}`}
                 >
                   {columns.map(col => (
                     <td

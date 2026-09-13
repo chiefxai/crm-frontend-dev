@@ -42,6 +42,7 @@ import KpiCard from './ui/KpiCard';
 import SearchInput from './ui/SearchInput';
 import Button from './ui/Button';
 import EmptyState from './ui/EmptyState';
+import DataTable, { Column } from './ui/DataTable';
 import { apiFetch, getPlayableRecordingUrl } from '../lib/api';
 import { callCostInr, formatInr } from '../lib/pricing';
 
@@ -1388,87 +1389,89 @@ Currently on question ${nextIndex} out of ${selectedTask.questions.length}. Next
 
       {dialerMode === 'outbound' ? (
         <>
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-        {/* Left Column: Today's Assigned Tasks list - Bento Card */}
-        <div className="lg:col-span-4 bg-[var(--bg-surface)] p-6 rounded-2xl border border-[var(--border)] shadow-sm space-y-4">
-          <div className="flex items-center justify-between border-b border-[var(--border)] pb-3">
-            <h4 className="text-xs font-bold text-[var(--text-muted)] uppercase tracking-widest flex items-center">
-              <FileSpreadsheet className="h-4.5 w-4.5 mr-1.5 text-blue-600" /> Today's Assigned lists
-            </h4>
+          <div className="grid grid-cols-12 gap-6">
+        {/* Left Column: Today's Assigned Tasks list */}
+        <Widget
+          colSpan={4}
+          title="Today's Assigned lists"
+          icon={FileSpreadsheet}
+          action={
             <span className="text-[10px] font-mono text-blue-600 bg-blue-50 font-bold px-2 py-0.5 rounded-full">
               {tasks.length} Active
             </span>
-          </div>
+          }
+        >
+          <div className="space-y-4">
+            <p className="text-xs text-[var(--text-muted)]">Select an active call-list scheduled for today to monitor agent progress.</p>
 
-          <p className="text-xs text-[var(--text-muted)]">Select an active call-list scheduled for today to monitor agent progress.</p>
+            <div className="space-y-3 max-h-[300px] overflow-y-auto pr-1">
+              {tasks.map((task) => {
+                const isActive = task.id === selectedTaskId;
+                const completed = Object.keys(task.callResults).map(k => task.callResults[k]).filter((r) => r.status === 'Completed').length;
+                const total = task.leadIds.length;
+                const percent = total > 0 ? Math.round((completed / total) * 100) : 0;
 
-          <div className="space-y-3 max-h-[300px] overflow-y-auto pr-1">
-            {tasks.map((task) => {
-              const isActive = task.id === selectedTaskId;
-              const completed = Object.keys(task.callResults).map(k => task.callResults[k]).filter((r) => r.status === 'Completed').length;
-              const total = task.leadIds.length;
-              const percent = total > 0 ? Math.round((completed / total) * 100) : 0;
-
-              return (
-                <button
-                  key={task.id}
-                  onClick={() => {
-                    setSelectedTaskId(task.id);
-                    setPlayingTapeId(null);
-                    setIsTapePlaying(false);
-                  }}
-                  className={`w-full p-4 rounded-xl text-left border transition-all flex flex-col space-y-2.5 ${
-                    isActive
-                      ? 'border-blue-600 bg-blue-50/25 shadow-sm'
-                      : 'border-[var(--border)] hover:bg-[var(--bg-subtle)]'
-                  }`}
-                >
-                  <div className="flex justify-between items-start w-full gap-2">
-                    <span className="text-xs font-bold text-[var(--text-primary)] line-clamp-1 flex-1">{task.name}</span>
-                    <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded shrink-0 ${
-                      task.status === 'Completed'
-                        ? 'bg-emerald-50 text-emerald-700'
-                        : task.status === 'In Progress'
-                        ? 'bg-blue-50 text-blue-700 animate-pulse'
-                        : 'bg-[var(--bg-subtle)] text-[var(--text-secondary)]'
-                    }`}>
-                      {task.status}
-                    </span>
-                  </div>
-
-                  <div className="w-full space-y-1">
-                    <div className="flex justify-between text-[10px] text-[var(--text-muted)]">
-                      <span>Questions: {task.questions.length}</span>
-                      <span>{completed}/{total} Dialed</span>
+                return (
+                  <button
+                    key={task.id}
+                    onClick={() => {
+                      setSelectedTaskId(task.id);
+                      setPlayingTapeId(null);
+                      setIsTapePlaying(false);
+                    }}
+                    className={`w-full p-4 rounded-xl text-left border transition-all flex flex-col space-y-2.5 cursor-pointer ${
+                      isActive
+                        ? 'border-blue-600 bg-blue-50/25 shadow-sm'
+                        : 'border-[var(--border)] hover:bg-[var(--bg-subtle)]'
+                    }`}
+                  >
+                    <div className="flex justify-between items-start w-full gap-2">
+                      <span className="text-xs font-bold text-[var(--text-primary)] line-clamp-1 flex-1">{task.name}</span>
+                      <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded shrink-0 ${
+                        task.status === 'Completed'
+                          ? 'bg-emerald-50 text-emerald-700'
+                          : task.status === 'In Progress'
+                          ? 'bg-blue-50 text-blue-700 animate-pulse'
+                          : 'bg-[var(--bg-subtle)] text-[var(--text-secondary)]'
+                      }`}>
+                        {task.status}
+                      </span>
                     </div>
-                    <div className="w-full bg-[var(--bg-subtle)] rounded-full h-1">
-                      <div className="bg-blue-600 h-1 rounded-full transition-all" style={{ width: `${percent}%` }}></div>
-                    </div>
-                  </div>
-                </button>
-              );
-            })}
-          </div>
 
-          {/* Quick Stats Bento widget */}
-          <div className="theme-panel rounded-xl p-4 space-y-2 relative overflow-hidden border">
-            <div className="absolute -right-8 -bottom-8 w-24 h-24 bg-blue-500/10 rounded-full blur-xl"></div>
-            <div className="relative z-10 space-y-1">
-              <span className={`text-[9px] font-mono uppercase tracking-wider font-bold ${autoDialOn ? 'text-emerald-500' : ''}`} style={!autoDialOn ? {color:'var(--panel-muted)'} : {}}>
-                Calling Telemetry {autoDialOn && '· LIVE'}
-              </span>
-              <p className="text-lg font-bold" style={{color:'var(--panel-text)'}}>Continuous Dialer Mode: {autoDialOn ? 'ON' : 'OFF'}</p>
-              <p className="text-[10px] leading-normal" style={{color:'var(--panel-muted)'}}>
-                {autoDialOn
-                  ? 'Auto-dialing every pending lead in the active list, one after another — hit "Stop Auto-Dial" to pause after the current call.'
-                  : 'AI parses voice audio stream, converts caller speech to text in real-time, matching questionnaire patterns instantly. Click "Auto-Dial Next List Target" to work through the whole list without clicking Dial per lead.'}
-              </p>
+                    <div className="w-full space-y-1">
+                      <div className="flex justify-between text-[10px] text-[var(--text-muted)]">
+                        <span>Questions: {task.questions.length}</span>
+                        <span>{completed}/{total} Dialed</span>
+                      </div>
+                      <div className="w-full bg-[var(--bg-subtle)] rounded-full h-1">
+                        <div className="bg-blue-600 h-1 rounded-full transition-all" style={{ width: `${percent}%` }}></div>
+                      </div>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Quick Stats Bento widget */}
+            <div className="theme-panel rounded-xl p-4 space-y-2 relative overflow-hidden border">
+              <div className="absolute -right-8 -bottom-8 w-24 h-24 bg-blue-500/10 rounded-full blur-xl"></div>
+              <div className="relative z-10 space-y-1">
+                <span className={`text-[9px] font-mono uppercase tracking-wider font-bold ${autoDialOn ? 'text-emerald-500' : ''}`} style={!autoDialOn ? {color:'var(--panel-muted)'} : {}}>
+                  Calling Telemetry {autoDialOn && '· LIVE'}
+                </span>
+                <p className="text-lg font-bold" style={{color:'var(--panel-text)'}}>Continuous Dialer Mode: {autoDialOn ? 'ON' : 'OFF'}</p>
+                <p className="text-[10px] leading-normal" style={{color:'var(--panel-muted)'}}>
+                  {autoDialOn
+                    ? 'Auto-dialing every pending lead in the active list, one after another — hit "Stop Auto-Dial" to pause after the current call.'
+                    : 'AI parses voice audio stream, converts caller speech to text in real-time, matching questionnaire patterns instantly. Click "Auto-Dial Next List Target" to work through the whole list without clicking Dial per lead.'}
+                </p>
+              </div>
             </div>
           </div>
-        </div>
+        </Widget>
 
-        {/* Center Main Column: Selected Task Queue Workspace - Bento Card */}
-        <div className="lg:col-span-8 bg-[var(--bg-surface)] p-6 rounded-2xl border border-[var(--border)] shadow-sm flex flex-col justify-between space-y-6">
+        {/* Center Main Column: Selected Task Queue Workspace */}
+        <Widget colSpan={8} showHeader={false}>
           {!selectedTask ? (
             <EmptyState
               icon={FileSpreadsheet}
@@ -1489,20 +1492,16 @@ Currently on question ${nextIndex} out of ${selectedTask.questions.length}. Next
                 <p className="text-xs text-[var(--text-muted)] mt-1">Checklist questions to ask: <span className="font-semibold text-[var(--text-secondary)]">{selectedTask.questions.length} questions sequential</span></p>
               </div>
 
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => setAutoDialOn((v) => !v)}
-                  disabled={dialableNumbers.length === 0}
-                  className={`flex items-center px-4 py-2 disabled:opacity-50 text-xs font-bold rounded-xl shadow-sm transition-all cursor-pointer ${
-                    autoDialOn ? 'bg-rose-600 hover:bg-rose-500 text-white' : ''
-                  }`}
-                  style={!autoDialOn ? {background:'var(--panel-surface)',color:'var(--panel-text)',border:'1px solid var(--panel-border)'} : {}}
-                  title={autoDialOn ? 'Stops after the current call finishes' : 'Dials the next pending lead now, then keeps going through the rest of the list automatically'}
-                >
-                  <PhoneCall className={`h-3.5 w-3.5 mr-1.5 ${autoDialOn ? '' : 'text-emerald-400'}`} />
-                  {autoDialOn ? 'Stop Auto-Dial' : 'Auto-Dial Next List Target'}
-                </button>
-              </div>
+              <Button
+                variant={autoDialOn ? 'danger' : 'secondary'}
+                size="sm"
+                icon={PhoneCall}
+                onClick={() => setAutoDialOn((v) => !v)}
+                disabled={dialableNumbers.length === 0}
+                title={autoDialOn ? 'Stops after the current call finishes' : 'Dials the next pending lead now, then keeps going through the rest of the list automatically'}
+              >
+                {autoDialOn ? 'Stop Auto-Dial' : 'Auto-Dial Next List Target'}
+              </Button>
             </div>
 
             {/* Micro bento statistics metrics */}
@@ -1514,148 +1513,159 @@ Currently on question ${nextIndex} out of ${selectedTask.questions.length}. Next
             </div>
 
             {/* List Queue Table */}
-            <div className="border border-[var(--border)] rounded-xl overflow-hidden">
-              <table className="w-full text-left text-xs">
-                <thead>
-                  <tr className="bg-[var(--bg-subtle)] border-b border-[var(--border)] text-[var(--text-muted)]">
-                    <th className="px-4 py-2.5 font-semibold">Lead Contact</th>
-                    <th className="px-4 py-2.5 font-semibold">Value</th>
-                    <th className="px-4 py-2.5 font-semibold">Survey Status</th>
-                    <th className="px-4 py-2.5 font-semibold">AI Sentiment</th>
-                    <th className="px-4 py-2.5 text-right font-semibold">Survey Outcome</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {selectedTask.leadIds.map((leadId) => {
-                    const lead = leadsDatabase.find((l) => l.id === leadId);
-                    if (!lead) return null;
+            {(() => {
+              type QueueRow = { leadId: string; lead: Lead };
+              const queueRows: QueueRow[] = selectedTask.leadIds
+                .map((leadId) => ({ leadId, lead: leadsDatabase.find((l) => l.id === leadId) }))
+                .filter((r): r is QueueRow => !!r.lead);
 
-                    const result = selectedTask.callResults[leadId];
-                    const isCallingActive = activeLead?.id === leadId && (callState === 'dialing' || callState === 'connected');
-
+              const columns: Column<QueueRow>[] = [
+                {
+                  key: 'contact',
+                  header: 'Lead Contact',
+                  cell: (row) => (
+                    <div className="space-y-0.5">
+                      <p className="font-bold text-[var(--text-primary)]">{row.lead.name}</p>
+                      <p className="text-[10px] text-[var(--text-muted)] font-mono">{row.lead.phone}</p>
+                    </div>
+                  ),
+                },
+                {
+                  key: 'value',
+                  header: 'Value',
+                  cell: (row) => (
+                    <span className="font-medium" style={{ color: 'var(--text-secondary)' }}>
+                      {row.lead.amountRequested ? `$${row.lead.amountRequested.toLocaleString()}` : '—'}
+                    </span>
+                  ),
+                },
+                {
+                  key: 'surveyStatus',
+                  header: 'Survey Status',
+                  cell: (row) => {
+                    const result = selectedTask.callResults[row.leadId];
+                    const isCallingActive = activeLead?.id === row.leadId && (callState === 'dialing' || callState === 'connected');
                     return (
-                      <tr key={leadId} className={`hover:bg-[var(--bg-subtle)]/50 transition-colors ${isCallingActive ? 'bg-blue-50/30' : ''}`}>
-                        <td className="px-4 py-3">
-                          <div className="space-y-0.5">
-                            <p className="font-bold text-[var(--text-primary)]">{lead.name}</p>
-                            <p className="text-[10px] text-[var(--text-muted)] font-mono">{lead.phone}</p>
-                          </div>
-                        </td>
-                        <td className="px-4 py-3 font-medium" style={{ color: 'var(--text-secondary)' }}>
-                          {lead.amountRequested ? `$${lead.amountRequested.toLocaleString()}` : '—'}
-                        </td>
-                        <td className="px-4 py-3">
-                          {isCallingActive ? (
-                            <span className="inline-flex items-center gap-1 text-[10px] font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded-md animate-pulse border border-blue-100">
-                              <span className="w-1.5 h-1.5 bg-red-500 rounded-full animate-ping"></span>
-                              Call Active
-                            </span>
-                          ) : result ? (
-                            <span className={`inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-md ${
-                              result.status === 'Completed'
-                                ? 'bg-emerald-50 text-emerald-700 border border-emerald-100'
-                                : result.status === 'Skipped'
-                                ? 'bg-[var(--bg-subtle)] text-slate-600'
-                                : 'bg-[var(--bg-subtle)] text-[var(--text-secondary)]'
-                            }`}>
-                              {result.status}
-                            </span>
-                          ) : (
-                            <span className="inline-flex items-center gap-1 text-[10px] font-medium text-[var(--text-muted)] bg-[var(--bg-subtle)] px-2 py-0.5 rounded-md">
-                              Pending Dial
-                            </span>
-                          )}
-                          {(() => {
-                            const retry = retryStatuses[normalizePhone(lead.phone)];
-                            if (!retry || isCallingActive) return null;
-                            if (retry.retryStatus === 'exhausted') {
-                              return (
-                                <p className="text-[9px] text-[var(--text-muted)] mt-1">
-                                  Auto-redial gave up after {retry.attemptNumber}/3 attempts
-                                </p>
-                              );
-                            }
-                            if (retry.retryStatus === 'pending' && retry.nextRetryAt) {
-                              const mins = Math.max(0, Math.round((new Date(retry.nextRetryAt).getTime() - Date.now()) / 60000));
-                              const label = mins >= 60 ? `${Math.floor(mins / 60)}h ${mins % 60}m` : `${mins}m`;
-                              return (
-                                <p className="text-[9px] text-blue-500 mt-1">
-                                  Auto-redial {retry.attemptNumber}/3 · next in {label}
-                                </p>
-                              );
-                            }
-                            if (retry.retryStatus === 'retrying') {
-                              return <p className="text-[9px] text-blue-500 mt-1 animate-pulse">Auto-redialing…</p>;
-                            }
-                            return null;
-                          })()}
-                        </td>
-                        <td className="px-4 py-3">
-                          {result?.sentiment ? (
-                            <span className={`text-[10px] font-semibold ${
-                              result.sentiment === 'Positive'
-                                ? 'text-emerald-600'
-                                : result.sentiment === 'Negative'
-                                ? 'text-rose-600'
-                                : 'text-[var(--text-muted)]'
-                            }`}>
-                              {result.sentiment}
-                            </span>
-                          ) : (
-                            <span className="text-[10px] text-[var(--text-muted)]">—</span>
-                          )}
-                        </td>
-                        <td className="px-4 py-3 text-right">
-                          <div className="flex items-center justify-end space-x-1.5">
-                            {!result ? (
-                              <>
-                                <button
-                                  onClick={() => handleSkipLead(leadId)}
-                                  disabled={callState === 'dialing' || callState === 'connected'}
-                                  className="text-[10px] font-semibold text-[var(--text-muted)] hover:text-slate-600 px-2 py-1 rounded hover:bg-[var(--bg-subtle)] cursor-pointer"
-                                >
-                                  Skip
-                                </button>
-                                <button
-                                  onClick={() => {
-                                    setActiveLead(lead);
-                                    setCallState('idle');
-                                  }}
-                                  disabled={callState === 'dialing' || callState === 'connected'}
-                                  className="text-[10px] font-bold text-blue-600 hover:text-white hover:bg-blue-600 border border-blue-200 hover:border-blue-600 px-2.5 py-1 rounded-lg transition-all cursor-pointer flex items-center gap-1"
-                                >
-                                  <PhoneCall className="h-3 w-3" /> Dial
-                                </button>
-                              </>
-                            ) : result.status === 'Completed' ? (
-                              <button
-                                onClick={() => handleOpenTapePlayer(leadId)}
-                                className="text-[10px] font-bold text-[var(--text-secondary)] bg-[var(--bg-subtle)] hover:bg-[var(--bg-subtle)] px-2.5 py-1 rounded-lg transition-all flex items-center gap-1 cursor-pointer"
-                              >
-                                <Headphones className="h-3.5 w-3.5 text-blue-600" /> Play Recording
-                              </button>
-                            ) : (
-                              <button
-                                onClick={() => {
-                                  setActiveLead(lead);
-                                  setCallState('idle');
-                                }}
-                                className="text-[10px] font-medium text-blue-600 hover:underline cursor-pointer"
-                              >
-                                Redial
-                              </button>
-                            )}
-                          </div>
-                        </td>
-                      </tr>
+                      <>
+                        {isCallingActive ? (
+                          <span className="inline-flex items-center gap-1 text-[10px] font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded-md animate-pulse border border-blue-100">
+                            <span className="w-1.5 h-1.5 bg-red-500 rounded-full animate-ping"></span>
+                            Call Active
+                          </span>
+                        ) : result ? (
+                          <span className={`inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-md ${
+                            result.status === 'Completed'
+                              ? 'bg-emerald-50 text-emerald-700 border border-emerald-100'
+                              : result.status === 'Skipped'
+                              ? 'bg-[var(--bg-subtle)] text-slate-600'
+                              : 'bg-[var(--bg-subtle)] text-[var(--text-secondary)]'
+                          }`}>
+                            {result.status}
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 text-[10px] font-medium text-[var(--text-muted)] bg-[var(--bg-subtle)] px-2 py-0.5 rounded-md">
+                            Pending Dial
+                          </span>
+                        )}
+                        {(() => {
+                          const retry = retryStatuses[normalizePhone(row.lead.phone)];
+                          if (!retry || isCallingActive) return null;
+                          if (retry.retryStatus === 'exhausted') {
+                            return (
+                              <p className="text-[9px] text-[var(--text-muted)] mt-1">
+                                Auto-redial gave up after {retry.attemptNumber}/3 attempts
+                              </p>
+                            );
+                          }
+                          if (retry.retryStatus === 'pending' && retry.nextRetryAt) {
+                            const mins = Math.max(0, Math.round((new Date(retry.nextRetryAt).getTime() - Date.now()) / 60000));
+                            const label = mins >= 60 ? `${Math.floor(mins / 60)}h ${mins % 60}m` : `${mins}m`;
+                            return (
+                              <p className="text-[9px] text-blue-500 mt-1">
+                                Auto-redial {retry.attemptNumber}/3 · next in {label}
+                              </p>
+                            );
+                          }
+                          if (retry.retryStatus === 'retrying') {
+                            return <p className="text-[9px] text-blue-500 mt-1 animate-pulse">Auto-redialing…</p>;
+                          }
+                          return null;
+                        })()}
+                      </>
                     );
-                  })}
-                </tbody>
-              </table>
-            </div>
+                  },
+                },
+                {
+                  key: 'sentiment',
+                  header: 'AI Sentiment',
+                  cell: (row) => {
+                    const result = selectedTask.callResults[row.leadId];
+                    return result?.sentiment ? (
+                      <span className={`text-[10px] font-semibold ${
+                        result.sentiment === 'Positive'
+                          ? 'text-emerald-600'
+                          : result.sentiment === 'Negative'
+                          ? 'text-rose-600'
+                          : 'text-[var(--text-muted)]'
+                      }`}>
+                        {result.sentiment}
+                      </span>
+                    ) : (
+                      <span className="text-[10px] text-[var(--text-muted)]">—</span>
+                    );
+                  },
+                },
+                {
+                  key: 'outcome',
+                  header: 'Survey Outcome',
+                  align: 'right',
+                  cell: (row) => {
+                    const result = selectedTask.callResults[row.leadId];
+                    const dialing = callState === 'dialing' || callState === 'connected';
+                    return (
+                      <div className="flex items-center justify-end gap-1.5">
+                        {!result ? (
+                          <>
+                            <Button variant="ghost" size="xs" onClick={() => handleSkipLead(row.leadId)} disabled={dialing}>
+                              Skip
+                            </Button>
+                            <Button
+                              variant="primary"
+                              size="xs"
+                              icon={PhoneCall}
+                              disabled={dialing}
+                              onClick={() => { setActiveLead(row.lead); setCallState('idle'); }}
+                            >
+                              Dial
+                            </Button>
+                          </>
+                        ) : result.status === 'Completed' ? (
+                          <Button variant="secondary" size="xs" icon={Headphones} onClick={() => handleOpenTapePlayer(row.leadId)}>
+                            Play Recording
+                          </Button>
+                        ) : (
+                          <Button variant="ghost" size="xs" onClick={() => { setActiveLead(row.lead); setCallState('idle'); }}>
+                            Redial
+                          </Button>
+                        )}
+                      </div>
+                    );
+                  },
+                },
+              ];
+
+              return (
+                <DataTable
+                  columns={columns}
+                  rows={queueRows}
+                  rowKey={(r) => r.leadId}
+                  rowClassName={(r) => (activeLead?.id === r.leadId && (callState === 'dialing' || callState === 'connected') ? 'bg-blue-50/30' : '')}
+                />
+              );
+            })()}
           </div>
           )}
-        </div>
+        </Widget>
       </div>
 
       {/* Two columns workspace: Live Active Telephone Screen AND Call Cassette Tape Transcript History Player */}
@@ -1906,19 +1916,18 @@ Currently on question ${nextIndex} out of ${selectedTask.questions.length}. Next
         </>
       ) : (
         /* REAL INBOUND CALL HISTORY */
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+        <div className="grid grid-cols-12 gap-6">
           {/* LEFT COLUMN: Active Inbound Virtual Numbers */}
-          <div className="lg:col-span-4 space-y-6">
-            <div className="bg-[var(--bg-surface)] p-6 rounded-2xl border border-[var(--border)] shadow-sm space-y-4">
-              <div className="flex items-center justify-between border-b border-[var(--border)] pb-3">
-                <h4 className="text-xs font-bold text-[var(--text-muted)] uppercase tracking-widest flex items-center gap-1.5">
-                  <PhoneForwarded className="h-4.5 w-4.5 text-blue-600 animate-pulse" /> Active Inbound Numbers
-                </h4>
+          <div className="col-span-12 lg:col-span-4 space-y-6">
+            <Widget
+              title="Active Inbound Numbers"
+              icon={PhoneForwarded}
+              action={
                 <span className="text-[10px] font-mono text-blue-600 bg-blue-50 font-bold px-2 py-0.5 rounded-full">
                   {activeVirtualNumbers.length} Online
                 </span>
-              </div>
-
+              }
+            >
               <div className="space-y-3.5">
                 {activeVirtualNumbers.map((vNum) => (
                   <div
@@ -1946,7 +1955,7 @@ Currently on question ${nextIndex} out of ${selectedTask.questions.length}. Next
                   </div>
                 )}
               </div>
-            </div>
+            </Widget>
 
             <div className="theme-panel p-4 rounded-2xl border relative overflow-hidden shrink-0">
               <div className="absolute right-0 bottom-0 w-32 h-32 bg-blue-500/10 rounded-full blur-2xl"></div>
@@ -1960,31 +1969,28 @@ Currently on question ${nextIndex} out of ${selectedTask.questions.length}. Next
           </div>
 
           {/* RIGHT COLUMN: Real Inbound Call History */}
-          <div className="lg:col-span-8 flex flex-col h-full space-y-6">
-            <div className="bg-[var(--bg-surface)] p-6 rounded-2xl border border-[var(--border)] shadow-sm flex flex-col justify-between h-full min-h-[580px] space-y-6">
+          <div className="col-span-12 lg:col-span-8 flex flex-col h-full space-y-6">
+            <Widget showHeader={false} className="h-full min-h-[580px]" bodyClassName="flex flex-col justify-between h-full">
               <div className="space-y-4">
                 {/* Stats banner */}
                 <div className="grid grid-cols-3 gap-4 border-b border-[var(--border)] pb-5">
-                  <div className="p-3 bg-[var(--bg-subtle)] border border-[var(--border)]/50 rounded-xl space-y-1 text-center">
-                    <span className="text-[8px] font-mono text-[var(--text-muted)] uppercase tracking-widest block">Inbound Volume</span>
-                    <p className="text-xl font-bold text-[var(--text-primary)]">{realInboundCallLogs.length}</p>
-                  </div>
-                  <div className="p-3 bg-[var(--bg-subtle)] border border-[var(--border)]/50 rounded-xl space-y-1 text-center">
-                    <span className="text-[8px] font-mono text-[var(--text-muted)] uppercase tracking-widest block">Average Duration</span>
-                    <p className="text-xl font-bold text-[var(--text-primary)]">
-                      {realInboundCallLogs.length > 0
-                        ? Math.round(realInboundCallLogs.reduce((acc, l) => acc + l.duration, 0) / realInboundCallLogs.length)
-                        : 0}s
-                    </p>
-                  </div>
-                  <div className="p-3 bg-[var(--bg-subtle)] border border-[var(--border)]/50 rounded-xl space-y-1 text-center">
-                    <span className="text-[8px] font-mono text-[var(--text-muted)] uppercase tracking-widest block">Positive Rate</span>
-                    <p className="text-xl font-bold text-[var(--text-primary)]">
-                      {realInboundCallLogs.length > 0
-                        ? Math.round((realInboundCallLogs.filter(l => l.sentiment === 'Positive').length / realInboundCallLogs.length) * 100)
-                        : 0}%
-                    </p>
-                  </div>
+                  <KpiCard colSpan={1} label="Inbound Volume" value={realInboundCallLogs.length} className="!rounded-xl !min-h-0 !p-3.5" />
+                  <KpiCard
+                    colSpan={1}
+                    label="Average Duration"
+                    value={`${realInboundCallLogs.length > 0
+                      ? Math.round(realInboundCallLogs.reduce((acc, l) => acc + l.duration, 0) / realInboundCallLogs.length)
+                      : 0}s`}
+                    className="!rounded-xl !min-h-0 !p-3.5"
+                  />
+                  <KpiCard
+                    colSpan={1}
+                    label="Positive Rate"
+                    value={`${realInboundCallLogs.length > 0
+                      ? Math.round((realInboundCallLogs.filter(l => l.sentiment === 'Positive').length / realInboundCallLogs.length) * 100)
+                      : 0}%`}
+                    className="!rounded-xl !min-h-0 !p-3.5"
+                  />
                 </div>
 
                 <div className="flex items-center justify-between">
@@ -2030,14 +2036,9 @@ Currently on question ${nextIndex} out of ${selectedTask.questions.length}. Next
                         </div>
                       </div>
 
-                      {/* Tape playback button */}
-                      <button
-                        onClick={() => handleOpenTapePlayer(log.id, 'inbound')}
-                        className="px-3.5 py-2 bg-[var(--bg-surface)] hover:bg-blue-600 hover:text-white text-[var(--text-secondary)] border border-[var(--border)] hover:border-blue-600 rounded-xl text-xs font-bold shadow-sm cursor-pointer transition-all flex items-center gap-1 shrink-0"
-                      >
-                        <Play className="h-3.5 w-3.5 fill-current" />
+                      <Button variant="secondary" size="sm" icon={Play} onClick={() => handleOpenTapePlayer(log.id, 'inbound')} className="shrink-0">
                         Play Tape
-                      </button>
+                      </Button>
                     </div>
                   ))}
 
@@ -2061,7 +2062,7 @@ Currently on question ${nextIndex} out of ${selectedTask.questions.length}. Next
                   </p>
                 </div>
               </div>
-            </div>
+            </Widget>
           </div>
         </div>
       )}
@@ -2183,14 +2184,15 @@ Currently on question ${nextIndex} out of ${selectedTask.questions.length}. Next
                 )}
 
                 <div className="flex justify-end pt-2 border-t border-[var(--border)]">
-                  <button
-                    type="button"
+                  <Button
+                    variant="primary"
+                    size="sm"
                     disabled={!wizardWorkflowId}
                     onClick={() => setWizardStep(2)}
-                    className="flex items-center gap-1.5 px-5 py-2 text-xs font-bold text-white bg-blue-600 hover:bg-blue-500 disabled:opacity-40 disabled:cursor-not-allowed rounded-xl cursor-pointer transition-all"
+                    iconRight={ChevronRight}
                   >
-                    Next: Select Agent <ChevronRight className="h-3.5 w-3.5" />
-                  </button>
+                    Next: Select Agent
+                  </Button>
                 </div>
               </div>
             )}
@@ -2259,17 +2261,18 @@ Currently on question ${nextIndex} out of ${selectedTask.questions.length}. Next
                 )}
 
                 <div className="flex items-center justify-between pt-2 border-t border-[var(--border)]">
-                  <button type="button" onClick={() => setWizardStep(1)} className="flex items-center gap-1 px-4 py-2 text-xs font-semibold text-[var(--text-muted)] hover:text-[var(--text-secondary)] rounded-xl cursor-pointer">
-                    <ChevronLeft className="h-3.5 w-3.5" /> Back
-                  </button>
-                  <button
-                    type="button"
+                  <Button variant="ghost" size="sm" onClick={() => setWizardStep(1)} icon={ChevronLeft}>
+                    Back
+                  </Button>
+                  <Button
+                    variant="primary"
+                    size="sm"
                     disabled={!wizardAgentId}
                     onClick={() => setWizardStep(3)}
-                    className="flex items-center gap-1.5 px-5 py-2 text-xs font-bold text-white bg-blue-600 hover:bg-blue-500 disabled:opacity-40 disabled:cursor-not-allowed rounded-xl cursor-pointer transition-all"
+                    iconRight={ChevronRight}
                   >
-                    Next: Add Contacts <ChevronRight className="h-3.5 w-3.5" />
-                  </button>
+                    Next: Add Contacts
+                  </Button>
                 </div>
               </div>
             )}
@@ -2426,17 +2429,18 @@ Currently on question ${nextIndex} out of ${selectedTask.questions.length}. Next
                 )}
 
                 <div className="flex items-center justify-between pt-2 border-t border-[var(--border)]">
-                  <button type="button" onClick={() => setWizardStep(2)} className="flex items-center gap-1 px-4 py-2 text-xs font-semibold text-[var(--text-muted)] hover:text-[var(--text-secondary)] rounded-xl cursor-pointer">
-                    <ChevronLeft className="h-3.5 w-3.5" /> Back
-                  </button>
-                  <button
-                    type="button"
+                  <Button variant="ghost" size="sm" onClick={() => setWizardStep(2)} icon={ChevronLeft}>
+                    Back
+                  </Button>
+                  <Button
+                    variant="primary"
+                    size="sm"
                     disabled={totalContacts === 0}
                     onClick={() => setWizardStep(4)}
-                    className="flex items-center gap-1.5 px-5 py-2 text-xs font-bold text-white bg-blue-600 hover:bg-blue-500 disabled:opacity-40 disabled:cursor-not-allowed rounded-xl cursor-pointer transition-all"
+                    iconRight={ChevronRight}
                   >
-                    Review Task <ChevronRight className="h-3.5 w-3.5" />
-                  </button>
+                    Review Task
+                  </Button>
                 </div>
               </div>
             )}
@@ -2518,17 +2522,19 @@ Currently on question ${nextIndex} out of ${selectedTask.questions.length}. Next
                 </div>
 
                 <div className="flex items-center justify-between pt-2 border-t border-[var(--border)]">
-                  <button type="button" onClick={() => setWizardStep(3)} className="flex items-center gap-1 px-4 py-2 text-xs font-semibold text-[var(--text-muted)] hover:text-[var(--text-secondary)] rounded-xl cursor-pointer">
-                    <ChevronLeft className="h-3.5 w-3.5" /> Back
-                  </button>
-                  <button
-                    type="button"
+                  <Button variant="ghost" size="sm" onClick={() => setWizardStep(3)} icon={ChevronLeft}>
+                    Back
+                  </Button>
+                  <Button
+                    variant="primary"
+                    size="md"
                     onClick={handleCreateTask}
                     disabled={!wizardTaskTitle.trim()}
-                    className="flex items-center gap-1.5 px-6 py-2.5 text-xs font-bold text-white bg-blue-600 hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed rounded-xl cursor-pointer transition-all shadow-md"
+                    icon={PhoneCall}
+                    className="shadow-md"
                   >
-                    <PhoneCall className="h-3.5 w-3.5" /> Create & Load Dialing Task
-                  </button>
+                    Create & Load Dialing Task
+                  </Button>
                 </div>
               </div>
             )}
