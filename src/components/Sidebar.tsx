@@ -96,7 +96,15 @@ const INDUSTRY_TAGLINES: Record<string, string> = {
 // that component pinned to the sidebar's "always appears to the right"
 // requirement instead of every call site repeating side="right".
 function CollapsedTooltip({ label, children }: { label: string; children: React.ReactNode }) {
-  return <Tooltip label={label} side="right">{children}</Tooltip>;
+  // Tooltip's own wrapper defaults to inline-flex (shrink-to-fit). Nav
+  // buttons inside are `w-full justify-center` to center their icon —
+  // but "full width of the shrink-wrapped tooltip div" isn't the same as
+  // "full width of the nav column", so the button never actually got the
+  // width it needed to center against, and the icon sat squashed to one
+  // side instead of centered in the collapsed 64px rail. "w-full flex"
+  // here makes the tooltip wrapper itself take the nav's full width so
+  // the button's own centering has something real to center within.
+  return <Tooltip label={label} side="right" className="w-full flex">{children}</Tooltip>;
 }
 
 // ── Flyout panel (group items in collapsed mode) ──────────────────────────────

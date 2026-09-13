@@ -11,9 +11,17 @@ interface TooltipProps {
   label: string;
   side?: Side;
   children: React.ReactNode;
+  /**
+   * Extra classes on the wrapper div — defaults to a shrink-to-fit
+   * `inline-flex`. Pass e.g. "w-full flex" when wrapping something that
+   * needs to fill its parent's width (a `w-full` child otherwise resolves
+   * against this wrapper, not the actual layout column, and loses its
+   * intended width/centering — see Sidebar.tsx's collapsed nav buttons).
+   */
+  className?: string;
 }
 
-export default function Tooltip({ label, side = 'bottom', children }: TooltipProps) {
+export default function Tooltip({ label, side = 'bottom', children, className = 'relative inline-flex' }: TooltipProps) {
   const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
   const ref = useRef<HTMLDivElement>(null);
 
@@ -37,7 +45,7 @@ export default function Tooltip({ label, side = 'bottom', children }: TooltipPro
   };
 
   return (
-    <div ref={ref} className="relative inline-flex" onMouseEnter={handleEnter} onMouseLeave={() => setPos(null)}>
+    <div ref={ref} className={className} onMouseEnter={handleEnter} onMouseLeave={() => setPos(null)}>
       {children}
       {pos && (
         <div
