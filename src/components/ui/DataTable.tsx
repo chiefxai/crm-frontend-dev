@@ -118,7 +118,7 @@ export default function DataTable<T>({
   };
 
   return (
-    <div className={`${wrapper} ${paginated ? 'flex flex-col h-full max-h-[75vh]' : ''}`}>
+    <div className={`${wrapper} ${paginated ? 'flex flex-col h-full' : ''}`}>
       {loading ? (
         <div className="flex items-center justify-center py-16 text-slate-400 gap-2">
           <Loader2 className="h-4 w-4 animate-spin" />
