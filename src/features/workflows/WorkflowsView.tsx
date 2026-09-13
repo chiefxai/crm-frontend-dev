@@ -342,6 +342,7 @@ export default function WorkflowsView({ flows, setFlows }: WorkflowsViewProps) {
         ) : (
           <DataTable
             bare
+            resizable
             columns={columns}
             rows={flows}
             rowKey={(flow) => flow.id}
