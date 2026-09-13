@@ -1,5 +1,5 @@
-import React, { useRef, useState } from 'react';
-import { Loader2 } from 'lucide-react';
+import React, { useEffect, useRef, useState } from 'react';
+import { Loader2, ChevronLeft, ChevronRight } from 'lucide-react';
 
 export interface Column<T> {
   key: string;
@@ -31,9 +31,20 @@ interface DataTableProps<T> {
   resizable?: boolean;
   /** Minimum column width in px while resizing (default 60) */
   minColWidth?: number;
+  /**
+   * Adds a page-size selector + Previous/Next footer and slices `rows`
+   * to the current page internally. Off by default so existing tables
+   * keep showing every row unless a page opts in.
+   */
+  paginated?: boolean;
+  /** Rows-per-page choices shown in the selector (default [25, 50, 100, 150]) */
+  pageSizeOptions?: number[];
+  /** Initial rows-per-page when paginated (default 25) */
+  defaultPageSize?: number;
 }
 
 const MIN_COL_WIDTH_DEFAULT = 60;
+const PAGE_SIZE_OPTIONS_DEFAULT = [25, 50, 100, 150];
 
 export default function DataTable<T>({
   columns,
@@ -47,6 +58,9 @@ export default function DataTable<T>({
   rowClassName,
   resizable = false,
   minColWidth = MIN_COL_WIDTH_DEFAULT,
+  paginated = false,
+  pageSizeOptions = PAGE_SIZE_OPTIONS_DEFAULT,
+  defaultPageSize = 25,
 }: DataTableProps<T>) {
   // bare=true: no card chrome, no overflow wrapper (caller's scroll container handles it)
   const wrapper = bare
@@ -59,6 +73,21 @@ export default function DataTable<T>({
   const [colWidths, setColWidths] = useState<Record<string, number>>({});
   const resizeState = useRef<{ key: string; startX: number; startWidth: number } | null>(null);
   const tableRef = useRef<HTMLTableElement>(null);
+
+  const [pageSize, setPageSize] = useState(defaultPageSize);
+  const [page, setPage] = useState(1);
+
+  const totalPages = paginated ? Math.max(1, Math.ceil(rows.length / pageSize)) : 1;
+
+  // Clamp back onto a valid page whenever the row count or page size shrinks
+  // out from under the current page (filtering, page-size change, etc.).
+  useEffect(() => {
+    if (page > totalPages) setPage(totalPages);
+  }, [totalPages, page]);
+
+  const visibleRows = paginated ? rows.slice((page - 1) * pageSize, page * pageSize) : rows;
+  const rangeStart = rows.length === 0 ? 0 : (page - 1) * pageSize + 1;
+  const rangeEnd = Math.min(page * pageSize, rows.length);
 
   const parseWidth = (w?: string): number | undefined => {
     if (!w) return undefined;
@@ -122,14 +151,14 @@ export default function DataTable<T>({
             </tr>
           </thead>
           <tbody>
-            {rows.length === 0 ? (
+            {visibleRows.length === 0 ? (
               <tr>
                 <td colSpan={columns.length} className="px-5 py-12 text-center text-sm text-slate-400 dark:text-[var(--text-muted)]">
                   {emptyMessage}
                 </td>
               </tr>
             ) : (
-              rows.map((row, i) => (
+              visibleRows.map((row, i) => (
                 <tr
                   key={rowKey(row)}
                   onClick={onRowClick ? () => onRowClick(row) : undefined}
@@ -148,6 +177,48 @@ export default function DataTable<T>({
             )}
           </tbody>
         </table>
+      )}
+
+      {paginated && !loading && rows.length > 0 && (
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 px-5 py-3 border-t border-slate-100 dark:border-[var(--border)]">
+          <div className="flex items-center gap-2 text-xs text-slate-500 dark:text-[var(--text-muted)]">
+            <span>Rows per page</span>
+            <select
+              value={pageSize}
+              onChange={(e) => { setPageSize(Number(e.target.value)); setPage(1); }}
+              className="rounded-lg px-2 py-1 text-xs bg-white dark:bg-[var(--bg-subtle)] border border-slate-200 dark:border-[var(--border)] text-slate-700 dark:text-[var(--text-primary)] focus:outline-none"
+            >
+              {pageSizeOptions.map((n) => (
+                <option key={n} value={n}>{n}</option>
+              ))}
+            </select>
+          </div>
+
+          <div className="flex items-center gap-3 text-xs text-slate-500 dark:text-[var(--text-muted)]">
+            <span>{rangeStart}–{rangeEnd} of {rows.length}</span>
+            <div className="flex items-center gap-1">
+              <button
+                type="button"
+                onClick={() => setPage((p) => Math.max(1, p - 1))}
+                disabled={page <= 1}
+                className="p-1.5 rounded-lg border border-slate-200 dark:border-[var(--border)] disabled:opacity-40 disabled:cursor-not-allowed hover:bg-slate-50 dark:hover:bg-[var(--bg-subtle)] cursor-pointer"
+                title="Previous page"
+              >
+                <ChevronLeft className="h-3.5 w-3.5" />
+              </button>
+              <span className="px-1.5 font-medium text-slate-700 dark:text-[var(--text-primary)]">{page} / {totalPages}</span>
+              <button
+                type="button"
+                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                disabled={page >= totalPages}
+                className="p-1.5 rounded-lg border border-slate-200 dark:border-[var(--border)] disabled:opacity-40 disabled:cursor-not-allowed hover:bg-slate-50 dark:hover:bg-[var(--bg-subtle)] cursor-pointer"
+                title="Next page"
+              >
+                <ChevronRight className="h-3.5 w-3.5" />
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

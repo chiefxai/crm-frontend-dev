@@ -1632,6 +1632,7 @@ Currently on question ${nextIndex} out of ${selectedTask.questions.length}. Next
                 <DataTable
                   bare
                   resizable
+                  paginated
                   columns={columns}
                   rows={queueRows}
                   rowKey={(r) => r.leadId}
