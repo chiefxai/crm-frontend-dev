@@ -1453,14 +1453,14 @@ Currently on question ${nextIndex} out of ${selectedTask.questions.length}. Next
             </div>
 
             {/* Quick Stats Bento widget */}
-            <div className="theme-panel rounded-xl p-4 space-y-2 relative overflow-hidden border">
+            <div className="bg-slate-50 dark:bg-[var(--bg-subtle)] border border-slate-100 dark:border-[var(--border)] rounded-xl p-4 space-y-2 relative overflow-hidden">
               <div className="absolute -right-8 -bottom-8 w-24 h-24 bg-blue-500/10 rounded-full blur-xl"></div>
               <div className="relative z-10 space-y-1">
-                <span className={`text-[9px] font-mono uppercase tracking-wider font-bold ${autoDialOn ? 'text-emerald-500' : ''}`} style={!autoDialOn ? {color:'var(--panel-muted)'} : {}}>
+                <span className={`text-[9px] font-mono uppercase tracking-wider font-bold ${autoDialOn ? 'text-emerald-500' : 'text-[var(--text-muted)]'}`}>
                   Calling Telemetry {autoDialOn && '· LIVE'}
                 </span>
-                <p className="text-lg font-bold" style={{color:'var(--panel-text)'}}>Continuous Dialer Mode: {autoDialOn ? 'ON' : 'OFF'}</p>
-                <p className="text-[10px] leading-normal" style={{color:'var(--panel-muted)'}}>
+                <p className="text-lg font-bold text-[var(--text-primary)]">Continuous Dialer Mode: {autoDialOn ? 'ON' : 'OFF'}</p>
+                <p className="text-[10px] leading-normal text-[var(--text-muted)]">
                   {autoDialOn
                     ? 'Auto-dialing every pending lead in the active list, one after another — hit "Stop Auto-Dial" to pause after the current call.'
                     : 'AI parses voice audio stream, converts caller speech to text in real-time, matching questionnaire patterns instantly. Click "Auto-Dial Next List Target" to work through the whole list without clicking Dial per lead.'}
@@ -1557,7 +1557,7 @@ Currently on question ${nextIndex} out of ${selectedTask.questions.length}. Next
                             result.status === 'Completed'
                               ? 'bg-emerald-50 text-emerald-700 border border-emerald-100'
                               : result.status === 'Skipped'
-                              ? 'bg-[var(--bg-subtle)] text-slate-600'
+                              ? 'bg-[var(--bg-subtle)] text-[var(--text-muted)]'
                               : 'bg-[var(--bg-subtle)] text-[var(--text-secondary)]'
                           }`}>
                             {result.status}
