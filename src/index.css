@@ -167,7 +167,7 @@ table tfoot tr {
 }
 
 .dark table thead tr {
-  background-color: var(--bg-subtle) !important;
+  background-color: var(--bg-surface) !important;
 }
 
 .dark table tbody tr:hover {
