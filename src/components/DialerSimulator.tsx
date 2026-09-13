@@ -1903,10 +1903,11 @@ Currently on question ${nextIndex} out of ${selectedTask.questions.length}. Next
           />
         </div>
 
-        <div className="grid grid-cols-12 gap-6">
+        <div className="grid grid-cols-12 gap-6 items-stretch">
           {/* LEFT COLUMN: Active Inbound Virtual Numbers */}
-          <div className="col-span-12 lg:col-span-4 space-y-6">
+          <div className="col-span-12 lg:col-span-4 flex flex-col h-full space-y-6">
             <Widget
+              className="flex-1"
               title="Active Inbound Numbers"
               icon={PhoneForwarded}
               action={
