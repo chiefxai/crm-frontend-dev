@@ -25,7 +25,7 @@ import {
 } from 'recharts';
 import { apiFetch } from '../lib/api';
 import { Lead, Loan, CallLog, OrganizationSettings } from '../types';
-import { COST_PER_MINUTE_INR_FALLBACK, formatInr } from '../lib/pricing';
+import { COST_PER_MINUTE_INR_FALLBACK, formatInr, callCostInr } from '../lib/pricing';
 import PageShell from './ui/PageShell';
 import Widget from './ui/Widget';
 import Button from './ui/Button';
@@ -79,6 +79,22 @@ const CHART_TOOLTIP = {
     fontSize: 12,
   },
 };
+
+const SENTIMENT_COLOR: Record<string, string> = {
+  Positive: '#059669',
+  Negative: '#e11d48',
+  Neutral: '#64748b',
+  Unknown: '#94a3b8',
+};
+
+function formatDuration(totalSeconds: number): string {
+  const h = Math.floor(totalSeconds / 3600);
+  const m = Math.floor((totalSeconds % 3600) / 60);
+  const s = Math.floor(totalSeconds % 60);
+  if (h > 0) return `${h}h ${m}m`;
+  if (m > 0) return `${m}m ${s}s`;
+  return `${s}s`;
+}
 
 export default function DashboardView({
   leads,
@@ -390,6 +406,44 @@ export default function DashboardView({
           ) : (
             <EmptyState heading="No calls in the last 30 days" />
           )}
+        </div>
+      </Widget>
+
+      {/* Detailed call list — moved here from Reports so the exec desk is a
+          complete pulse-check on its own; capped at 200 rows, newest first. */}
+      <Widget colSpan={12} title={`Calls in Period (${callsInPeriod.length})`} padding="none" scrollable>
+        <div className="overflow-x-auto">
+          <table className="w-full text-left text-xs mt-3">
+            <thead>
+              <tr className="bg-slate-50/75 border-y border-slate-100 text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                <th className="p-3 px-5">Caller</th>
+                <th className="p-3 px-5">Direction</th>
+                <th className="p-3 px-5">Duration</th>
+                <th className="p-3 px-5">Cost</th>
+                <th className="p-3 px-5">Sentiment</th>
+                <th className="p-3 px-5">When</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {[...callsInPeriod].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()).slice(0, 200).map((c) => (
+                <tr key={c.id} className="hover:bg-[var(--bg-subtle)]">
+                  <td className="p-3 px-5 font-semibold text-slate-800">{c.leadName}</td>
+                  <td className="p-3 px-5 text-slate-500 capitalize">{c.direction || '—'}</td>
+                  <td className="p-3 px-5 font-mono">{formatDuration(c.duration)}</td>
+                  <td className="p-3 px-5 font-mono">{formatInr(callCostInr(c.duration, costPerMinuteInr))}</td>
+                  <td className="p-3 px-5">
+                    <span className="px-2 py-0.5 rounded-md text-[10px] font-semibold" style={{ color: SENTIMENT_COLOR[c.sentiment], backgroundColor: `${SENTIMENT_COLOR[c.sentiment]}1a` }}>
+                      {c.sentiment}
+                    </span>
+                  </td>
+                  <td className="p-3 px-5 text-slate-400">{new Date(c.createdAt).toLocaleString()}</td>
+                </tr>
+              ))}
+              {callsInPeriod.length === 0 && (
+                <tr><td colSpan={6} className="p-8 text-center text-slate-400">No calls in the last 30 days.</td></tr>
+              )}
+            </tbody>
+          </table>
         </div>
       </Widget>
 

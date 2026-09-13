@@ -434,43 +434,6 @@ export default function ReportsView({ callLogs, dialerTasks, leads, costPerMinut
         </div>
         </Widget>
 
-        {/* Detailed call list */}
-        <Widget colSpan={12} title={`Calls in Period (${filteredCalls.length})`} padding="none" scrollable>
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs mt-3">
-              <thead>
-                <tr className="bg-slate-50/75 border-y border-slate-100 text-[10px] font-bold text-slate-400 uppercase tracking-widest">
-                  <th className="p-3 px-5">Caller</th>
-                  <th className="p-3 px-5">Direction</th>
-                  <th className="p-3 px-5">Duration</th>
-                  <th className="p-3 px-5">Cost</th>
-                  <th className="p-3 px-5">Sentiment</th>
-                  <th className="p-3 px-5">When</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {[...filteredCalls].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()).slice(0, 200).map((c) => (
-                  <tr key={c.id} className="hover:bg-[var(--bg-subtle)]">
-                    <td className="p-3 px-5 font-semibold text-slate-800">{c.leadName}</td>
-                    <td className="p-3 px-5 text-slate-500 capitalize">{c.direction || '—'}</td>
-                    <td className="p-3 px-5 font-mono">{formatDuration(c.duration)}</td>
-                    <td className="p-3 px-5 font-mono">{formatInr(callCostInr(c.duration, costPerMinuteInr))}</td>
-                    <td className="p-3 px-5">
-                      <span className="px-2 py-0.5 rounded-md text-[10px] font-semibold" style={{ color: SENTIMENT_COLOR[c.sentiment], backgroundColor: `${SENTIMENT_COLOR[c.sentiment]}1a` }}>
-                        {c.sentiment}
-                      </span>
-                    </td>
-                    <td className="p-3 px-5 text-slate-400">{new Date(c.createdAt).toLocaleString()}</td>
-                  </tr>
-                ))}
-                {filteredCalls.length === 0 && (
-                  <tr><td colSpan={6} className="p-8 text-center text-slate-400">No calls match this filter.</td></tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-        </Widget>
-
       {showPreview && (
         <PrintableReport
           onClose={() => setShowPreview(false)}
