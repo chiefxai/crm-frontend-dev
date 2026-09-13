@@ -1,7 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   TrendingUp,
   PhoneCall,
+  PhoneIncoming,
   DollarSign,
   UserCheck,
   RefreshCw,
@@ -18,6 +19,7 @@ import {
   YAxis,
   CartesianGrid,
   Tooltip,
+  Legend,
   ResponsiveContainer,
   BarChart,
   Bar,
@@ -141,6 +143,28 @@ export default function DashboardView({
     ? Math.round((positiveCalls.length / completedCalls.length) * 100)
     : null;
 
+  // Calls in period + volume-over-time trend — same "Report by Task" view
+  // from ReportsView, ported here so the exec desk gives a quick pulse
+  // without needing to jump to the full Reports page. Fixed to the last 30
+  // days, one bar per day — this is a glance-at-it overview, not a
+  // configurable report, so no date-range/granularity controls here.
+  const callsInPeriod = useMemo(() => {
+    const cutoff = new Date();
+    cutoff.setDate(cutoff.getDate() - 30);
+    return callLogs.filter(c => new Date(c.createdAt) >= cutoff);
+  }, [callLogs]);
+
+  const callVolumeTrend = useMemo(() => {
+    const buckets: Record<string, { period: string; inbound: number; outbound: number }> = {};
+    for (const c of callsInPeriod) {
+      const key = new Date(c.createdAt).toISOString().slice(0, 10);
+      if (!buckets[key]) buckets[key] = { period: key, inbound: 0, outbound: 0 };
+      if (c.direction === 'inbound') buckets[key].inbound++;
+      else if (c.direction === 'outbound') buckets[key].outbound++;
+    }
+    return Object.values(buckets).sort((a, b) => a.period.localeCompare(b.period));
+  }, [callsInPeriod]);
+
   // ── Interested clients table columns ─────────────────────────────────────
   const clientColumns: Column<InterestedClient>[] = [
     {
@@ -258,6 +282,16 @@ export default function DashboardView({
         badgeColor={aiCallConversionPct !== null && aiCallConversionPct >= 50 ? 'green' : 'neutral'}
       />
 
+      <KpiCard
+        colSpan={3}
+        icon={PhoneIncoming}
+        iconBg="#eff6ff"
+        iconColor="#2563eb"
+        label="Calls This Period"
+        value={callsInPeriod.length}
+        sub="Last 30 days"
+      />
+
       {/* ── Row 2: Charts ── */}
 
       {/* Area chart — portfolio/records trend */}
@@ -353,6 +387,29 @@ export default function DashboardView({
               )
               : <EmptyState heading="No pipeline stages configured yet" />
           }
+        </div>
+      </Widget>
+
+      {/* Call volume over time — same chart Reports uses, fixed to the last
+          30 days here since this is a glance-at-it overview, not a
+          configurable report (see Reports > Report by Task for filters). */}
+      <Widget colSpan={12} title="Call Volume Over Time" subtitle="Incoming vs. outgoing calls, last 30 days." icon={PhoneIncoming} accent="#2563eb" padding="md" hover>
+        <div className="h-64 w-full mt-1">
+          {callVolumeTrend.length > 0 ? (
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={callVolumeTrend} barGap={2} margin={{ top: 8, right: 8, left: -20, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                <XAxis dataKey="period" stroke="#94a3b8" fontSize={11} tickLine={false} />
+                <YAxis stroke="#94a3b8" fontSize={11} tickLine={false} axisLine={false} allowDecimals={false} />
+                <Tooltip {...CHART_TOOLTIP} />
+                <Legend wrapperStyle={{ fontSize: 11 }} />
+                <Bar dataKey="inbound" name="Incoming" fill="#2563eb" radius={[3, 3, 0, 0]} />
+                <Bar dataKey="outbound" name="Outgoing" fill="#f97316" radius={[3, 3, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          ) : (
+            <EmptyState heading="No calls in the last 30 days" />
+          )}
         </div>
       </Widget>
 
