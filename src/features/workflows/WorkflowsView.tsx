@@ -23,6 +23,7 @@ import PageShell from '../../components/ui/PageShell';
 import Widget from '../../components/ui/Widget';
 import Modal from '../../components/ui/Modal';
 import IconButton from '../../components/ui/IconButton';
+import DataTable, { Column } from '../../components/ui/DataTable';
 
 function uid(prefix: string) {
   return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
@@ -271,6 +272,54 @@ export default function WorkflowsView({ flows, setFlows }: WorkflowsViewProps) {
     );
   }
 
+  const columns: Column<QuestionFlow>[] = [
+    {
+      key: 'name',
+      header: 'Name',
+      cell: (flow) => (
+        <div className="flex items-center gap-2 min-w-0">
+          <span className="font-semibold text-slate-800 dark:text-[var(--text-primary)] truncate">{flow.name}</span>
+          {flow.active && (
+            <span className="text-[10px] font-bold bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full shrink-0">ACTIVE</span>
+          )}
+        </div>
+      ),
+    },
+    {
+      key: 'description',
+      header: 'Description',
+      cell: (flow) => (
+        <span className="text-slate-500 dark:text-[var(--text-muted)] truncate block max-w-sm" title={flow.description || ''}>
+          {flow.description || '—'}
+        </span>
+      ),
+    },
+    { key: 'nodes', header: 'Nodes', cell: (flow) => (flow.nodes ?? []).length, align: 'center' },
+    { key: 'connections', header: 'Connections', cell: (flow) => (flow.edges ?? []).length, align: 'center' },
+    { key: 'updated', header: 'Updated', cell: (flow) => new Date(flow.updatedAt).toLocaleDateString() },
+    {
+      key: 'actions',
+      header: '',
+      align: 'right',
+      cell: (flow) => (
+        <div className="flex items-center justify-end gap-2" onClick={(e) => e.stopPropagation()}>
+          <button onClick={() => handleToggleActive(flow.id)} title={flow.active ? 'Deactivate' : 'Activate'} className="text-slate-400 hover:text-blue-600 transition-colors">
+            {flow.active ? <ToggleRight className="h-6 w-6 text-blue-600" /> : <ToggleLeft className="h-6 w-6" />}
+          </button>
+          <button onClick={() => handleDuplicate(flow)} title="Duplicate" className="p-2 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition-colors">
+            <Copy className="h-4 w-4" />
+          </button>
+          <button onClick={() => setEditingId(flow.id)} className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold bg-blue-50 text-blue-700 rounded-lg hover:bg-blue-100">
+            <Edit2 className="h-3.5 w-3.5" /> Edit
+          </button>
+          <button onClick={() => handleDelete(flow.id)} className="p-2 text-slate-400 hover:text-rose-500 hover:bg-rose-50 rounded-lg transition-colors">
+            <Trash2 className="h-4 w-4" />
+          </button>
+        </div>
+      ),
+    },
+  ];
+
   return (
     <PageShell
       title="Workflow Builder"
@@ -291,42 +340,13 @@ export default function WorkflowsView({ flows, setFlows }: WorkflowsViewProps) {
             </button>
           </div>
         ) : (
-          <div className="divide-y divide-slate-100">
-            {flows.map(flow => (
-              <div key={flow.id} className="p-5 hover:bg-[var(--bg-subtle)] transition-colors">
-                <div className="flex items-start justify-between gap-4">
-                  <div className="min-w-0">
-                    <div className="flex items-center gap-2 mb-1">
-                      <h3 className="text-sm font-bold text-slate-800 truncate">{flow.name}</h3>
-                      {flow.active && (
-                        <span className="text-[10px] font-bold bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full shrink-0">ACTIVE</span>
-                      )}
-                    </div>
-                    {flow.description && <p className="text-xs text-slate-500 mb-2">{flow.description}</p>}
-                    <div className="flex items-center gap-4 text-xs text-slate-400">
-                      <span>{(flow.nodes ?? []).length} nodes</span>
-                      <span>{(flow.edges ?? []).length} connections</span>
-                      <span>Updated {new Date(flow.updatedAt).toLocaleDateString()}</span>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2 shrink-0">
-                    <button onClick={() => handleToggleActive(flow.id)} title={flow.active ? 'Deactivate' : 'Activate'} className="text-slate-400 hover:text-blue-600 transition-colors">
-                      {flow.active ? <ToggleRight className="h-6 w-6 text-blue-600" /> : <ToggleLeft className="h-6 w-6" />}
-                    </button>
-                    <button onClick={() => handleDuplicate(flow)} title="Duplicate" className="p-2 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition-colors">
-                      <Copy className="h-4 w-4" />
-                    </button>
-                    <button onClick={() => setEditingId(flow.id)} className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold bg-blue-50 text-blue-700 rounded-lg hover:bg-blue-100">
-                      <Edit2 className="h-3.5 w-3.5" /> Edit
-                    </button>
-                    <button onClick={() => handleDelete(flow.id)} className="p-2 text-slate-400 hover:text-rose-500 hover:bg-rose-50 rounded-lg transition-colors">
-                      <Trash2 className="h-4 w-4" />
-                    </button>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
+          <DataTable
+            bare
+            columns={columns}
+            rows={flows}
+            rowKey={(flow) => flow.id}
+            onRowClick={(flow) => setEditingId(flow.id)}
+          />
         )}
       </Widget>
 
