@@ -1,6 +1,6 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { apiFetch } from '../lib/api';
-import { PhoneOutgoing, Clock, DollarSign, Smile, CheckCircle2, ListChecks, FileDown, ChevronDown, ChevronRight, Download, FileText } from 'lucide-react';
+import { PhoneOutgoing, Clock, DollarSign, Smile, CheckCircle2, ListChecks, FileDown, Download, FileText } from 'lucide-react';
 import PageShell from './ui/PageShell';
 import Button from './ui/Button';
 import Widget from './ui/Widget';
@@ -116,10 +116,16 @@ export default function ReportsView({ callLogs, dialerTasks, leads, costPerMinut
   // wrong the moment the same lead gets dialed more than once. callId is
   // absent on data captured before this field existed, so phone stays as
   // the fallback for that older data. Cached by whichever key was used.
-  const [expandedLeadId, setExpandedLeadId] = useState<string | null>(null);
+  const [selectedLeadId, setSelectedLeadId] = useState<string | null>(null);
   const [answersCache, setAnswersCache] = useState<Record<string, { label?: string; question: string; answer: string }[]>>({});
   const [loadingAnswersFor, setLoadingAnswersFor] = useState<string | null>(null);
   const [exportingCsv, setExportingCsv] = useState(false);
+
+  // Clear the selected lead whenever the task changes — a lead id from the
+  // previous task's table has no meaning against the new one.
+  useEffect(() => {
+    setSelectedLeadId(null);
+  }, [selectedTaskId]);
 
   async function fetchAnswers(callId: string | undefined, phone: string): Promise<{ label?: string; question: string; answer: string }[]> {
     const cacheKey = callId || phone;
@@ -139,12 +145,12 @@ export default function ReportsView({ callLogs, dialerTasks, leads, costPerMinut
     }
   }
 
-  async function toggleLeadExpand(leadId: string, phone: string, callId?: string) {
-    if (expandedLeadId === leadId) {
-      setExpandedLeadId(null);
+  async function selectLead(leadId: string, phone: string, callId?: string) {
+    if (selectedLeadId === leadId) {
+      setSelectedLeadId(null);
       return;
     }
-    setExpandedLeadId(leadId);
+    setSelectedLeadId(leadId);
     const cacheKey = callId || phone;
     if (!cacheKey || answersCache[cacheKey]) return;
     setLoadingAnswersFor(cacheKey);
@@ -350,113 +356,116 @@ export default function ReportsView({ callLogs, dialerTasks, leads, costPerMinut
           </div>
         </Widget>
 
-        {/* Task-wise report */}
+        {/* Table 1 — leads in this task. Click a row to load its captured
+            answers into the table below; row count here is fixed (one per
+            lead in the task) regardless of which workflow created it. */}
         <Widget colSpan={12} title={selectedTask ? selectedTask.name : 'Report by Task'} icon={ListChecks} padding="none" scrollable>
         <div className="p-5">
           {!selectedTask && <p className="text-xs text-slate-400 text-center py-8">{dialerTasks.length === 0 ? 'No dialer tasks yet — create one from the Voice Simulator.' : 'Pick a task above to see its per-lead outcomes and conversion rate.'}</p>}
           {taskReport && (
-            <>
-              <div className="overflow-x-auto">
-                <table className="w-full text-left text-xs">
-                  <thead>
-                    <tr className="border-b border-slate-100 text-[10px] font-bold text-slate-400 uppercase tracking-widest">
-                      <th className="py-2 pr-2 w-6"></th>
-                      <th className="py-2 pr-4">Lead</th>
-                      <th className="py-2 pr-4">Phone</th>
-                      <th className="py-2 pr-4">Status</th>
-                      <th className="py-2 pr-4">Duration</th>
-                      <th className="py-2 pr-4">Sentiment</th>
-                      <th className="py-2 pr-4">Intent</th>
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs">
+                <thead>
+                  <tr className="border-b border-slate-100 text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                    <th className="py-2 pr-4">Lead</th>
+                    <th className="py-2 pr-4">Phone</th>
+                    <th className="py-2 pr-4">Status</th>
+                    <th className="py-2 pr-4">Duration</th>
+                    <th className="py-2 pr-4">Sentiment</th>
+                    <th className="py-2 pr-4">Intent</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-50">
+                  {taskReport.rows.map((r) => (
+                    <tr
+                      key={r.leadId}
+                      onClick={() => selectLead(r.leadId, r.phone, r.callId)}
+                      className="cursor-pointer hover:bg-[var(--bg-subtle)]"
+                      style={selectedLeadId === r.leadId ? { background: 'var(--bg-subtle)', boxShadow: 'inset 3px 0 0 #2563eb' } : undefined}
+                    >
+                      <td className="py-2 pr-4 font-medium text-slate-700">{r.name}</td>
+                      <td className="py-2 pr-4 text-slate-500">{r.phone}</td>
+                      <td className="py-2 pr-4">{r.status}</td>
+                      <td className="py-2 pr-4">{formatDuration(r.duration)}</td>
+                      <td className="py-2 pr-4">
+                        <span className="px-2 py-0.5 rounded-md text-[10px] font-semibold" style={{ color: SENTIMENT_COLOR[r.sentiment], backgroundColor: `${SENTIMENT_COLOR[r.sentiment]}1a` }}>
+                          {r.sentiment}
+                        </span>
+                      </td>
+                      <td className="py-2 pr-4">{r.intent}</td>
                     </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-50">
-                    {taskReport.rows.map((r) => {
-                      const isExpanded = expandedLeadId === r.leadId;
-                      const cacheKey = r.callId || r.phone;
-                      const answers = cacheKey ? answersCache[cacheKey] : undefined;
-                      return (
-                        <React.Fragment key={r.leadId}>
-                          <tr
-                            className="cursor-pointer hover:bg-[var(--bg-subtle)]"
-                            onClick={() => toggleLeadExpand(r.leadId, r.phone, r.callId)}
-                          >
-                            <td className="py-2 pr-2 text-slate-400">
-                              {isExpanded ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
-                            </td>
-                            <td className="py-2 pr-4 font-medium text-slate-700">{r.name}</td>
-                            <td className="py-2 pr-4 text-slate-500">{r.phone}</td>
-                            <td className="py-2 pr-4">{r.status}</td>
-                            <td className="py-2 pr-4">{formatDuration(r.duration)}</td>
-                            <td className="py-2 pr-4">
-                              <span className="px-2 py-0.5 rounded-md text-[10px] font-semibold" style={{ color: SENTIMENT_COLOR[r.sentiment], backgroundColor: `${SENTIMENT_COLOR[r.sentiment]}1a` }}>
-                                {r.sentiment}
-                              </span>
-                            </td>
-                            <td className="py-2 pr-4">{r.intent}</td>
-                          </tr>
-                          {isExpanded && (
-                            <tr className="bg-slate-50/40">
-                              <td colSpan={7} className="px-4 pb-4 pt-1">
-                                {loadingAnswersFor === cacheKey ? (
-                                  <div className="flex items-center gap-2 py-3 text-[11px] text-slate-400">
-                                    <span className="h-3 w-3 border-2 border-slate-300 border-t-blue-500 rounded-full animate-spin" />
-                                    Loading answers…
-                                  </div>
-                                ) : (
-                                  <div className="bg-white border border-slate-200 rounded-xl overflow-hidden">
-                                    <table className="w-full text-left text-xs">
-                                      <thead>
-                                        <tr className="border-b border-slate-100 text-[10px] font-bold text-slate-400 uppercase tracking-widest">
-                                          <th className="py-2 px-3.5">Field</th>
-                                          <th className="py-2 px-3.5">Value</th>
-                                        </tr>
-                                      </thead>
-                                      <tbody className="divide-y divide-slate-100">
-                                        <tr>
-                                          <td className="py-2 px-3.5 font-semibold text-slate-500 uppercase tracking-wide text-[10px] whitespace-nowrap align-top">Name</td>
-                                          <td className="py-2 px-3.5 text-slate-700">{r.name}</td>
-                                        </tr>
-                                        <tr>
-                                          <td className="py-2 px-3.5 font-semibold text-slate-500 uppercase tracking-wide text-[10px] whitespace-nowrap align-top">Phone</td>
-                                          <td className="py-2 px-3.5 text-slate-700">{r.phone}</td>
-                                        </tr>
-                                        <tr>
-                                          <td className="py-2 px-3.5 font-semibold text-slate-500 uppercase tracking-wide text-[10px] whitespace-nowrap align-top">Sentiment</td>
-                                          <td className="py-2 px-3.5">
-                                            <span className="px-2 py-0.5 rounded-md text-[10px] font-semibold" style={{ color: SENTIMENT_COLOR[r.sentiment], backgroundColor: `${SENTIMENT_COLOR[r.sentiment]}1a` }}>
-                                              {r.sentiment}
-                                            </span>
-                                          </td>
-                                        </tr>
-                                        {answers && answers.length > 0 ? (
-                                          answers.map((a, i) => (
-                                            <tr key={i}>
-                                              <td className="py-2 px-3.5 font-semibold text-slate-500 uppercase tracking-wide text-[10px] whitespace-nowrap align-top">{a.label || a.question}</td>
-                                              <td className="py-2 px-3.5 text-slate-700 break-words">{a.answer}</td>
-                                            </tr>
-                                          ))
-                                        ) : (
-                                          <tr>
-                                            <td colSpan={2} className="py-2 px-3.5 text-slate-400 italic">No workflow answers captured for this call.</td>
-                                          </tr>
-                                        )}
-                                      </tbody>
-                                    </table>
-                                  </div>
-                                )}
-                              </td>
-                            </tr>
-                          )}
-                        </React.Fragment>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            </>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           )}
         </div>
         </Widget>
+
+        {/* Table 2 — the selected lead's captured answers, one row per
+            workflow variable (Field/Value), plus Name/Phone/Sentiment.
+            Row count is NOT fixed — it's however many variables this
+            task's workflow defines, so it grows/shrinks task to task. */}
+        {selectedTask && (() => {
+          const selectedRow = taskReport?.rows.find((r) => r.leadId === selectedLeadId) || null;
+          const cacheKey = selectedRow ? (selectedRow.callId || selectedRow.phone) : undefined;
+          const answers = cacheKey ? answersCache[cacheKey] : undefined;
+          return (
+            <Widget colSpan={12} title={selectedTask.workflowName || selectedTask.name} padding="none" scrollable>
+              <div className="p-5">
+                {!selectedRow ? (
+                  <p className="text-xs text-slate-400 text-center py-8">Click a lead in the table above to see their captured answers.</p>
+                ) : loadingAnswersFor === cacheKey ? (
+                  <div className="flex items-center gap-2 py-8 justify-center text-[11px] text-slate-400">
+                    <span className="h-3 w-3 border-2 border-slate-300 border-t-blue-500 rounded-full animate-spin" />
+                    Loading answers…
+                  </div>
+                ) : (
+                  <div className="bg-white border border-slate-200 rounded-xl overflow-hidden">
+                    <table className="w-full text-left text-xs">
+                      <thead>
+                        <tr className="border-b border-slate-100 text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                          <th className="py-2 px-3.5">Field</th>
+                          <th className="py-2 px-3.5">Value</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                        <tr>
+                          <td className="py-2 px-3.5 font-semibold text-slate-500 uppercase tracking-wide text-[10px] whitespace-nowrap align-top">Name</td>
+                          <td className="py-2 px-3.5 text-slate-700">{selectedRow.name}</td>
+                        </tr>
+                        <tr>
+                          <td className="py-2 px-3.5 font-semibold text-slate-500 uppercase tracking-wide text-[10px] whitespace-nowrap align-top">Phone</td>
+                          <td className="py-2 px-3.5 text-slate-700">{selectedRow.phone}</td>
+                        </tr>
+                        <tr>
+                          <td className="py-2 px-3.5 font-semibold text-slate-500 uppercase tracking-wide text-[10px] whitespace-nowrap align-top">Sentiment</td>
+                          <td className="py-2 px-3.5">
+                            <span className="px-2 py-0.5 rounded-md text-[10px] font-semibold" style={{ color: SENTIMENT_COLOR[selectedRow.sentiment], backgroundColor: `${SENTIMENT_COLOR[selectedRow.sentiment]}1a` }}>
+                              {selectedRow.sentiment}
+                            </span>
+                          </td>
+                        </tr>
+                        {answers && answers.length > 0 ? (
+                          answers.map((a, i) => (
+                            <tr key={i}>
+                              <td className="py-2 px-3.5 font-semibold text-slate-500 uppercase tracking-wide text-[10px] whitespace-nowrap align-top">{a.label || a.question}</td>
+                              <td className="py-2 px-3.5 text-slate-700 break-words">{a.answer}</td>
+                            </tr>
+                          ))
+                        ) : (
+                          <tr>
+                            <td colSpan={2} className="py-2 px-3.5 text-slate-400 italic">No workflow answers captured for this call.</td>
+                          </tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            </Widget>
+          );
+        })()}
 
       {showPreview && (
         <PrintableReport
