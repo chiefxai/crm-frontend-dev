@@ -4,6 +4,7 @@ import { PhoneOutgoing, Clock, DollarSign, Smile, CheckCircle2, ListChecks, File
 import PageShell from './ui/PageShell';
 import Button from './ui/Button';
 import Widget from './ui/Widget';
+import PieChart from './ui/PieChart';
 import KpiCard from './ui/KpiCard';
 import SlideOver from './ui/SlideOver';
 import { CallLog } from '../types';
@@ -340,20 +341,49 @@ export default function ReportsView({ callLogs, dialerTasks, leads, costPerMinut
 
         {/* Sentiment breakdown — for the selected task's calls */}
         <Widget colSpan={12} title="Sentiment Breakdown" padding="md">
-          <div className="flex h-3 rounded-full overflow-hidden bg-slate-100">
-            {(['Positive', 'Neutral', 'Negative', 'Unknown'] as const).map((s) => {
-              const count = taskReport?.sentimentCounts[s] || 0;
-              const pct = taskReport && taskReport.total > 0 ? (count / taskReport.total) * 100 : 0;
-              return pct > 0 ? <div key={s} style={{ width: `${pct}%`, backgroundColor: SENTIMENT_COLOR[s] }} title={`${s}: ${count}`} /> : null;
-            })}
-          </div>
-          <div className="flex flex-wrap gap-4 mt-3">
-            {(['Positive', 'Neutral', 'Negative', 'Unknown'] as const).map((s) => (
-              <div key={s} className="flex items-center gap-1.5 text-[11px] text-slate-600">
-                <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: SENTIMENT_COLOR[s] }} />
-                {s} ({taskReport?.sentimentCounts[s] || 0})
-              </div>
-            ))}
+          <div className="flex flex-col sm:flex-row items-center gap-8">
+            {/* Chart left */}
+            <div className="shrink-0">
+              <PieChart
+                size={160}
+                slices={(['Positive', 'Neutral', 'Negative', 'Unknown'] as const).map((s) => ({
+                  label: s,
+                  value: taskReport?.sentimentCounts[s] || 0,
+                  color: SENTIMENT_COLOR[s],
+                }))}
+              />
+            </div>
+
+            {/* Breakdown table right */}
+            <div className="flex-1 w-full overflow-x-auto">
+              <table className="w-full text-left text-xs">
+                <thead>
+                  <tr className="border-b border-slate-100 text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                    <th className="py-2 pr-4">Sentiment</th>
+                    <th className="py-2 pr-4">Calls</th>
+                    <th className="py-2 pr-4">Share</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-50">
+                  {(['Positive', 'Neutral', 'Negative', 'Unknown'] as const).map((s) => {
+                    const count = taskReport?.sentimentCounts[s] || 0;
+                    const pct = taskReport && taskReport.total > 0 ? Math.round((count / taskReport.total) * 100) : 0;
+                    return (
+                      <tr key={s}>
+                        <td className="py-2 pr-4">
+                          <div className="flex items-center gap-1.5">
+                            <span className="h-2.5 w-2.5 rounded-full shrink-0" style={{ backgroundColor: SENTIMENT_COLOR[s] }} />
+                            <span className="font-medium text-slate-700">{s}</span>
+                          </div>
+                        </td>
+                        <td className="py-2 pr-4 text-slate-600">{count}</td>
+                        <td className="py-2 pr-4 text-slate-600">{pct}%</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
           </div>
         </Widget>
 

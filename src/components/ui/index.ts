@@ -17,3 +17,5 @@ export { default as Tooltip } from './Tooltip';
 export { default as IconButton } from './IconButton';
 export { default as ActionMenu } from './ActionMenu';
 export type { ActionMenuItem } from './ActionMenu';
+export { default as PieChart } from './PieChart';
+export type { PieChartSlice } from './PieChart';
