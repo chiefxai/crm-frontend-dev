@@ -142,9 +142,11 @@ export default function DataTable<T>({
                     {resizable && (
                       <span
                         onMouseDown={(e) => startResize(e, col.key)}
-                        className="absolute top-0 right-0 h-full w-2 cursor-col-resize select-none hover:bg-blue-500/20 active:bg-blue-500/30"
+                        className="group absolute top-0 right-0 h-full w-3 flex items-center justify-center cursor-col-resize select-none hover:bg-blue-500/10 active:bg-blue-500/20"
                         title="Drag to resize column"
-                      />
+                      >
+                        <span className="w-px h-3.5 rounded-full bg-slate-300 dark:bg-[var(--border)] group-hover:bg-blue-500 group-hover:h-full group-hover:w-0.5 transition-all" />
+                      </span>
                     )}
                   </th>
                 );
