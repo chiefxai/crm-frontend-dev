@@ -53,17 +53,26 @@ const COLUMNS: Column<AuditEntry>[] = [
 
 export default function AuditLogView() {
   const [entries, setEntries] = useState<AuditEntry[]>([]);
+  const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(25);
 
+  // Server-side pagination: the backend only returns this one page's rows
+  // plus the true total count (see /api/audit-log?page=&limit=), so the
+  // whole audit log never has to be fetched at once.
   const loadEntries = (showSpinner = false) => {
     if (showSpinner) setLoading(true);
-    apiFetch('/api/audit-log')
+    apiFetch(`/api/audit-log?page=${page}&limit=${pageSize}`)
       .then(r => r.json())
-      .then((list: AuditEntry[]) => setEntries(Array.isArray(list) ? list : []))
+      .then((result: { rows: AuditEntry[]; total: number }) => {
+        setEntries(Array.isArray(result?.rows) ? result.rows : []);
+        setTotal(result?.total ?? 0);
+      })
       .finally(() => { if (showSpinner) setLoading(false); });
   };
 
-  useEffect(() => { loadEntries(true); }, []);
+  useEffect(() => { loadEntries(true); }, [page, pageSize]);
 
   return (
     <PageShell title="Audit Log" subtitle="Admin actions across this organization — who changed what, and when." onRefresh={() => loadEntries()} layout="fill">
@@ -72,9 +81,24 @@ export default function AuditLogView() {
           <div className="flex-1 flex items-center justify-center text-slate-400"><Loader2 className="h-5 w-5 animate-spin mr-2" /> Loading…</div>
         ) : (
           <Widget className="flex-1" showHeader={false} padding="none">
-            {entries.length === 0
+            {total === 0
               ? <EmptyState icon={ScrollText} heading="No admin actions recorded yet" />
-              : <DataTable bare paginated resizable columns={COLUMNS} rows={entries} rowKey={r => r.id} />
+              : (
+                <DataTable
+                  bare
+                  resizable
+                  columns={COLUMNS}
+                  rows={entries}
+                  rowKey={r => r.id}
+                  serverPagination={{
+                    page,
+                    pageSize,
+                    total,
+                    onPageChange: setPage,
+                    onPageSizeChange: (n) => { setPageSize(n); setPage(1); },
+                  }}
+                />
+              )
             }
           </Widget>
         )}

@@ -41,6 +41,23 @@ interface DataTableProps<T> {
   pageSizeOptions?: number[];
   /** Initial rows-per-page when paginated (default 25) */
   defaultPageSize?: number;
+  /**
+   * Hands pagination control to the caller: `rows` is assumed to already
+   * be just the current page (fetched from the server), and DataTable
+   * renders the same page-size/Prev/Next footer but drives it through
+   * these callbacks instead of slicing `rows` itself. Use this whenever
+   * the backend supports `?page=&limit=` so large tables don't have to
+   * fetch every row up front — omit it (just pass `paginated`) for
+   * tables that already have the full array in memory.
+   */
+  serverPagination?: {
+    page: number;
+    pageSize: number;
+    /** Total row count across all pages (from the backend) */
+    total: number;
+    onPageChange: (page: number) => void;
+    onPageSizeChange: (pageSize: number) => void;
+  };
 }
 
 const MIN_COL_WIDTH_DEFAULT = 60;
@@ -61,7 +78,9 @@ export default function DataTable<T>({
   paginated = false,
   pageSizeOptions = PAGE_SIZE_OPTIONS_DEFAULT,
   defaultPageSize = 25,
+  serverPagination,
 }: DataTableProps<T>) {
+  const isPaginated = paginated || !!serverPagination;
   // bare=true: no card chrome, no overflow wrapper (caller's scroll container handles it)
   const wrapper = bare
     ? className
@@ -74,20 +93,30 @@ export default function DataTable<T>({
   const resizeState = useRef<{ key: string; startX: number; startWidth: number } | null>(null);
   const tableRef = useRef<HTMLTableElement>(null);
 
-  const [pageSize, setPageSize] = useState(defaultPageSize);
-  const [page, setPage] = useState(1);
+  const [internalPageSize, setInternalPageSize] = useState(defaultPageSize);
+  const [internalPage, setInternalPage] = useState(1);
 
-  const totalPages = paginated ? Math.max(1, Math.ceil(rows.length / pageSize)) : 1;
+  const page = serverPagination ? serverPagination.page : internalPage;
+  const pageSize = serverPagination ? serverPagination.pageSize : internalPageSize;
+  const setPage = serverPagination ? serverPagination.onPageChange : setInternalPage;
+  const setPageSize = serverPagination ? serverPagination.onPageSizeChange : setInternalPageSize;
+  // Server mode already gives us just the current page's rows and the
+  // true total; local mode slices the full in-memory array itself.
+  const totalRowCount = serverPagination ? serverPagination.total : rows.length;
+
+  const totalPages = isPaginated ? Math.max(1, Math.ceil(totalRowCount / pageSize)) : 1;
 
   // Clamp back onto a valid page whenever the row count or page size shrinks
   // out from under the current page (filtering, page-size change, etc.).
+  // Server-driven pages manage their own clamping (the caller decides what
+  // happens when a page goes out of range after a refetch).
   useEffect(() => {
-    if (page > totalPages) setPage(totalPages);
-  }, [totalPages, page]);
+    if (!serverPagination && internalPage > totalPages) setInternalPage(totalPages);
+  }, [serverPagination, totalPages, internalPage]);
 
-  const visibleRows = paginated ? rows.slice((page - 1) * pageSize, page * pageSize) : rows;
-  const rangeStart = rows.length === 0 ? 0 : (page - 1) * pageSize + 1;
-  const rangeEnd = Math.min(page * pageSize, rows.length);
+  const visibleRows = serverPagination ? rows : (paginated ? rows.slice((page - 1) * pageSize, page * pageSize) : rows);
+  const rangeStart = totalRowCount === 0 ? 0 : (page - 1) * pageSize + 1;
+  const rangeEnd = Math.min(page * pageSize, totalRowCount);
 
   const parseWidth = (w?: string): number | undefined => {
     if (!w) return undefined;
@@ -118,14 +147,14 @@ export default function DataTable<T>({
   };
 
   return (
-    <div className={`${wrapper} ${paginated ? 'flex flex-col h-full' : ''}`}>
+    <div className={`${wrapper} ${isPaginated ? 'flex flex-col h-full' : ''}`}>
       {loading ? (
         <div className="flex items-center justify-center py-16 text-slate-400 gap-2">
           <Loader2 className="h-4 w-4 animate-spin" />
           <span className="text-sm">Loading…</span>
         </div>
       ) : (
-        <div className={paginated ? 'flex-1 overflow-auto min-h-0' : undefined}>
+        <div className={isPaginated ? 'flex-1 overflow-auto min-h-0' : undefined}>
         <table ref={tableRef} className="w-full text-sm" style={resizable ? { tableLayout: 'fixed' } : undefined}>
           <thead className="sticky top-0 z-10" style={{ background: 'var(--bg-surface)' }}>
             <tr className="border-b border-slate-100 dark:border-[var(--border)]">
@@ -183,7 +212,7 @@ export default function DataTable<T>({
         </div>
       )}
 
-      {paginated && !loading && rows.length > 0 && (
+      {isPaginated && !loading && totalRowCount > 0 && (
         <div className="shrink-0 flex flex-col sm:flex-row sm:items-center justify-between gap-3 px-5 py-3 border-t border-slate-100 dark:border-[var(--border)] bg-white dark:bg-[var(--bg-surface)]">
           <div className="flex items-center gap-2 text-xs text-slate-500 dark:text-[var(--text-muted)]">
             <span>Rows per page</span>
@@ -199,11 +228,11 @@ export default function DataTable<T>({
           </div>
 
           <div className="flex items-center gap-3 text-xs text-slate-500 dark:text-[var(--text-muted)]">
-            <span>{rangeStart}–{rangeEnd} of {rows.length}</span>
+            <span>{rangeStart}–{rangeEnd} of {totalRowCount}</span>
             <div className="flex items-center gap-1">
               <button
                 type="button"
-                onClick={() => setPage((p) => Math.max(1, p - 1))}
+                onClick={() => setPage(Math.max(1, page - 1))}
                 disabled={page <= 1}
                 className="p-1.5 rounded-lg border border-slate-200 dark:border-[var(--border)] disabled:opacity-40 disabled:cursor-not-allowed hover:bg-slate-50 dark:hover:bg-[var(--bg-subtle)] cursor-pointer"
                 title="Previous page"
@@ -213,7 +242,7 @@ export default function DataTable<T>({
               <span className="px-1.5 font-medium text-slate-700 dark:text-[var(--text-primary)]">{page} / {totalPages}</span>
               <button
                 type="button"
-                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                onClick={() => setPage(Math.min(totalPages, page + 1))}
                 disabled={page >= totalPages}
                 className="p-1.5 rounded-lg border border-slate-200 dark:border-[var(--border)] disabled:opacity-40 disabled:cursor-not-allowed hover:bg-slate-50 dark:hover:bg-[var(--bg-subtle)] cursor-pointer"
                 title="Next page"

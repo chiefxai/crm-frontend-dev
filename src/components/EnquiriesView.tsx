@@ -24,29 +24,43 @@ const STATUS_COLOR: Record<string, 'amber' | 'blue' | 'green'> = { new: 'amber',
 
 export default function EnquiriesView() {
   const [enquiries, setEnquiries] = useState<Enquiry[]>([]);
+  const [total, setTotal] = useState(0);
+  const [openCount, setOpenCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [updatingId, setUpdatingId] = useState<string | null>(null);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(25);
 
+  // Server-side pagination — the backend only sends this one page's rows,
+  // the true total, and a separate openCount (computed across the whole
+  // table server-side) so the "N still open" header stays correct without
+  // fetching every enquiry.
   const load = (showSpinner = false) => {
     if (showSpinner) setLoading(true);
-    apiFetch('/api/enquiries')
-      .then(r => r.ok ? r.json() : [])
-      .then((list: Enquiry[]) => setEnquiries(Array.isArray(list) ? list : []))
-      .catch(() => [])
+    apiFetch(`/api/enquiries?page=${page}&limit=${pageSize}`)
+      .then(r => r.ok ? r.json() : null)
+      .then((result: { rows: Enquiry[]; total: number; openCount: number } | null) => {
+        setEnquiries(Array.isArray(result?.rows) ? result.rows : []);
+        setTotal(result?.total ?? 0);
+        setOpenCount(result?.openCount ?? 0);
+      })
+      .catch(() => {})
       .finally(() => { if (showSpinner) setLoading(false); });
   };
 
-  useEffect(() => { load(true); }, []);
+  useEffect(() => { load(true); }, [page, pageSize]);
 
   const handleMarkStatus = async (id: string, status: Enquiry['status']) => {
     setUpdatingId(id);
+    const wasNew = enquiries.find(e => e.id === id)?.status === 'new';
     try {
       const res = await apiFetch(`/api/enquiries/${id}`, { method: 'PATCH', body: JSON.stringify({ status }) });
-      if (res.ok) setEnquiries(prev => prev.map(e => e.id === id ? { ...e, status } : e));
+      if (res.ok) {
+        setEnquiries(prev => prev.map(e => e.id === id ? { ...e, status } : e));
+        if (wasNew) setOpenCount(prev => Math.max(0, prev - 1));
+      }
     } finally { setUpdatingId(null); }
   };
-
-  const openCount = enquiries.filter(e => e.status === 'new').length;
 
   return (
     <PageShell title="Enquiries" subtitle={`Callers who asked something mid-call and need a follow-up — ${openCount} still open.`} onRefresh={() => load()} layout="fill">
@@ -55,7 +69,7 @@ export default function EnquiriesView() {
         <div className="flex-1 flex items-center justify-center text-slate-400"><Loader2 className="h-5 w-5 animate-spin mr-2" /> Loading…</div>
       ) : (
       <Widget className="flex-1" showHeader={false} padding="none">
-        {enquiries.length === 0
+        {total === 0
           ? <EmptyState icon={MessageCircleQuestion} heading="No enquiries captured yet" message="Enquiries from AI calls will appear here automatically." />
           : (() => {
               const columns: Column<Enquiry>[] = [
@@ -92,7 +106,22 @@ export default function EnquiriesView() {
                   ) : null,
                 },
               ];
-              return <DataTable bare resizable paginated columns={columns} rows={enquiries} rowKey={(e) => e.id} />;
+              return (
+                <DataTable
+                  bare
+                  resizable
+                  columns={columns}
+                  rows={enquiries}
+                  rowKey={(e) => e.id}
+                  serverPagination={{
+                    page,
+                    pageSize,
+                    total,
+                    onPageChange: setPage,
+                    onPageSizeChange: (n) => { setPageSize(n); setPage(1); },
+                  }}
+                />
+              );
             })()
         }
       </Widget>
