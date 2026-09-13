@@ -54,7 +54,7 @@ export default function EnquiriesView() {
       {loading ? (
         <div className="flex-1 flex items-center justify-center text-slate-400"><Loader2 className="h-5 w-5 animate-spin mr-2" /> Loading…</div>
       ) : (
-      <Widget className="flex-1" title="Open Enquiries" subtitle="Click an action to update the status of each enquiry." icon={MessageCircleQuestion} accent="#f59e0b" padding="none">
+      <Widget className="flex-1" showHeader={false} padding="none">
         {enquiries.length === 0
           ? <EmptyState icon={MessageCircleQuestion} heading="No enquiries captured yet" message="Enquiries from AI calls will appear here automatically." />
           : (() => {

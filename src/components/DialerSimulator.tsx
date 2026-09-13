@@ -1468,8 +1468,8 @@ Currently on question ${nextIndex} out of ${selectedTask.questions.length}. Next
               }
             />
           ) : (
-          <div className="space-y-4">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-[var(--border)] pb-4">
+          <div className="flex flex-col h-full gap-4">
+            <div className="shrink-0 flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-[var(--border)] pb-4">
               <div>
                 <h3 className="text-lg font-bold text-[var(--text-primary)] uppercase tracking-widest">Active Working List</h3>
               </div>
@@ -1487,6 +1487,7 @@ Currently on question ${nextIndex} out of ${selectedTask.questions.length}. Next
             </div>
 
             {/* List Queue Table */}
+            <div className="flex-1 min-h-0">
             {(() => {
               type QueueRow = { leadId: string; lead: Lead };
               const queueRows: QueueRow[] = selectedTask.leadIds
@@ -1641,6 +1642,7 @@ Currently on question ${nextIndex} out of ${selectedTask.questions.length}. Next
                 />
               );
             })()}
+            </div>
           </div>
           )}
         </Widget>
