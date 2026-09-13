@@ -180,7 +180,7 @@ export default function DataTable<T>({
       )}
 
       {paginated && !loading && rows.length > 0 && (
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 px-5 py-3 border-t border-slate-100 dark:border-[var(--border)]">
+        <div className="shrink-0 sticky bottom-0 flex flex-col sm:flex-row sm:items-center justify-between gap-3 px-5 py-3 border-t border-slate-100 dark:border-[var(--border)] bg-white dark:bg-[var(--bg-surface)]">
           <div className="flex items-center gap-2 text-xs text-slate-500 dark:text-[var(--text-muted)]">
             <span>Rows per page</span>
             <select
