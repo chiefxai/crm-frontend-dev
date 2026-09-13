@@ -102,11 +102,11 @@ export default function ReportsView({ callLogs, dialerTasks, leads, costPerMinut
   // absent on data captured before this field existed, so phone stays as
   // the fallback for that older data. Cached by whichever key was used.
   const [expandedLeadId, setExpandedLeadId] = useState<string | null>(null);
-  const [answersCache, setAnswersCache] = useState<Record<string, { question: string; answer: string }[]>>({});
+  const [answersCache, setAnswersCache] = useState<Record<string, { label?: string; question: string; answer: string }[]>>({});
   const [loadingAnswersFor, setLoadingAnswersFor] = useState<string | null>(null);
   const [exportingCsv, setExportingCsv] = useState(false);
 
-  async function fetchAnswers(callId: string | undefined, phone: string): Promise<{ question: string; answer: string }[]> {
+  async function fetchAnswers(callId: string | undefined, phone: string): Promise<{ label?: string; question: string; answer: string }[]> {
     const cacheKey = callId || phone;
     if (!cacheKey) return [];
     if (answersCache[cacheKey]) return answersCache[cacheKey];
@@ -198,8 +198,9 @@ export default function ReportsView({ callLogs, dialerTasks, leads, costPerMinut
   }, [selectedTask, leads]);
 
   // Fetches every lead's answers (reusing the same cache the expandable
-  // rows use) and lays them out wide — one row per lead, Q1/A1/Q2/A2...
-  // columns — since that's what reads cleanly in Excel/Sheets.
+  // rows use) and lays them out wide — one row per lead, one column per
+  // question headed by its label — since that's what reads cleanly in
+  // Excel/Sheets.
   async function exportTaskCsv(task: DialTask, report: typeof taskReport) {
     if (!report) return;
     setExportingCsv(true);
@@ -209,8 +210,13 @@ export default function ReportsView({ callLogs, dialerTasks, leads, costPerMinut
       );
 
       const maxAnswers = Math.max(0, ...perLead.map((r) => r.answers.length));
+      // Header per question = its label (falls back to the full question
+      // text for pre-migration data with no label) — take it from whichever
+      // lead answered the most questions, since all leads in a task
+      // normally share the same question set in the same order.
+      const labelSource = perLead.find((r) => r.answers.length === maxAnswers)?.answers ?? [];
       const qaHeaders: string[] = [];
-      for (let i = 0; i < maxAnswers; i++) qaHeaders.push(`Question ${i + 1}`, `Answer ${i + 1}`);
+      for (let i = 0; i < maxAnswers; i++) qaHeaders.push(labelSource[i]?.label || labelSource[i]?.question || `Question ${i + 1}`);
 
       const escapeCsv = (val: string) => `"${String(val ?? '').replace(/"/g, '""')}"`;
       // Excel auto-detects a long digit string as a number and mangles it
@@ -222,9 +228,7 @@ export default function ReportsView({ callLogs, dialerTasks, leads, costPerMinut
       const lines = [header.map(escapeCsv).join(',')];
       for (const r of perLead) {
         const qaCells: string[] = [];
-        for (let i = 0; i < maxAnswers; i++) {
-          qaCells.push(r.answers[i]?.question || '', r.answers[i]?.answer || '');
-        }
+        for (let i = 0; i < maxAnswers; i++) qaCells.push(r.answers[i]?.answer || '');
         const row = [escapeCsv(r.name), escapePhoneCsv(r.phone), escapeCsv(r.status), escapeCsv(formatDuration(r.duration)), escapeCsv(r.sentiment), escapeCsv(r.intent), ...qaCells.map(escapeCsv)];
         lines.push(row.join(','));
       }
@@ -429,23 +433,46 @@ export default function ReportsView({ callLogs, dialerTasks, leads, costPerMinut
                                     <span className="h-3 w-3 border-2 border-slate-300 border-t-blue-500 rounded-full animate-spin" />
                                     Loading answers…
                                   </div>
-                                ) : !answers || answers.length === 0 ? (
-                                  <div className="py-3 px-3.5 bg-white border border-dashed border-slate-200 rounded-xl text-[11px] text-slate-400 italic">
-                                    No answers captured for this call.
-                                  </div>
                                 ) : (
-                                  <div className="bg-white border border-slate-200 rounded-xl divide-y divide-slate-100 overflow-hidden">
-                                    {answers.map((a, i) => (
-                                      <div key={i} className="flex gap-3 px-3.5 py-2.5">
-                                        <span className="shrink-0 h-5 w-5 rounded-full bg-blue-50 text-blue-600 text-[10px] font-bold flex items-center justify-center mt-0.5">
-                                          {i + 1}
-                                        </span>
-                                        <div className="min-w-0 flex-1">
-                                          <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide">{a.question}</p>
-                                          <p className="text-[12px] text-slate-700 mt-0.5 break-words">{a.answer}</p>
-                                        </div>
-                                      </div>
-                                    ))}
+                                  <div className="bg-white border border-slate-200 rounded-xl overflow-hidden">
+                                    <table className="w-full text-left text-xs">
+                                      <thead>
+                                        <tr className="border-b border-slate-100 text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                                          <th className="py-2 px-3.5">Field</th>
+                                          <th className="py-2 px-3.5">Value</th>
+                                        </tr>
+                                      </thead>
+                                      <tbody className="divide-y divide-slate-100">
+                                        <tr>
+                                          <td className="py-2 px-3.5 font-semibold text-slate-500 uppercase tracking-wide text-[10px] whitespace-nowrap align-top">Name</td>
+                                          <td className="py-2 px-3.5 text-slate-700">{r.name}</td>
+                                        </tr>
+                                        <tr>
+                                          <td className="py-2 px-3.5 font-semibold text-slate-500 uppercase tracking-wide text-[10px] whitespace-nowrap align-top">Phone</td>
+                                          <td className="py-2 px-3.5 text-slate-700">{r.phone}</td>
+                                        </tr>
+                                        <tr>
+                                          <td className="py-2 px-3.5 font-semibold text-slate-500 uppercase tracking-wide text-[10px] whitespace-nowrap align-top">Sentiment</td>
+                                          <td className="py-2 px-3.5">
+                                            <span className="px-2 py-0.5 rounded-md text-[10px] font-semibold" style={{ color: SENTIMENT_COLOR[r.sentiment], backgroundColor: `${SENTIMENT_COLOR[r.sentiment]}1a` }}>
+                                              {r.sentiment}
+                                            </span>
+                                          </td>
+                                        </tr>
+                                        {answers && answers.length > 0 ? (
+                                          answers.map((a, i) => (
+                                            <tr key={i}>
+                                              <td className="py-2 px-3.5 font-semibold text-slate-500 uppercase tracking-wide text-[10px] whitespace-nowrap align-top">{a.label || a.question}</td>
+                                              <td className="py-2 px-3.5 text-slate-700 break-words">{a.answer}</td>
+                                            </tr>
+                                          ))
+                                        ) : (
+                                          <tr>
+                                            <td colSpan={2} className="py-2 px-3.5 text-slate-400 italic">No workflow answers captured for this call.</td>
+                                          </tr>
+                                        )}
+                                      </tbody>
+                                    </table>
                                   </div>
                                 )}
                               </td>

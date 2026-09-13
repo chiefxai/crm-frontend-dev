@@ -169,10 +169,26 @@ const SUPER_STAR_QUESTIONS: string[] = [
   'Nomination details complete pannikanuma?'
 ];
 
+// Builds the wire-format questions payload for POST /api/{twilio,vobiz,piopiy}/call
+// — pairs each question with its label (falling back to the question text
+// itself when no label was set) so the backend can attach it to the
+// extracted answer.
+function buildQuestionsPayload(task: DialTask | null | undefined): { label: string; question: string }[] {
+  if (!task) return [];
+  return task.questions.map((q, i) => ({ question: q, label: task.questionLabels?.[i] || q }));
+}
+
 interface DialTask {
   id: string;
   name: string;
   questions: string[];
+  // Short key per question (e.g. "customer_budget"), same order/length as
+  // `questions` — set from the workflow builder's WorkflowVariable.name.
+  // Optional/parallel rather than replacing `questions` so the live
+  // question-by-question call flow (which indexes `questions` directly as
+  // the literal text spoken) is untouched; only reporting/extraction
+  // surfaces read this.
+  questionLabels?: string[];
   leadIds: string[];
   status: 'Pending' | 'In Progress' | 'Completed';
   createdAt: string;
@@ -278,6 +294,10 @@ Real Tamil speakers do not say the "correct" written form of a word. They contra
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [wizardStep, setWizardStep] = useState<1 | 2 | 3 | 4>(1);
   const [wizardWorkflowId, setWizardWorkflowId] = useState('');
+  // Optional custom name for the task — falls back to the workflow's own
+  // name when left blank, so this stays backward-compatible with tasks
+  // created before this field existed.
+  const [wizardTaskTitle, setWizardTaskTitle] = useState('');
   const [wizardAgentId, setWizardAgentId] = useState('');
   const [wizardAgents, setWizardAgents] = useState<WizardAgent[]>([]);
   const [wizardAgentsLoading, setWizardAgentsLoading] = useState(false);
@@ -418,9 +438,11 @@ Real Tamil speakers do not say the "correct" written form of a word. They contra
     const workflow = flows.find(f => f.id === wizardWorkflowId);
     if (!workflow) return;
 
-    const questions = (workflow.variables ?? [])
-      .map(v => v.questionText || v.name)
-      .filter(Boolean);
+    const questionPairs = (workflow.variables ?? [])
+      .map(v => ({ label: v.name || v.questionText, question: v.questionText || v.name }))
+      .filter(p => p.question);
+    const questions = questionPairs.map(p => p.question);
+    const questionLabels = questionPairs.map(p => p.label);
 
     // New contacts → add to leadsDatabase first
     const newLeads: Lead[] = wizardNewContacts.map(c => ({
@@ -443,8 +465,9 @@ Real Tamil speakers do not say the "correct" written form of a word. They contra
 
     const newTask: DialTask = {
       id: `TASK-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`,
-      name: workflow.name,
+      name: wizardTaskTitle.trim() || workflow.name,
       questions,
+      questionLabels,
       leadIds: allLeadIds,
       status: 'Pending',
       createdAt: new Date().toISOString(),
@@ -461,6 +484,7 @@ Real Tamil speakers do not say the "correct" written form of a word. They contra
   const openCreateTaskModal = () => {
     setWizardStep(1);
     setWizardWorkflowId('');
+    setWizardTaskTitle('');
     setWizardAgentId('');
     setWizardAgents([]);
     setWizardSelectedLeadIds([]);
@@ -511,7 +535,7 @@ Real Tamil speakers do not say the "correct" written form of a word. They contra
         method: 'POST',
         body: JSON.stringify({
           phoneNumber: lead.phone,
-          questions: selectedTask ? selectedTask.questions : [],
+          questions: buildQuestionsPayload(selectedTask),
           from: selectedOutboundNumber || undefined,
           language: selectedTask?.language || undefined,
           assignedContact: assignedMember ? { name: assignedMember.name, phone: assignedMember.phone } : undefined,
@@ -564,7 +588,7 @@ Real Tamil speakers do not say the "correct" written form of a word. They contra
         method: 'POST',
         body: JSON.stringify({
           phoneNumber: lead.phone,
-          questions: selectedTask ? selectedTask.questions : [],
+          questions: buildQuestionsPayload(selectedTask),
           from: selectedOutboundNumber || undefined,
           language: selectedTask?.language || undefined,
           assignedContact: assignedMember ? { name: assignedMember.name, phone: assignedMember.phone } : undefined,
@@ -618,7 +642,7 @@ Real Tamil speakers do not say the "correct" written form of a word. They contra
         method: 'POST',
         body: JSON.stringify({
           phoneNumber: lead.phone,
-          questions: selectedTask ? selectedTask.questions : [],
+          questions: buildQuestionsPayload(selectedTask),
           from: selectedOutboundNumber || undefined,
           language: selectedTask?.language || undefined,
           assignedContact: assignedMemberTwilio ? { name: assignedMemberTwilio.name, phone: assignedMemberTwilio.phone } : undefined,
@@ -667,7 +691,7 @@ Real Tamil speakers do not say the "correct" written form of a word. They contra
   // player always showed "No recording available" even though the call
   // really was recorded: this function only ever wrote the local
   // simulated timer/transcript, never the real Supabase-hosted recording URL.
-  const handleHangupCall = (realCallLog?: { recordingUrl?: string; duration?: number; sentiment?: string; summary?: string; callId?: string; transcript?: { speaker: 'AI' | 'Customer'; text: string; timestamp: string }[]; answers?: { question: string; answer: string }[] }) => {
+  const handleHangupCall = (realCallLog?: { recordingUrl?: string; duration?: number; sentiment?: string; summary?: string; callId?: string; transcript?: { speaker: 'AI' | 'Customer'; text: string; timestamp: string }[]; answers?: { label?: string; question: string; answer: string }[] }) => {
     if (!activeLead) return;
     setCallState('completed');
 
@@ -708,8 +732,11 @@ Real Tamil speakers do not say the "correct" written form of a word. They contra
               // Real calls: answers come from the backend (lead_responses
               // table, populated by the AI's save_question_response tool).
               // Simulation mode falls back to the local extractedAnswers state.
+              // Keyed by label (falling back to the raw question text for
+              // rows saved before labels existed) to match how the
+              // "Extracted Campaign Answers" panel looks these up.
               answers: realCallLog?.answers
-                ? Object.fromEntries(realCallLog.answers.map(a => [a.question, a.answer]))
+                ? Object.fromEntries(realCallLog.answers.map(a => [a.label || a.question, a.answer]))
                 : { ...extractedAnswers },
               recordingUrl: realCallLog?.recordingUrl,
               // The real call_logs row's id — server.js now writes this as
@@ -776,10 +803,13 @@ Real Tamil speakers do not say the "correct" written form of a word. They contra
     const currentQuestion = selectedTask.questions[activeQuestionIndex];
     const timeStr = new Date().toTimeString().split(' ')[0];
 
-    // Save answer
+    // Save answer, keyed by label to match how real-call answers are keyed
+    // (see handleHangupCall) and how the "Extracted Campaign Answers" panel
+    // looks values up.
+    const currentLabel = selectedTask.questionLabels?.[activeQuestionIndex] || currentQuestion;
     const newAnswers = {
       ...extractedAnswers,
-      [currentQuestion]: utteranceText
+      [currentLabel]: utteranceText
     };
     setExtractedAnswers(newAnswers);
 
@@ -933,33 +963,60 @@ Currently on question ${nextIndex} out of ${selectedTask.questions.length}. Next
   // is actually logged (services/vobizProxy.js / twilioProxy.js,
   // regardless of who hung up) — this just listens for it and matches it
   // to the lead currently on the line.
+  //
+  // This connection is opened ONCE for the whole session rather than being
+  // torn down and reopened every time callState/activeLead changed (the
+  // previous approach) — that reopen-per-call pattern raced a fast-ending
+  // call (voicemail/AMD auto-hangup, "no answer", or any quick hangup)
+  // against the connection actually being open again: EventSource does not
+  // replay missed messages, so if the backend's call_completed event fired
+  // during that brief reconnect window, it was lost forever. callState
+  // would then stay stuck on 'connected' for that lead, and since both
+  // auto-dial-advance effects below require callState === 'completed',
+  // Continuous Dialer Mode would never turn itself off — exactly the
+  // "process never terminates, user has to stop it manually" symptom.
+  // Reading activeLead/callState from refs (instead of the effect's own
+  // closure) lets the connection stay open across every call in the task.
+  const activeLeadRef = useRef(activeLead);
+  useEffect(() => { activeLeadRef.current = activeLead; }, [activeLead]);
+  const callStateRef = useRef(callState);
+  useEffect(() => { callStateRef.current = callState; }, [callState]);
+  // handleHangupCall closes over `tasks`/`extractedAnswers`/etc. and is
+  // redefined every render — a ref kept current on every render (no dep
+  // array) lets the mount-once effect below always call the LATEST version
+  // instead of a stale one frozen at mount time, which would otherwise
+  // compute its task update from a stale `tasks` snapshot and clobber any
+  // other calls' results saved since.
+  const handleHangupCallRef = useRef(handleHangupCall);
+  useEffect(() => { handleHangupCallRef.current = handleHangupCall; });
+
   useEffect(() => {
-    if (callState !== 'connected' || !activeLead) return;
     const token = getAuthToken();
     if (!token) return;
 
     const sanitize = (n: string) => (n || '').replace(/[\s\-\(\)\+]+/g, '');
-    const activePhone = sanitize(activeLead.phone);
 
     const source = new EventSource(`${getApiBase()}/api/logs-stream?token=${encodeURIComponent(token)}`);
     source.onmessage = (event) => {
       try {
         const data = JSON.parse(event.data);
         if (data.type !== 'call_completed' || !data.callLog) return;
+        const lead = activeLeadRef.current;
+        if (!lead || callStateRef.current === 'completed') return;
         const log = data.callLog;
         if (log.direction !== 'outbound') return;
         // Match on callerNumber (E.164 phone stored separately from display name)
         // falling back to leadName for older logs that predate the callerNumber column.
         const logPhone = sanitize(log.callerNumber || log.leadName || '');
-        if (logPhone !== activePhone) return;
-        handleHangupCall({
+        if (logPhone !== sanitize(lead.phone)) return;
+        handleHangupCallRef.current({
           recordingUrl: log.recordingUrl,
           duration: log.duration,
           sentiment: log.sentiment,
           summary: log.summary,
           callId: log.id,
           transcript: log.transcript,
-          answers: log.answers, // { question, answer }[] from lead_responses
+          answers: log.answers, // { label, question, answer }[] from lead_responses
         });
       } catch {
         // non-JSON keepalive/init messages — ignore
@@ -967,7 +1024,7 @@ Currently on question ${nextIndex} out of ${selectedTask.questions.length}. Next
     };
     return () => source.close();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [callState, activeLead]);
+  }, []);
 
   // Continuous auto-dial: once a call finishes, if autoDialOn is set, move
   // to the next pending lead and place the call immediately — no manual
@@ -1218,12 +1275,13 @@ Currently on question ${nextIndex} out of ${selectedTask.questions.length}. Next
 
                 <div className="flex-1 overflow-y-auto space-y-4 pr-1">
                   {selectedTask.questions.map((question, qIdx) => {
-                    const answer = activeTapeResult.answers?.[question];
+                    const label = selectedTask.questionLabels?.[qIdx] || question;
+                    const answer = activeTapeResult.answers?.[label] ?? activeTapeResult.answers?.[question];
                     return (
                       <div key={qIdx} className="p-4 bg-[var(--bg-subtle)] rounded-xl border border-[var(--border)] space-y-2.5 transition-all hover:border-[var(--border)]/80">
                         <div className="flex items-start gap-2">
                           <span className="text-[9px] bg-[var(--bg-subtle)] px-2 py-0.5 rounded font-mono shrink-0 font-bold" style={{ color: 'var(--text-secondary)' }}>Q{qIdx + 1}</span>
-                          <p className="font-medium text-xs leading-snug text-[var(--text-secondary)]">{question}</p>
+                          <p className="font-medium text-xs leading-snug text-[var(--text-secondary)]">{label}</p>
                         </div>
                         <div className="bg-[var(--bg-surface)] border border-[var(--border)]/80 rounded-lg px-3.5 py-3 font-sans text-xs shadow-sm">
                           {answer ? (
@@ -2398,6 +2456,18 @@ Currently on question ${nextIndex} out of ${selectedTask.questions.length}. Next
                 <div>
                   <h3 className="text-sm font-bold text-[var(--text-primary)]">Review & Create</h3>
                   <p className="text-xs text-[var(--text-muted)] mt-0.5">Confirm the details below, then create the dialing task.</p>
+                </div>
+
+                <div>
+                  <label className="text-[10px] font-bold uppercase tracking-widest text-[var(--text-muted)]">Title (optional)</label>
+                  <input
+                    type="text"
+                    value={wizardTaskTitle}
+                    onChange={(e) => setWizardTaskTitle(e.target.value)}
+                    placeholder={selectedWorkflow.name}
+                    className="mt-1 w-full px-3 py-2 text-sm border border-[var(--border)] rounded-xl bg-[var(--bg-surface)] focus:outline-none focus:border-blue-500"
+                  />
+                  <p className="text-[11px] text-[var(--text-muted)] mt-1">Shown in the task list and the call playback panel. Leave blank to use the workflow's name ("{selectedWorkflow.name}").</p>
                 </div>
 
                 <div className="space-y-3 bg-[var(--bg-subtle)] rounded-xl p-4 border border-[var(--border)]">
