@@ -225,17 +225,6 @@ export default function DashboardView({
           ? 'Real-time credit health, portfolio metrics, and automated dialing conversion stats.'
           : `Real-time ${primaryObject?.objectLabel || 'pipeline'} metrics and automated dialing conversion stats.`
       }
-      action={
-        <Button
-          icon={RefreshCw}
-          variant="secondary"
-          size="sm"
-          loading={loadingInsights}
-          onClick={fetchAIInsights}
-        >
-          Refresh AI Model
-        </Button>
-      }
       onRefresh={loadMetrics}
     >
       {/* ── Row 1: KPI tiles ── */}
@@ -475,10 +464,21 @@ export default function DashboardView({
         icon={Sparkles}
         accent="#2563eb"
         action={
-          <span className="flex items-center gap-1.5 text-xs font-medium text-emerald-500">
-            <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
-            Advisor Online
-          </span>
+          <div className="flex items-center gap-3">
+            <span className="flex items-center gap-1.5 text-xs font-medium text-emerald-500">
+              <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
+              Advisor Online
+            </span>
+            <Button
+              icon={RefreshCw}
+              variant="secondary"
+              size="sm"
+              loading={loadingInsights}
+              onClick={fetchAIInsights}
+            >
+              Refresh AI Model
+            </Button>
+          </div>
         }
         padding="md"
         className="theme-panel border relative overflow-hidden"
