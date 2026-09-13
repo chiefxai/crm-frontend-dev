@@ -66,17 +66,19 @@ export default function AuditLogView() {
   useEffect(() => { loadEntries(true); }, []);
 
   return (
-    <PageShell title="Audit Log" subtitle="Admin actions across this organization — who changed what, and when." onRefresh={() => loadEntries()}>
-      {loading ? (
-        <div className="col-span-12 flex items-center justify-center py-20 text-slate-400"><Loader2 className="h-5 w-5 animate-spin mr-2" /> Loading…</div>
-      ) : (
-        <Widget colSpan={12} title="Activity History" subtitle="All admin-level actions are recorded below." icon={ScrollText} accent="#7c3aed" padding="none" scrollable>
-          {entries.length === 0
-            ? <EmptyState icon={ScrollText} heading="No admin actions recorded yet" />
-            : <DataTable bare columns={COLUMNS} rows={entries} rowKey={r => r.id} />
-          }
-        </Widget>
-      )}
+    <PageShell title="Audit Log" subtitle="Admin actions across this organization — who changed what, and when." onRefresh={() => loadEntries()} layout="fill">
+      <div className="flex-1 flex flex-col overflow-hidden px-8 pb-8 pt-6">
+        {loading ? (
+          <div className="flex-1 flex items-center justify-center text-slate-400"><Loader2 className="h-5 w-5 animate-spin mr-2" /> Loading…</div>
+        ) : (
+          <Widget className="flex-1" title="Activity History" subtitle="All admin-level actions are recorded below." icon={ScrollText} accent="#7c3aed" padding="none" scrollable maxBodyHeight="100%">
+            {entries.length === 0
+              ? <EmptyState icon={ScrollText} heading="No admin actions recorded yet" />
+              : <DataTable bare paginated columns={COLUMNS} rows={entries} rowKey={r => r.id} />
+            }
+          </Widget>
+        )}
+      </div>
     </PageShell>
   );
 }

@@ -48,11 +48,12 @@ export default function EnquiriesView() {
   const openCount = enquiries.filter(e => e.status === 'new').length;
 
   return (
-    <PageShell title="Enquiries" subtitle={`Callers who asked something mid-call and need a follow-up — ${openCount} still open.`} onRefresh={() => load()}>
+    <PageShell title="Enquiries" subtitle={`Callers who asked something mid-call and need a follow-up — ${openCount} still open.`} onRefresh={() => load()} layout="fill">
+      <div className="flex-1 flex flex-col overflow-hidden px-8 pb-8 pt-6">
       {loading ? (
-        <div className="col-span-12 flex items-center justify-center py-20 text-slate-400"><Loader2 className="h-5 w-5 animate-spin mr-2" /> Loading…</div>
+        <div className="flex-1 flex items-center justify-center text-slate-400"><Loader2 className="h-5 w-5 animate-spin mr-2" /> Loading…</div>
       ) : (
-      <Widget colSpan={12} title="Open Enquiries" subtitle="Click an action to update the status of each enquiry." icon={MessageCircleQuestion} accent="#f59e0b" padding="none" scrollable>
+      <Widget className="flex-1" title="Open Enquiries" subtitle="Click an action to update the status of each enquiry." icon={MessageCircleQuestion} accent="#f59e0b" padding="none" scrollable maxBodyHeight="100%">
         {enquiries.length === 0
           ? <EmptyState icon={MessageCircleQuestion} heading="No enquiries captured yet" message="Enquiries from AI calls will appear here automatically." />
           : (
@@ -102,6 +103,7 @@ export default function EnquiriesView() {
         }
       </Widget>
       )}
+      </div>
     </PageShell>
   );
 }

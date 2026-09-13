@@ -325,8 +325,10 @@ export default function WorkflowsView({ flows, setFlows }: WorkflowsViewProps) {
       title="Workflow Builder"
       subtitle="Design question flows with conditional branching — skip, jump, or end based on answers."
       action={<IconButton icon={Plus} label="New Workflow" onClick={() => setCreating(true)} />}
+      layout="fill"
     >
-      <Widget colSpan={12} showHeader={false} padding="none">
+      <div className="flex-1 flex flex-col overflow-hidden px-8 pb-8 pt-6">
+      <Widget className="flex-1" showHeader={false} padding="none" scrollable maxBodyHeight="100%">
         {flows.length === 0 ? (
           <div className="text-center py-20">
             <GitBranch className="h-12 w-12 text-slate-200 mx-auto mb-4" />
@@ -372,6 +374,7 @@ export default function WorkflowsView({ flows, setFlows }: WorkflowsViewProps) {
           </div>
         </Modal>
       )}
+      </div>
     </PageShell>
   );
 }

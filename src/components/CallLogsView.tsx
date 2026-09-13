@@ -170,8 +170,10 @@ export default function CallLogsView({ callLogs, costPerMinuteInr, leads = [] }:
           )}
         </div>
       }
+      layout="fill"
     >
-      <Widget colSpan={12} showHeader={false} padding="md">
+      <div className="flex-1 flex flex-col overflow-hidden px-8 pb-8 pt-6 gap-6">
+      <Widget showHeader={false} padding="md" className="shrink-0">
         <FilterBar
           search={{ value: searchTerm, onChange: setSearchTerm, placeholder: 'Search by caller or summary…' }}
           dates={[
@@ -197,7 +199,7 @@ export default function CallLogsView({ callLogs, costPerMinuteInr, leads = [] }:
         />
       </Widget>
 
-      <Widget colSpan={12} showHeader={false} padding="none" scrollable>
+      <Widget className="flex-1" showHeader={false} padding="none" scrollable maxBodyHeight="100%">
         <div>
           <table className="w-full text-left text-xs">
             <thead>
@@ -352,6 +354,7 @@ export default function CallLogsView({ callLogs, costPerMinuteInr, leads = [] }:
           </div>
         </Modal>
       )}
+      </div>
     </PageShell>
   );
 }

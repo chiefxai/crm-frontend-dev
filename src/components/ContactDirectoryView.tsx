@@ -420,8 +420,11 @@ export default function ContactDirectoryView({
           ]}
         />
       }
+      layout="fill"
     >
-      {/* KPI Stats Cards */}
+      <div className="flex-1 flex flex-col overflow-hidden px-8 pb-8 pt-6 gap-6">
+      {/* KPI Stats Cards + Filters — natural height, table below fills the rest */}
+      <div className="grid grid-cols-12 gap-6 shrink-0">
       <KpiCard colSpan={3} icon={Users} iconBg="#eff6ff" iconColor="#2563eb" label="Total Contacts" value={totalContacts} />
       <KpiCard colSpan={3} icon={FileSpreadsheet} iconBg="#f0fdf4" iconColor="#16a34a" label="Bulk Imported" value={bulkUploadedCount} />
       {isLending ? (
@@ -472,9 +475,10 @@ export default function ContactDirectoryView({
           ]}
         />
       </Widget>
+      </div>
 
-      {/* Main Table View */}
-      <Widget title="All Contacts" icon={Users} accent="#2563eb" padding="none" scrollable colSpan={12}>
+      {/* Main Table View — fills the remaining page height */}
+      <Widget className="flex-1" title="All Contacts" icon={Users} accent="#2563eb" padding="none" scrollable maxBodyHeight="100%">
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse">
             <thead className="sticky top-0 z-10" style={{ background: 'var(--bg-surface)' }}>
@@ -583,6 +587,7 @@ export default function ContactDirectoryView({
           </table>
         </div>
       </Widget>
+      </div>
 
       {/* MODAL: Add / Edit Single Contact */}
       {isAddModalOpen && (
