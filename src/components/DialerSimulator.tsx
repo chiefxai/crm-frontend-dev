@@ -1487,9 +1487,7 @@ Currently on question ${nextIndex} out of ${selectedTask.questions.length}. Next
           <div className="space-y-4">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-[var(--border)] pb-4">
               <div>
-                <span className="text-[9px] font-mono text-blue-600 uppercase tracking-widest font-bold">Active Working List</span>
-                <h3 className="text-lg font-bold text-[var(--text-primary)] mt-0.5">{selectedTask.name}</h3>
-                <p className="text-xs text-[var(--text-muted)] mt-1">Checklist questions to ask: <span className="font-semibold text-[var(--text-secondary)]">{selectedTask.questions.length} questions sequential</span></p>
+                <h3 className="text-lg font-bold text-[var(--text-primary)] uppercase tracking-widest">Active Working List</h3>
               </div>
 
               <Button
