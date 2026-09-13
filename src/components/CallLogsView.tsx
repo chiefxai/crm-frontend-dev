@@ -197,7 +197,7 @@ export default function CallLogsView({ callLogs, costPerMinuteInr, leads = [] }:
         />
       </Widget>
 
-      <Widget className="flex-1" showHeader={false} padding="none" scrollable maxBodyHeight="100%">
+      <Widget className="flex-1" showHeader={false} padding="none">
         {(() => {
           const columns: Column<CallLog>[] = [
             {

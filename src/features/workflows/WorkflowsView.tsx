@@ -328,7 +328,7 @@ export default function WorkflowsView({ flows, setFlows }: WorkflowsViewProps) {
       layout="fill"
     >
       <div className="flex-1 flex flex-col overflow-hidden px-8 pb-8 pt-6">
-      <Widget className="flex-1" showHeader={false} padding="none" scrollable maxBodyHeight="100%">
+      <Widget className="flex-1" showHeader={false} padding="none">
         {flows.length === 0 ? (
           <div className="text-center py-20">
             <GitBranch className="h-12 w-12 text-slate-200 mx-auto mb-4" />

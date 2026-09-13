@@ -479,7 +479,7 @@ export default function ContactDirectoryView({
       </div>
 
       {/* Main Table View — fills the remaining page height */}
-      <Widget className="flex-1" title="All Contacts" icon={Users} accent="#2563eb" padding="none" scrollable maxBodyHeight="100%">
+      <Widget className="flex-1" title="All Contacts" icon={Users} accent="#2563eb" padding="none">
         {(() => {
           const columns: Column<Lead>[] = [
             {

@@ -118,13 +118,14 @@ export default function DataTable<T>({
   };
 
   return (
-    <div className={wrapper}>
+    <div className={`${wrapper} ${paginated ? 'flex flex-col h-full max-h-[75vh]' : ''}`}>
       {loading ? (
         <div className="flex items-center justify-center py-16 text-slate-400 gap-2">
           <Loader2 className="h-4 w-4 animate-spin" />
           <span className="text-sm">Loading…</span>
         </div>
       ) : (
+        <div className={paginated ? 'flex-1 overflow-auto min-h-0' : undefined}>
         <table ref={tableRef} className="w-full text-sm" style={resizable ? { tableLayout: 'fixed' } : undefined}>
           <thead className="sticky top-0 z-10" style={{ background: 'var(--bg-surface)' }}>
             <tr className="border-b border-slate-100 dark:border-[var(--border)]">
@@ -177,10 +178,11 @@ export default function DataTable<T>({
             )}
           </tbody>
         </table>
+        </div>
       )}
 
       {paginated && !loading && rows.length > 0 && (
-        <div className="shrink-0 sticky bottom-0 flex flex-col sm:flex-row sm:items-center justify-between gap-3 px-5 py-3 border-t border-slate-100 dark:border-[var(--border)] bg-white dark:bg-[var(--bg-surface)]">
+        <div className="shrink-0 flex flex-col sm:flex-row sm:items-center justify-between gap-3 px-5 py-3 border-t border-slate-100 dark:border-[var(--border)] bg-white dark:bg-[var(--bg-surface)]">
           <div className="flex items-center gap-2 text-xs text-slate-500 dark:text-[var(--text-muted)]">
             <span>Rows per page</span>
             <select

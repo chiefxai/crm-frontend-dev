@@ -71,7 +71,7 @@ export default function AuditLogView() {
         {loading ? (
           <div className="flex-1 flex items-center justify-center text-slate-400"><Loader2 className="h-5 w-5 animate-spin mr-2" /> Loading…</div>
         ) : (
-          <Widget className="flex-1" title="Activity History" subtitle="All admin-level actions are recorded below." icon={ScrollText} accent="#7c3aed" padding="none" scrollable maxBodyHeight="100%">
+          <Widget className="flex-1" title="Activity History" subtitle="All admin-level actions are recorded below." icon={ScrollText} accent="#7c3aed" padding="none">
             {entries.length === 0
               ? <EmptyState icon={ScrollText} heading="No admin actions recorded yet" />
               : <DataTable bare paginated resizable columns={COLUMNS} rows={entries} rowKey={r => r.id} />

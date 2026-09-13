@@ -391,7 +391,7 @@ export default function ReportsView({ callLogs, dialerTasks, leads, costPerMinut
         {/* Table 1 — leads in this task. Click a row to load its captured
             answers into the table below; row count here is fixed (one per
             lead in the task) regardless of which workflow created it. */}
-        <Widget colSpan={12} title={selectedTask ? selectedTask.name : 'Report by Task'} icon={ListChecks} padding="none" scrollable>
+        <Widget colSpan={12} title={selectedTask ? selectedTask.name : 'Report by Task'} icon={ListChecks} padding="none">
           {!selectedTask && <p className="text-xs text-slate-400 text-center py-8">{dialerTasks.length === 0 ? 'No dialer tasks yet — create one from the Voice Simulator.' : 'Pick a task above to see its per-lead outcomes and conversion rate.'}</p>}
           {taskReport && (() => {
             type TaskReportRow = typeof taskReport.rows[number];
