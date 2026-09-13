@@ -1630,9 +1630,12 @@ Currently on question ${nextIndex} out of ${selectedTask.questions.length}. Next
 
               return (
                 <DataTable
+                  bare
+                  resizable
                   columns={columns}
                   rows={queueRows}
                   rowKey={(r) => r.leadId}
+                  emptyMessage="No leads loaded in this list yet."
                   rowClassName={(r) => (activeLead?.id === r.leadId && (callState === 'dialing' || callState === 'connected') ? 'bg-blue-50/30' : '')}
                 />
               );
