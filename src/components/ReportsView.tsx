@@ -5,6 +5,7 @@ import PageShell from './ui/PageShell';
 import Button from './ui/Button';
 import Widget from './ui/Widget';
 import KpiCard from './ui/KpiCard';
+import SlideOver from './ui/SlideOver';
 import { CallLog } from '../types';
 import { callCostInr, formatInr, COST_PER_MINUTE_INR_FALLBACK } from '../lib/pricing';
 import PrintableReport from './PrintableReport';
@@ -402,20 +403,23 @@ export default function ReportsView({ callLogs, dialerTasks, leads, costPerMinut
         </div>
         </Widget>
 
-        {/* Table 2 — the selected lead's captured answers, one row per
-            workflow variable (Field/Value), plus Name/Phone/Sentiment.
-            Row count is NOT fixed — it's however many variables this
-            task's workflow defines, so it grows/shrinks task to task. */}
-        {selectedTask && (() => {
+        {/* Lead detail sidebar — opens on clicking a row in the table above.
+            Row count inside is NOT fixed: Name/Phone/Sentiment plus one row
+            per workflow variable, so it grows/shrinks depending on which
+            task/workflow the selected lead belongs to. */}
+        {(() => {
           const selectedRow = taskReport?.rows.find((r) => r.leadId === selectedLeadId) || null;
           const cacheKey = selectedRow ? (selectedRow.callId || selectedRow.phone) : undefined;
           const answers = cacheKey ? answersCache[cacheKey] : undefined;
           return (
-            <Widget colSpan={12} title={selectedTask.workflowName || selectedTask.name} padding="none" scrollable>
-              <div className="p-5">
-                {!selectedRow ? (
-                  <p className="text-xs text-slate-400 text-center py-8">Click a lead in the table above to see their captured answers.</p>
-                ) : loadingAnswersFor === cacheKey ? (
+            <SlideOver
+              open={!!selectedRow}
+              onClose={() => setSelectedLeadId(null)}
+              title={selectedRow?.name}
+              subtitle={selectedTask?.workflowName || selectedTask?.name}
+            >
+              {selectedRow && (
+                loadingAnswersFor === cacheKey ? (
                   <div className="flex items-center gap-2 py-8 justify-center text-[11px] text-slate-400">
                     <span className="h-3 w-3 border-2 border-slate-300 border-t-blue-500 rounded-full animate-spin" />
                     Loading answers…
@@ -439,12 +443,24 @@ export default function ReportsView({ callLogs, dialerTasks, leads, costPerMinut
                           <td className="py-2 px-3.5 text-slate-700">{selectedRow.phone}</td>
                         </tr>
                         <tr>
+                          <td className="py-2 px-3.5 font-semibold text-slate-500 uppercase tracking-wide text-[10px] whitespace-nowrap align-top">Status</td>
+                          <td className="py-2 px-3.5 text-slate-700">{selectedRow.status}</td>
+                        </tr>
+                        <tr>
+                          <td className="py-2 px-3.5 font-semibold text-slate-500 uppercase tracking-wide text-[10px] whitespace-nowrap align-top">Duration</td>
+                          <td className="py-2 px-3.5 text-slate-700">{formatDuration(selectedRow.duration)}</td>
+                        </tr>
+                        <tr>
                           <td className="py-2 px-3.5 font-semibold text-slate-500 uppercase tracking-wide text-[10px] whitespace-nowrap align-top">Sentiment</td>
                           <td className="py-2 px-3.5">
                             <span className="px-2 py-0.5 rounded-md text-[10px] font-semibold" style={{ color: SENTIMENT_COLOR[selectedRow.sentiment], backgroundColor: `${SENTIMENT_COLOR[selectedRow.sentiment]}1a` }}>
                               {selectedRow.sentiment}
                             </span>
                           </td>
+                        </tr>
+                        <tr>
+                          <td className="py-2 px-3.5 font-semibold text-slate-500 uppercase tracking-wide text-[10px] whitespace-nowrap align-top">Intent</td>
+                          <td className="py-2 px-3.5 text-slate-700">{selectedRow.intent}</td>
                         </tr>
                         {answers && answers.length > 0 ? (
                           answers.map((a, i) => (
@@ -461,9 +477,9 @@ export default function ReportsView({ callLogs, dialerTasks, leads, costPerMinut
                       </tbody>
                     </table>
                   </div>
-                )}
-              </div>
-            </Widget>
+                )
+              )}
+            </SlideOver>
           );
         })()}
 
