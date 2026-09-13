@@ -1671,41 +1671,38 @@ Currently on question ${nextIndex} out of ${selectedTask.questions.length}. Next
       {/* Two columns workspace: Live Active Telephone Screen AND Call Cassette Tape Transcript History Player */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
         {/* Active Telephone Simulator Frame */}
-        <div className="lg:col-span-6 theme-panel rounded-2xl p-6 border shadow-xl space-y-5">
-          <div className="flex justify-between items-center border-b border-white/5 pb-3">
-            <div className="flex items-center space-x-2">
-              <Disc className={`h-4.5 w-4.5 text-blue-400 ${callState === 'connected' ? 'animate-spin' : ''}`} />
-              <span className="text-xs font-mono text-blue-300 font-bold uppercase tracking-widest">AI Call Simulator Screen</span>
-            </div>
-            {callState === 'connected' ? (
-              <span className="text-[10px] font-mono text-red-400 font-bold flex items-center gap-1 bg-red-950/40 border border-red-900/40 px-2 py-0.5 rounded-full">
-                <span className="h-1.5 w-1.5 rounded-full bg-red-500 animate-pulse"></span>
-                🔴 REC AUDIO ACTIVE
-              </span>
-            ) : (
-              <span className="text-[10px] font-mono text-[var(--text-muted)] uppercase tracking-widest font-bold">Line Standing By</span>
-            )}
-          </div>
-
+        <Widget
+          colSpan={6}
+          icon={Disc}
+          title="AI Call Simulator Screen"
+          action={callState === 'connected' ? (
+            <span className="text-[10px] font-mono text-rose-500 font-bold flex items-center gap-1 bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900/40 px-2 py-0.5 rounded-full">
+              <span className="h-1.5 w-1.5 rounded-full bg-rose-500 animate-pulse"></span>
+              🔴 REC AUDIO ACTIVE
+            </span>
+          ) : (
+            <span className="text-[10px] font-mono text-[var(--text-muted)] uppercase tracking-widest font-bold">Line Standing By</span>
+          )}
+        >
           {activeLead ? (
             <div className="space-y-4">
               {/* Active Call details */}
-              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center bg-white/5 p-4 rounded-xl border border-white/5 gap-2">
+              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center bg-slate-50 dark:bg-[var(--bg-subtle)] p-4 rounded-xl border border-slate-100 dark:border-[var(--border)] gap-2">
                 <div>
                   <h5 className="text-xs text-[var(--text-muted)] font-mono">CALLEE TARGET</h5>
-                  <p className="text-sm font-bold text-slate-100 font-display mt-0.5">{activeLead.name}</p>
-                  <p className="text-[10px] text-blue-300 font-mono mt-0.5">{activeLead.phone}{activeLead.amountRequested ? ` • value $${activeLead.amountRequested.toLocaleString()}` : ''}</p>
+                  <p className="text-sm font-bold text-[var(--text-primary)] mt-0.5">{activeLead.name}</p>
+                  <p className="text-[10px] text-blue-600 dark:text-blue-400 font-mono mt-0.5">{activeLead.phone}{activeLead.amountRequested ? ` • value $${activeLead.amountRequested.toLocaleString()}` : ''}</p>
                 </div>
                 <div className="text-right shrink-0">
                   <h5 className="text-xs text-[var(--text-muted)] font-mono">DIAL TIMER</h5>
-                  <p className="text-md font-mono font-bold text-slate-100 mt-0.5">
+                  <p className="text-md font-mono font-bold text-[var(--text-primary)] mt-0.5">
                     {callState === 'connected' ? formatTime(duration) : '00:00'}
                   </p>
                 </div>
               </div>
 
               {/* Questionnaire Progress checklist inside phone hud */}
-              <div className="theme-panel-surface border rounded-xl p-4 space-y-2.5" style={{borderColor:'var(--panel-border)'}}>
+              <div className="bg-slate-50 dark:bg-[var(--bg-subtle)] border border-slate-100 dark:border-[var(--border)] rounded-xl p-4 space-y-2.5">
                 <span className="text-[9px] font-mono text-[var(--text-muted)] uppercase font-bold tracking-wider block">Questionnaire Steps asked by AI:</span>
                 <div className="space-y-1.5 text-[11px]">
                   {selectedTask.questions.map((q, idx) => {
@@ -1714,20 +1711,20 @@ Currently on question ${nextIndex} out of ${selectedTask.questions.length}. Next
 
                     return (
                       <div key={idx} className={`flex items-start gap-2 p-1.5 rounded ${
-                        isCurrent ? 'bg-blue-900/30 border border-blue-800/40' : 'opacity-60'
+                        isCurrent ? 'bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-800/40' : 'opacity-60'
                       }`}>
                         {isAsked ? (
-                          <CheckCircle2 className="h-4 w-4 text-emerald-400 shrink-0 mt-0.5" />
+                          <CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0 mt-0.5" />
                         ) : isCurrent ? (
-                          <span className="h-4 w-4 rounded-full border border-blue-400 flex items-center justify-center text-[10px] text-blue-300 font-bold animate-pulse shrink-0 mt-0.5">
+                          <span className="h-4 w-4 rounded-full border border-blue-400 flex items-center justify-center text-[10px] text-blue-600 dark:text-blue-300 font-bold animate-pulse shrink-0 mt-0.5">
                             {idx + 1}
                           </span>
                         ) : (
-                          <span className="h-4 w-4 rounded-full border border-slate-700 flex items-center justify-center text-[10px] text-[var(--text-muted)] shrink-0 mt-0.5">
+                          <span className="h-4 w-4 rounded-full border border-slate-300 dark:border-[var(--border)] flex items-center justify-center text-[10px] text-[var(--text-muted)] shrink-0 mt-0.5">
                             {idx + 1}
                           </span>
                         )}
-                        <p className={`leading-relaxed ${isCurrent ? 'font-bold text-slate-100' : 'text-slate-300'}`}>{q}</p>
+                        <p className={`leading-relaxed ${isCurrent ? 'font-bold text-[var(--text-primary)]' : 'text-[var(--text-secondary)]'}`}>{q}</p>
                       </div>
                     );
                   })}
@@ -1738,7 +1735,7 @@ Currently on question ${nextIndex} out of ${selectedTask.questions.length}. Next
               <div className="flex items-center justify-center pt-2">
                 {callState === 'idle' && (
                   <div className="text-center py-4 space-y-3">
-                    <div className="h-12 w-12 bg-blue-600/10 border border-blue-500/20 rounded-full flex items-center justify-center text-blue-400 mx-auto">
+                    <div className="h-12 w-12 bg-blue-50 dark:bg-blue-600/10 border border-blue-200 dark:border-blue-500/20 rounded-full flex items-center justify-center text-blue-500 mx-auto">
                       <PhoneCall className="h-6 w-6" />
                     </div>
                     <p className="text-xs text-[var(--text-muted)]">Selected target ready for outbound dial. Initiate line now.</p>
@@ -1747,7 +1744,7 @@ Currently on question ${nextIndex} out of ${selectedTask.questions.length}. Next
                         <select
                           value={selectedOutboundNumber}
                           onChange={(e) => setSelectedOutboundNumber(e.target.value)}
-                          className="rounded-lg px-3 py-1.5 text-xs focus:outline-none" style={{background:'var(--panel-surface)',border:'1px solid var(--panel-border)',color:'var(--panel-text)'}}
+                          className="rounded-lg px-3 py-1.5 text-xs focus:outline-none bg-white dark:bg-[var(--bg-surface)] border border-slate-200 dark:border-[var(--border)] text-[var(--text-primary)]"
                         >
                           {dialableNumbers.map((n) => (
                             <option key={n.number} value={n.number}>
@@ -1755,56 +1752,50 @@ Currently on question ${nextIndex} out of ${selectedTask.questions.length}. Next
                             </option>
                           ))}
                         </select>
-                        <button
-                          onClick={() => dialLead(activeLead)}
-                          className="px-5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs rounded-xl shadow-md cursor-pointer"
-                        >
+                        <Button variant="success" size="sm" onClick={() => dialLead(activeLead)}>
                           Dial
-                        </button>
+                        </Button>
                       </div>
                     ) : (
-                      <p className="text-xs text-rose-400">No Twilio or Vobiz.ai number provisioned yet — add one in Settings &gt; Numbers before dialing.</p>
+                      <p className="text-xs text-rose-500">No Twilio or Vobiz.ai number provisioned yet — add one in Settings &gt; Numbers before dialing.</p>
                     )}
                   </div>
                 )}
 
                 {callState === 'dialing' && (
                   <div className="text-center py-4 space-y-3">
-                    <div className="h-12 w-12 bg-amber-500/10 border border-amber-500/20 rounded-full flex items-center justify-center text-amber-400 animate-ping mx-auto">
+                    <div className="h-12 w-12 bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/20 rounded-full flex items-center justify-center text-amber-500 animate-ping mx-auto">
                       <Volume2 className="h-6 w-6" />
                     </div>
-                    <p className="text-xs text-amber-400 font-mono">Securing carrier trunk line...</p>
-                    <button
-                      onClick={() => setCallState('idle')}
-                      className="px-4 py-1.5 bg-rose-600 text-white text-[10px] font-bold rounded-lg cursor-pointer"
-                    >
+                    <p className="text-xs text-amber-600 dark:text-amber-400 font-mono">Securing carrier trunk line...</p>
+                    <Button variant="danger" size="xs" onClick={() => setCallState('idle')}>
                       Cancel Outbound Connection
-                    </button>
+                    </Button>
                   </div>
                 )}
 
                 {callState === 'connected' && (
-                  <button
+                  <Button
+                    variant="danger"
+                    size="md"
+                    icon={PhoneOff}
+                    className="w-full justify-center"
                     onClick={vobizCallSid ? handleHangupVobizCall : (twilioCallSid ? handleHangupTwilioCall : handleHangupCall)}
-                    className="w-full py-2.5 bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs rounded-xl flex items-center justify-center transition-all cursor-pointer shadow-lg"
                   >
-                    <PhoneOff className="h-4.5 w-4.5 mr-2" /> Disconnect Call (Finish & Save Recording)
-                  </button>
+                    Disconnect Call (Finish & Save Recording)
+                  </Button>
                 )}
 
                 {callState === 'completed' && (
                   <div className="text-center py-4 space-y-3">
-                    <div className="h-12 w-12 bg-emerald-600/10 border border-emerald-500/20 rounded-full flex items-center justify-center text-emerald-400 mx-auto">
+                    <div className="h-12 w-12 bg-emerald-50 dark:bg-emerald-600/10 border border-emerald-200 dark:border-emerald-500/20 rounded-full flex items-center justify-center text-emerald-500 mx-auto">
                       <ThumbsUp className="h-6 w-6" />
                     </div>
-                    <p className="text-xs text-slate-200 font-semibold">Call successfully finished & saved to tape recorder!</p>
+                    <p className="text-xs text-[var(--text-primary)] font-semibold">Call successfully finished & saved to tape recorder!</p>
                     <p className="text-[10px] text-[var(--text-muted)]">Speech transcript has been parsed and answers extracted.</p>
-                    <button
-                      onClick={() => setCallState('idle')}
-                      className="px-4 py-1.5 bg-white/10 hover:bg-white/15 text-xs rounded-lg cursor-pointer text-white"
-                    >
+                    <Button variant="secondary" size="xs" onClick={() => setCallState('idle')}>
                       Ready Next Dial
-                    </button>
+                    </Button>
                   </div>
                 )}
               </div>
@@ -1815,20 +1806,22 @@ Currently on question ${nextIndex} out of ${selectedTask.questions.length}. Next
               <p className="text-xs text-[var(--text-muted)]">No active connection. Choose a target from the list above and click "Dial" to start.</p>
             </div>
           )}
-        </div>
+        </Widget>
 
         {/* Live Active Transcript / Simulation Speech Feed */}
-        <div className="lg:col-span-6 theme-panel rounded-2xl border shadow-xl flex flex-col h-[400px]">
-          <div className="p-4 border-b theme-panel-surface flex items-center justify-between" style={{borderColor:'var(--panel-border)'}}>
-            <span className="text-xs font-mono text-blue-400 uppercase tracking-widest flex items-center">
-              <MessageSquare className="h-4.5 w-4.5 mr-2" /> Active Dialogue feed
-            </span>
+        <Widget
+          colSpan={6}
+          icon={MessageSquare}
+          title="Active Dialogue Feed"
+          padding="none"
+          bodyClassName="flex flex-col h-[400px] p-0"
+          action={
             <div className="flex items-center space-x-1.5">
               <span className="h-2 w-2 rounded-full bg-emerald-500"></span>
-              <span className="text-[10px] font-mono text-emerald-400 font-semibold uppercase tracking-wider">AUDIO STREAM PARSING</span>
+              <span className="text-[10px] font-mono text-emerald-600 dark:text-emerald-400 font-semibold uppercase tracking-wider">AUDIO STREAM PARSING</span>
             </div>
-          </div>
-
+          }
+        >
           {/* Transcript bubbles */}
           <div className="flex-1 overflow-y-auto p-4 space-y-4">
             {transcript.length > 0 ? (
@@ -1840,8 +1833,8 @@ Currently on question ${nextIndex} out of ${selectedTask.questions.length}. Next
                     <div
                       className={`rounded-2xl px-4 py-2 text-xs font-sans leading-relaxed ${
                         isAI
-                          ? 'bg-blue-900 text-blue-50 rounded-tl-none'
-                          : 'bg-slate-800 text-slate-200 rounded-tr-none border border-slate-700/50'
+                          ? 'bg-blue-600 text-white rounded-tl-none'
+                          : 'bg-slate-100 dark:bg-[var(--bg-subtle)] text-[var(--text-primary)] rounded-tr-none border border-slate-200 dark:border-[var(--border)]'
                       }`}
                     >
                       {line.text}
@@ -1851,7 +1844,7 @@ Currently on question ${nextIndex} out of ${selectedTask.questions.length}. Next
               })
             ) : (
               <div className="flex flex-col items-center justify-center h-full text-[var(--text-muted)] space-y-2">
-                <Mic className="h-8 w-8 text-slate-600 animate-pulse" />
+                <Mic className="h-8 w-8 text-slate-300 dark:text-slate-600 animate-pulse" />
                 <p className="text-xs text-[var(--text-muted)]">Awaiting telephone call connection to parse audio waves...</p>
               </div>
             )}
@@ -1859,7 +1852,7 @@ Currently on question ${nextIndex} out of ${selectedTask.questions.length}. Next
             {isAiResponding && (
               <div className="flex flex-col items-start">
                 <span className="text-[9px] text-[var(--text-muted)] font-mono mb-1">AI {agentDisplayName} • Thinking</span>
-                <div className="bg-blue-950/50 border border-blue-900/40 text-blue-300 rounded-2xl rounded-tl-none px-4 py-2 flex items-center space-x-2 text-xs">
+                <div className="bg-blue-50 dark:bg-blue-950/50 border border-blue-200 dark:border-blue-900/40 text-blue-600 dark:text-blue-300 rounded-2xl rounded-tl-none px-4 py-2 flex items-center space-x-2 text-xs">
                   <RefreshCw className="h-3.5 w-3.5 animate-spin" />
                   <span>AI Agent {agentDisplayName} is evaluating customer utterance...</span>
                 </div>
@@ -1870,7 +1863,7 @@ Currently on question ${nextIndex} out of ${selectedTask.questions.length}. Next
 
           {/* Caller Interactive Speech Simulation pad */}
           {callState === 'connected' && (
-            <div className="p-3 border-t theme-panel-surface space-y-2.5" style={{borderColor:'var(--panel-border)'}}>
+            <div className="p-3 border-t border-slate-100 dark:border-[var(--border)] space-y-2.5">
               {/* Quick simulation helper response chips */}
               <div className="flex flex-wrap gap-1.5">
                 {getSuggestionsForActiveQuestion().map((suggestion, sIdx) => (
@@ -1881,7 +1874,7 @@ Currently on question ${nextIndex} out of ${selectedTask.questions.length}. Next
                       setCustomerUtterance(suggestion);
                       handleSendUtterance(suggestion);
                     }}
-                    className="text-[10px] bg-slate-800 hover:bg-blue-900 hover:text-white text-slate-300 border border-slate-700/60 rounded px-2.5 py-1 transition-all cursor-pointer"
+                    className="text-[10px] bg-slate-100 dark:bg-[var(--bg-subtle)] hover:bg-blue-600 hover:text-white text-[var(--text-secondary)] border border-slate-200 dark:border-[var(--border)] rounded px-2.5 py-1 transition-all cursor-pointer"
                   >
                     🎤 Say: "{suggestion}"
                   </button>
@@ -1900,18 +1893,15 @@ Currently on question ${nextIndex} out of ${selectedTask.questions.length}. Next
                   value={customerUtterance}
                   onChange={(e) => setCustomerUtterance(e.target.value)}
                   placeholder="Type customer reply here..."
-                  className="flex-1 rounded-xl px-3.5 py-2.5 text-xs placeholder-slate-500 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500" style={{background:'var(--panel-surface)',border:'1px solid var(--panel-border)',color:'var(--panel-text)'}}
+                  className="flex-1 rounded-xl px-3.5 py-2.5 text-xs placeholder-slate-400 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 bg-white dark:bg-[var(--bg-surface)] border border-slate-200 dark:border-[var(--border)] text-[var(--text-primary)]"
                 />
-                <button
-                  type="submit"
-                  className="p-2.5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl transition-all cursor-pointer"
-                >
+                <Button type="submit" variant="primary" size="md" className="!px-2.5">
                   <Send className="h-4 w-4" />
-                </button>
+                </Button>
               </form>
             </div>
           )}
-        </div>
+        </Widget>
       </div>
         </>
       ) : (
