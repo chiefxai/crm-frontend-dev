@@ -1389,6 +1389,13 @@ Currently on question ${nextIndex} out of ${selectedTask.questions.length}. Next
 
       {dialerMode === 'outbound' ? (
         <>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+            <KpiCard colSpan={1} label="Targets Loaded" value={totalLeadsInTask} icon={FileSpreadsheet} iconPosition="right" iconBg="var(--bg-subtle)" iconColor="var(--text-muted)" className="!rounded-xl !min-h-0 !p-3.5" />
+            <KpiCard colSpan={1} label="Recorded Dialed" value={completedLeadsInTask} icon={CheckCircle2} iconPosition="right" iconBg="var(--bg-subtle)" iconColor="var(--text-muted)" className="!rounded-xl !min-h-0 !p-3.5" />
+            <KpiCard colSpan={1} label="Skipped/No Answer" value={skippedLeadsInTask} icon={XCircle} iconPosition="right" iconBg="var(--bg-subtle)" iconColor="var(--text-muted)" className="!rounded-xl !min-h-0 !p-3.5" />
+            <KpiCard colSpan={1} label="Conversion Rate" value={`${conversionPercent}%`} icon={Activity} iconPosition="right" iconBg="var(--bg-subtle)" iconColor="#059669" className="!rounded-xl !min-h-0 !p-3.5" />
+          </div>
+
           <div className="grid grid-cols-12 gap-6">
         {/* Left Column: Today's Assigned Tasks list */}
         <Widget
@@ -1500,14 +1507,6 @@ Currently on question ${nextIndex} out of ${selectedTask.questions.length}. Next
               >
                 {autoDialOn ? 'Stop Auto-Dial' : 'Auto-Dial Next List Target'}
               </Button>
-            </div>
-
-            {/* Micro bento statistics metrics */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-              <KpiCard colSpan={1} label="Targets Loaded" value={totalLeadsInTask} icon={FileSpreadsheet} iconPosition="right" iconBg="var(--bg-subtle)" iconColor="var(--text-muted)" className="!rounded-xl !min-h-0 !p-3.5" />
-              <KpiCard colSpan={1} label="Recorded Dialed" value={completedLeadsInTask} icon={CheckCircle2} iconPosition="right" iconBg="var(--bg-subtle)" iconColor="var(--text-muted)" className="!rounded-xl !min-h-0 !p-3.5" />
-              <KpiCard colSpan={1} label="Skipped/No Answer" value={skippedLeadsInTask} icon={XCircle} iconPosition="right" iconBg="var(--bg-subtle)" iconColor="var(--text-muted)" className="!rounded-xl !min-h-0 !p-3.5" />
-              <KpiCard colSpan={1} label="Conversion Rate" value={`${conversionPercent}%`} icon={Activity} iconPosition="right" iconBg="var(--bg-subtle)" iconColor="#059669" className="!rounded-xl !min-h-0 !p-3.5" />
             </div>
 
             {/* List Queue Table */}
@@ -1904,6 +1903,27 @@ Currently on question ${nextIndex} out of ${selectedTask.questions.length}. Next
         </>
       ) : (
         /* REAL INBOUND CALL HISTORY */
+        <>
+        <div className="grid grid-cols-3 gap-4">
+          <KpiCard colSpan={1} label="Inbound Volume" value={realInboundCallLogs.length} className="!rounded-xl !min-h-0 !p-3.5" />
+          <KpiCard
+            colSpan={1}
+            label="Average Duration"
+            value={`${realInboundCallLogs.length > 0
+              ? Math.round(realInboundCallLogs.reduce((acc, l) => acc + l.duration, 0) / realInboundCallLogs.length)
+              : 0}s`}
+            className="!rounded-xl !min-h-0 !p-3.5"
+          />
+          <KpiCard
+            colSpan={1}
+            label="Positive Rate"
+            value={`${realInboundCallLogs.length > 0
+              ? Math.round((realInboundCallLogs.filter(l => l.sentiment === 'Positive').length / realInboundCallLogs.length) * 100)
+              : 0}%`}
+            className="!rounded-xl !min-h-0 !p-3.5"
+          />
+        </div>
+
         <div className="grid grid-cols-12 gap-6">
           {/* LEFT COLUMN: Active Inbound Virtual Numbers */}
           <div className="col-span-12 lg:col-span-4 space-y-6">
@@ -1960,27 +1980,6 @@ Currently on question ${nextIndex} out of ${selectedTask.questions.length}. Next
           <div className="col-span-12 lg:col-span-8 flex flex-col h-full space-y-6">
             <Widget showHeader={false} className="h-full min-h-[580px]" bodyClassName="flex flex-col justify-between h-full">
               <div className="space-y-4">
-                {/* Stats banner */}
-                <div className="grid grid-cols-3 gap-4 border-b border-[var(--border)] pb-5">
-                  <KpiCard colSpan={1} label="Inbound Volume" value={realInboundCallLogs.length} className="!rounded-xl !min-h-0 !p-3.5" />
-                  <KpiCard
-                    colSpan={1}
-                    label="Average Duration"
-                    value={`${realInboundCallLogs.length > 0
-                      ? Math.round(realInboundCallLogs.reduce((acc, l) => acc + l.duration, 0) / realInboundCallLogs.length)
-                      : 0}s`}
-                    className="!rounded-xl !min-h-0 !p-3.5"
-                  />
-                  <KpiCard
-                    colSpan={1}
-                    label="Positive Rate"
-                    value={`${realInboundCallLogs.length > 0
-                      ? Math.round((realInboundCallLogs.filter(l => l.sentiment === 'Positive').length / realInboundCallLogs.length) * 100)
-                      : 0}%`}
-                    className="!rounded-xl !min-h-0 !p-3.5"
-                  />
-                </div>
-
                 <div className="flex items-center justify-between">
                   <div>
                     <h3 className="text-sm font-bold text-[var(--text-primary)] uppercase tracking-widest flex items-center gap-1.5">
@@ -2053,6 +2052,7 @@ Currently on question ${nextIndex} out of ${selectedTask.questions.length}. Next
             </Widget>
           </div>
         </div>
+        </>
       )}
       </div>
       {/* MODAL: Assign New Dialing Task — 4-step wizard */}
