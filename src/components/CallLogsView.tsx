@@ -5,8 +5,6 @@ import { CallLog, Lead } from '../types';
 import { callCostInr, formatInr } from '../lib/pricing';
 import { normalizePhone, formatPhone } from '../lib/phone';
 import { getPlayableRecordingUrl } from '../lib/api';
-import Pagination from '../shared/components/Pagination';
-import { usePagination } from '../shared/hooks/usePagination';
 import PageShell from './ui/PageShell';
 import Widget from './ui/Widget';
 import Button from './ui/Button';
@@ -14,6 +12,7 @@ import Badge from './ui/Badge';
 import FilterBar from './ui/FilterBar';
 import EmptyState from './ui/EmptyState';
 import Markdown from './ui/Markdown';
+import DataTable, { Column } from './ui/DataTable';
 
 interface CallLogsViewProps {
   callLogs: CallLog[];
@@ -120,7 +119,6 @@ export default function CallLogsView({ callLogs, costPerMinuteInr, leads = [] }:
   });
 
   const sorted = [...filtered].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-  const pagination = usePagination(sorted, 25);
   const totalDuration = filtered.reduce((sum, c) => sum + (c.duration || 0), 0);
   const totalCost = filtered.reduce((sum, c) => sum + callCostInr(c.duration || 0, costPerMinuteInr), 0);
 
@@ -200,47 +198,40 @@ export default function CallLogsView({ callLogs, costPerMinuteInr, leads = [] }:
       </Widget>
 
       <Widget className="flex-1" showHeader={false} padding="none" scrollable maxBodyHeight="100%">
-        <div>
-          <table className="w-full text-left text-xs">
-            <thead>
-              <tr className="text-[10px] font-bold uppercase tracking-widest border-b" style={{ background: 'var(--bg-subtle)', borderColor: 'var(--border)', color: 'var(--text-muted)' }}>
-                <th className="px-5 py-3">Caller</th>
-                <th className="px-5 py-3">Duration</th>
-                <th className="px-5 py-3">Cost</th>
-                <th className="px-5 py-3">Status</th>
-                <th className="px-5 py-3">Sentiment</th>
-                <th className="px-5 py-3">When</th>
-                <th className="px-5 py-3 text-right">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y" style={{ borderColor: 'var(--border)', color: 'var(--text-secondary)' }}>
-              {pagination.paginatedItems.map(c => (
-                <tr key={c.id} className="hover:bg-[var(--bg-subtle)]">
-                  <td className="px-5 py-3 font-semibold" style={{ color: 'var(--text-primary)' }}>
-                    <div>{resolveCallerName(c)}</div>
-                    {c.direction && <div className="text-[10px] font-normal mt-0.5" style={{ color: 'var(--text-muted)' }}>{c.direction}</div>}
-                  </td>
-                  <td className="px-5 py-3 font-mono">{formatDuration(c.duration)}</td>
-                  <td className="px-5 py-3 font-mono">{formatInr(callCostInr(c.duration, costPerMinuteInr))}</td>
-                  <td className="px-5 py-3">{c.status}</td>
-                  <td className="px-5 py-3">
-                    <Badge color={SENTIMENT_COLOR[c.sentiment] ?? 'slate'}>{c.sentiment}</Badge>
-                  </td>
-                  <td className="px-5 py-3" style={{ color: 'var(--text-muted)' }}>{new Date(c.createdAt).toLocaleString()}</td>
-                  <td className="px-5 py-3 text-right">
-                    <button onClick={() => setSelected(c)} className="text-blue-600 hover:underline font-semibold flex items-center gap-1 ml-auto text-xs">
-                      <Phone className="h-3 w-3" /> View
-                    </button>
-                  </td>
-                </tr>
-              ))}
-              {sorted.length === 0 && (
-                <tr><td colSpan={7}><EmptyState heading={searchTerm ? 'No calls match your search' : 'No calls yet'} message="Real inbound and outbound calls will appear here automatically." /></td></tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-        <Pagination page={pagination.page} totalPages={pagination.totalPages} totalItems={pagination.totalItems} pageSize={pagination.pageSize} onPageChange={pagination.setPage} />
+        {(() => {
+          const columns: Column<CallLog>[] = [
+            {
+              key: 'caller',
+              header: 'Caller',
+              cell: (c) => (
+                <>
+                  <div className="font-semibold" style={{ color: 'var(--text-primary)' }}>{resolveCallerName(c)}</div>
+                  {c.direction && <div className="text-[10px] font-normal mt-0.5" style={{ color: 'var(--text-muted)' }}>{c.direction}</div>}
+                </>
+              ),
+            },
+            { key: 'duration', header: 'Duration', cell: (c) => <span className="font-mono">{formatDuration(c.duration)}</span> },
+            { key: 'cost', header: 'Cost', cell: (c) => <span className="font-mono">{formatInr(callCostInr(c.duration, costPerMinuteInr))}</span> },
+            { key: 'status', header: 'Status', cell: (c) => <>{c.status}</> },
+            { key: 'sentiment', header: 'Sentiment', cell: (c) => <Badge color={SENTIMENT_COLOR[c.sentiment] ?? 'slate'}>{c.sentiment}</Badge> },
+            { key: 'when', header: 'When', cell: (c) => <span style={{ color: 'var(--text-muted)' }}>{new Date(c.createdAt).toLocaleString()}</span> },
+            {
+              key: 'actions',
+              header: 'Actions',
+              align: 'right',
+              cell: (c) => (
+                <button onClick={() => setSelected(c)} className="text-blue-600 hover:underline font-semibold flex items-center gap-1 ml-auto text-xs">
+                  <Phone className="h-3 w-3" /> View
+                </button>
+              ),
+            },
+          ];
+          return sorted.length === 0 ? (
+            <EmptyState heading={searchTerm ? 'No calls match your search' : 'No calls yet'} message="Real inbound and outbound calls will appear here automatically." />
+          ) : (
+            <DataTable bare resizable paginated defaultPageSize={25} columns={columns} rows={sorted} rowKey={(c) => c.id} />
+          );
+        })()}
       </Widget>
 
       {/* Detail modal */}

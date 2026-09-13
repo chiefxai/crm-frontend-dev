@@ -74,7 +74,7 @@ export default function AuditLogView() {
           <Widget className="flex-1" title="Activity History" subtitle="All admin-level actions are recorded below." icon={ScrollText} accent="#7c3aed" padding="none" scrollable maxBodyHeight="100%">
             {entries.length === 0
               ? <EmptyState icon={ScrollText} heading="No admin actions recorded yet" />
-              : <DataTable bare paginated columns={COLUMNS} rows={entries} rowKey={r => r.id} />
+              : <DataTable bare paginated resizable columns={COLUMNS} rows={entries} rowKey={r => r.id} />
             }
           </Widget>
         )}

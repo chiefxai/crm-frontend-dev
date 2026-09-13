@@ -5,6 +5,7 @@ import PageShell from './ui/PageShell';
 import Widget from './ui/Widget';
 import Badge from './ui/Badge';
 import EmptyState from './ui/EmptyState';
+import DataTable, { Column } from './ui/DataTable';
 
 interface Enquiry {
   id: string;
@@ -56,50 +57,43 @@ export default function EnquiriesView() {
       <Widget className="flex-1" title="Open Enquiries" subtitle="Click an action to update the status of each enquiry." icon={MessageCircleQuestion} accent="#f59e0b" padding="none" scrollable maxBodyHeight="100%">
         {enquiries.length === 0
           ? <EmptyState icon={MessageCircleQuestion} heading="No enquiries captured yet" message="Enquiries from AI calls will appear here automatically." />
-          : (
-            <table className="w-full text-sm">
-              <thead className="sticky top-0 z-10" style={{ background: 'var(--bg-surface)' }}>
-                <tr className="border-b border-slate-100 text-left text-[10px] font-bold text-slate-400 uppercase tracking-wide">
-                  <th className="px-5 py-3">Caller</th>
-                  <th className="px-5 py-3">Enquiry</th>
-                  <th className="px-5 py-3">Status</th>
-                  <th className="px-5 py-3">When</th>
-                  <th className="px-5 py-3 text-right">Action</th>
-                </tr>
-              </thead>
-              <tbody>
-                {enquiries.map(e => (
-                  <tr key={e.id} className="border-b border-slate-50 last:border-0 hover:bg-[var(--bg-subtle)]">
-                    <td className="px-5 py-3">
+          : (() => {
+              const columns: Column<Enquiry>[] = [
+                {
+                  key: 'caller',
+                  header: 'Caller',
+                  cell: (e) => (
+                    <>
                       <div className="font-medium text-slate-700">{e.name || 'Unknown caller'}</div>
                       <div className="flex flex-col gap-0.5 mt-1 text-xs text-slate-400">
                         {e.phone && <span className="flex items-center gap-1"><Phone className="h-3 w-3" /> {e.phone}</span>}
                         {e.email && <span className="flex items-center gap-1"><Mail className="h-3 w-3" /> {e.email}</span>}
                         {e.location && <span className="flex items-center gap-1"><MapPin className="h-3 w-3" /> {e.location}</span>}
                       </div>
-                    </td>
-                    <td className="px-5 py-3 text-slate-600 max-w-sm">{e.queryText}</td>
-                    <td className="px-5 py-3">
-                      <Badge color={STATUS_COLOR[e.status]}>{e.status}</Badge>
-                    </td>
-                    <td className="px-5 py-3 text-slate-400 text-xs whitespace-nowrap">{new Date(e.createdAt).toLocaleString()}</td>
-                    <td className="px-5 py-3 text-right">
-                      {e.status !== 'resolved' && (
-                        <button
-                          disabled={updatingId === e.id}
-                          onClick={() => handleMarkStatus(e.id, e.status === 'new' ? 'contacted' : 'resolved')}
-                          className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-semibold rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 disabled:opacity-50 cursor-pointer"
-                        >
-                          <CheckCircle2 className="h-3.5 w-3.5" />
-                          {e.status === 'new' ? 'Mark Contacted' : 'Mark Resolved'}
-                        </button>
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )
+                    </>
+                  ),
+                },
+                { key: 'enquiry', header: 'Enquiry', cell: (e) => <span className="text-slate-600 max-w-sm">{e.queryText}</span> },
+                { key: 'status', header: 'Status', cell: (e) => <Badge color={STATUS_COLOR[e.status]}>{e.status}</Badge> },
+                { key: 'when', header: 'When', cell: (e) => <span className="text-slate-400 text-xs whitespace-nowrap">{new Date(e.createdAt).toLocaleString()}</span> },
+                {
+                  key: 'action',
+                  header: 'Action',
+                  align: 'right',
+                  cell: (e) => e.status !== 'resolved' ? (
+                    <button
+                      disabled={updatingId === e.id}
+                      onClick={() => handleMarkStatus(e.id, e.status === 'new' ? 'contacted' : 'resolved')}
+                      className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-semibold rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 disabled:opacity-50 cursor-pointer"
+                    >
+                      <CheckCircle2 className="h-3.5 w-3.5" />
+                      {e.status === 'new' ? 'Mark Contacted' : 'Mark Resolved'}
+                    </button>
+                  ) : null,
+                },
+              ];
+              return <DataTable bare resizable paginated columns={columns} rows={enquiries} rowKey={(e) => e.id} />;
+            })()
         }
       </Widget>
       )}

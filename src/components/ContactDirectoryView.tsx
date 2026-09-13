@@ -30,6 +30,7 @@ import KpiCard from './ui/KpiCard';
 import Modal from './ui/Modal';
 import FilterBar from './ui/FilterBar';
 import ActionMenu from './ui/ActionMenu';
+import DataTable, { Column } from './ui/DataTable';
 
 
 interface ContactDirectoryViewProps {
@@ -479,113 +480,111 @@ export default function ContactDirectoryView({
 
       {/* Main Table View — fills the remaining page height */}
       <Widget className="flex-1" title="All Contacts" icon={Users} accent="#2563eb" padding="none" scrollable maxBodyHeight="100%">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse">
-            <thead className="sticky top-0 z-10" style={{ background: 'var(--bg-surface)' }}>
-              <tr className="bg-slate-50 border-b border-slate-200 text-slate-400 text-[10px] font-bold uppercase tracking-wider">
-                <th className="py-4 px-6">Name / Details</th>
-                <th className="py-4 px-6">Phone Number</th>
-                <th className="py-4 px-6">Email Address</th>
-                {isLending && <th className="py-4 px-6">Loan Amt Requested</th>}
-                {isLending && <th className="py-4 px-6">Employment & Wages</th>}
-                {isLending && <th className="py-4 px-6">Credit / DTI</th>}
-                <th className="py-4 px-6">Source</th>
-                <th className="py-4 px-6">Groups</th>
-                <th className="py-4 px-6 text-right">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100 text-xs text-slate-700">
-              {filteredLeads.map((lead) => (
-                <tr key={lead.id} className="hover:bg-[var(--bg-subtle)] transition-colors">
-                  <td className="py-4 px-6">
-                    <div className="flex items-center space-x-3">
-                      <div className="h-8 w-8 rounded-lg bg-blue-50 text-blue-700 font-bold flex items-center justify-center uppercase">
-                        {lead.name.split(' ').map((n) => n[0]).join('')}
-                      </div>
-                      <div>
-                        <p className="font-semibold text-slate-800 text-sm">{lead.name}</p>
-                        <p className="text-[10px] text-slate-400 font-mono mt-0.5">ID: {lead.id}</p>
-                      </div>
-                    </div>
-                  </td>
-                  <td className="py-4 px-6 font-mono text-slate-600">
-                    {formatPhone(lead.phone)}
-                  </td>
-                  <td className="py-4 px-6 text-slate-500">
-                    {lead.email}
-                  </td>
-                  {isLending && (
-                    <td className="py-4 px-6 font-semibold text-slate-800">
-                      ${lead.amountRequested.toLocaleString()}
-                    </td>
-                  )}
-                  {isLending && (
-                    <td className="py-4 px-6">
-                      <div className="space-y-0.5">
-                        <p className="font-medium text-slate-700 flex items-center">
-                          <Building className="h-3 w-3 mr-1 text-slate-400" />
-                          {lead.financialInfo?.employer || 'Unspecified'}
-                        </p>
-                        <p className="text-slate-400 text-[10px]">Wages: ${lead.financialInfo?.monthlyIncome.toLocaleString()}/mo</p>
-                      </div>
-                    </td>
-                  )}
-                  {isLending && (
-                    <td className="py-4 px-6 font-mono">
-                      <div className="space-y-0.5">
-                        <p className="font-semibold text-slate-700">CS: {lead.financialInfo?.creditScore || 'N/A'}</p>
-                        <p className="text-[10px] text-slate-400">DTI: {((lead.financialInfo?.debtToIncome || 0) * 100).toFixed(0)}%</p>
-                      </div>
-                    </td>
-                  )}
-                  <td className="py-4 px-6">
-                    <span className="px-2 py-0.5 text-[9px] bg-slate-100 border border-slate-200 rounded text-slate-500 font-medium">
-                      {lead.source}
+        {(() => {
+          const columns: Column<Lead>[] = [
+            {
+              key: 'name',
+              header: 'Name / Details',
+              cell: (lead) => (
+                <div className="flex items-center space-x-3">
+                  <div className="h-8 w-8 rounded-lg bg-blue-50 text-blue-700 font-bold flex items-center justify-center uppercase">
+                    {lead.name.split(' ').map((n) => n[0]).join('')}
+                  </div>
+                  <div>
+                    <p className="font-semibold text-slate-800 text-sm">{lead.name}</p>
+                    <p className="text-[10px] text-slate-400 font-mono mt-0.5">ID: {lead.id}</p>
+                  </div>
+                </div>
+              ),
+            },
+            { key: 'phone', header: 'Phone Number', cell: (lead) => <span className="font-mono text-slate-600">{formatPhone(lead.phone)}</span> },
+            { key: 'email', header: 'Email Address', cell: (lead) => <span className="text-slate-500">{lead.email}</span> },
+            ...(isLending ? [
+              { key: 'amount', header: 'Loan Amt Requested', cell: (lead: Lead) => <span className="font-semibold text-slate-800">${lead.amountRequested.toLocaleString()}</span> },
+              {
+                key: 'employment',
+                header: 'Employment & Wages',
+                cell: (lead: Lead) => (
+                  <div className="space-y-0.5">
+                    <p className="font-medium text-slate-700 flex items-center">
+                      <Building className="h-3 w-3 mr-1 text-slate-400" />
+                      {lead.financialInfo?.employer || 'Unspecified'}
+                    </p>
+                    <p className="text-slate-400 text-[10px]">Wages: ${lead.financialInfo?.monthlyIncome.toLocaleString()}/mo</p>
+                  </div>
+                ),
+              },
+              {
+                key: 'credit',
+                header: 'Credit / DTI',
+                cell: (lead: Lead) => (
+                  <div className="space-y-0.5 font-mono">
+                    <p className="font-semibold text-slate-700">CS: {lead.financialInfo?.creditScore || 'N/A'}</p>
+                    <p className="text-[10px] text-slate-400">DTI: {((lead.financialInfo?.debtToIncome || 0) * 100).toFixed(0)}%</p>
+                  </div>
+                ),
+              },
+            ] as Column<Lead>[] : []),
+            {
+              key: 'source',
+              header: 'Source',
+              cell: (lead) => (
+                <span className="px-2 py-0.5 text-[9px] bg-slate-100 border border-slate-200 rounded text-slate-500 font-medium">
+                  {lead.source}
+                </span>
+              ),
+            },
+            {
+              key: 'groups',
+              header: 'Groups',
+              cell: (lead) => (lead.groupIds || []).length === 0 ? (
+                <span className="text-[10px] text-slate-300 italic">No group</span>
+              ) : (
+                <div className="flex flex-wrap gap-1 max-w-[160px]">
+                  {(lead.groupIds || []).map((gid) => (
+                    <span key={gid} className="px-2 py-0.5 text-[9px] bg-indigo-50 border border-indigo-200 rounded text-indigo-600 font-medium">
+                      {groupNameById(gid)}
                     </span>
-                  </td>
-                  <td className="py-4 px-6">
-                    {(lead.groupIds || []).length === 0 ? (
-                      <span className="text-[10px] text-slate-300 italic">No group</span>
-                    ) : (
-                      <div className="flex flex-wrap gap-1 max-w-[160px]">
-                        {(lead.groupIds || []).map((gid) => (
-                          <span key={gid} className="px-2 py-0.5 text-[9px] bg-indigo-50 border border-indigo-200 rounded text-indigo-600 font-medium">
-                            {groupNameById(gid)}
-                          </span>
-                        ))}
-                      </div>
-                    )}
-                  </td>
-                  <td className="py-4 px-6 text-right">
-                    <div className="flex items-center justify-end space-x-1">
-                      <button
-                        onClick={() => openEditModal(lead)}
-                        title="Edit Contact"
-                        className="p-1.5 hover:bg-slate-100 hover:text-blue-600 rounded-lg text-slate-400 transition-all cursor-pointer"
-                      >
-                        <Edit className="h-4 w-4" />
-                      </button>
-                      <button
-                        onClick={() => handleDeleteContact(lead.id, lead.name)}
-                        title="Delete Contact"
-                        className="p-1.5 hover:bg-slate-100 hover:text-rose-600 rounded-lg text-slate-400 transition-all cursor-pointer"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-              {filteredLeads.length === 0 && (
-                <tr>
-                  <td colSpan={9} className="py-12 text-center text-slate-400 italic">
-                    No contacts found in the directory database matching search criteria. Click "Add Contact" or "Bulk Upload" to populate.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
+                  ))}
+                </div>
+              ),
+            },
+            {
+              key: 'actions',
+              header: 'Actions',
+              align: 'right',
+              cell: (lead) => (
+                <div className="flex items-center justify-end space-x-1">
+                  <button
+                    onClick={() => openEditModal(lead)}
+                    title="Edit Contact"
+                    className="p-1.5 hover:bg-slate-100 hover:text-blue-600 rounded-lg text-slate-400 transition-all cursor-pointer"
+                  >
+                    <Edit className="h-4 w-4" />
+                  </button>
+                  <button
+                    onClick={() => handleDeleteContact(lead.id, lead.name)}
+                    title="Delete Contact"
+                    className="p-1.5 hover:bg-slate-100 hover:text-rose-600 rounded-lg text-slate-400 transition-all cursor-pointer"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </button>
+                </div>
+              ),
+            },
+          ];
+          return (
+            <DataTable
+              bare
+              resizable
+              paginated
+              columns={columns}
+              rows={filteredLeads}
+              rowKey={(lead) => lead.id}
+              emptyMessage='No contacts found in the directory database matching search criteria. Click "Add Contact" or "Bulk Upload" to populate.'
+            />
+          );
+        })()}
       </Widget>
       </div>
 

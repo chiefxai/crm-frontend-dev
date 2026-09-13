@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, ReactNode } from 'react';
 import { apiFetch } from '../lib/api';
 import { PhoneOutgoing, Clock, DollarSign, Smile, CheckCircle2, ListChecks, FileDown, Download, FileText } from 'lucide-react';
 import PageShell from './ui/PageShell';
@@ -11,6 +11,7 @@ import { CallLog } from '../types';
 import { callCostInr, formatInr, COST_PER_MINUTE_INR_FALLBACK } from '../lib/pricing';
 import PrintableReport from './PrintableReport';
 import FilterBar from './ui/FilterBar';
+import DataTable, { Column } from './ui/DataTable';
 
 const SENTIMENT_COLOR: Record<string, string> = {
   Positive: '#059669',
@@ -355,34 +356,34 @@ export default function ReportsView({ callLogs, dialerTasks, leads, costPerMinut
             </div>
 
             {/* Breakdown table right */}
-            <div className="flex-1 w-full overflow-x-auto">
-              <table className="w-full text-left text-xs">
-                <thead>
-                  <tr className="border-b border-slate-100 text-[10px] font-bold text-slate-400 uppercase tracking-widest">
-                    <th className="py-2 pr-4">Sentiment</th>
-                    <th className="py-2 pr-4">Calls</th>
-                    <th className="py-2 pr-4">Share</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-50">
-                  {(['Positive', 'Neutral', 'Negative', 'Unknown'] as const).map((s) => {
-                    const count = taskReport?.sentimentCounts[s] || 0;
-                    const pct = taskReport && taskReport.total > 0 ? Math.round((count / taskReport.total) * 100) : 0;
-                    return (
-                      <tr key={s}>
-                        <td className="py-2 pr-4">
-                          <div className="flex items-center gap-1.5">
-                            <span className="h-2.5 w-2.5 rounded-full shrink-0" style={{ backgroundColor: SENTIMENT_COLOR[s] }} />
-                            <span className="font-medium text-slate-700">{s}</span>
-                          </div>
-                        </td>
-                        <td className="py-2 pr-4 text-slate-600">{count}</td>
-                        <td className="py-2 pr-4 text-slate-600">{pct}%</td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
+            <div className="flex-1 w-full">
+              {(() => {
+                type SentimentRow = { s: 'Positive' | 'Neutral' | 'Negative' | 'Unknown' };
+                const rows: SentimentRow[] = (['Positive', 'Neutral', 'Negative', 'Unknown'] as const).map((s) => ({ s }));
+                const columns: Column<SentimentRow>[] = [
+                  {
+                    key: 'sentiment',
+                    header: 'Sentiment',
+                    cell: ({ s }) => (
+                      <div className="flex items-center gap-1.5">
+                        <span className="h-2.5 w-2.5 rounded-full shrink-0" style={{ backgroundColor: SENTIMENT_COLOR[s] }} />
+                        <span className="font-medium text-slate-700">{s}</span>
+                      </div>
+                    ),
+                  },
+                  { key: 'calls', header: 'Calls', cell: ({ s }) => <span className="text-slate-600">{taskReport?.sentimentCounts[s] || 0}</span> },
+                  {
+                    key: 'share',
+                    header: 'Share',
+                    cell: ({ s }) => {
+                      const count = taskReport?.sentimentCounts[s] || 0;
+                      const pct = taskReport && taskReport.total > 0 ? Math.round((count / taskReport.total) * 100) : 0;
+                      return <span className="text-slate-600">{pct}%</span>;
+                    },
+                  },
+                ];
+                return <DataTable bare resizable columns={columns} rows={rows} rowKey={(r) => r.s} />;
+              })()}
             </div>
           </div>
         </Widget>
@@ -391,46 +392,38 @@ export default function ReportsView({ callLogs, dialerTasks, leads, costPerMinut
             answers into the table below; row count here is fixed (one per
             lead in the task) regardless of which workflow created it. */}
         <Widget colSpan={12} title={selectedTask ? selectedTask.name : 'Report by Task'} icon={ListChecks} padding="none" scrollable>
-        <div className="p-5">
           {!selectedTask && <p className="text-xs text-slate-400 text-center py-8">{dialerTasks.length === 0 ? 'No dialer tasks yet — create one from the Voice Simulator.' : 'Pick a task above to see its per-lead outcomes and conversion rate.'}</p>}
-          {taskReport && (
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs">
-                <thead>
-                  <tr className="border-b border-slate-100 text-[10px] font-bold text-slate-400 uppercase tracking-widest">
-                    <th className="py-2 pr-4">Lead</th>
-                    <th className="py-2 pr-4">Phone</th>
-                    <th className="py-2 pr-4">Status</th>
-                    <th className="py-2 pr-4">Duration</th>
-                    <th className="py-2 pr-4">Sentiment</th>
-                    <th className="py-2 pr-4">Intent</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-50">
-                  {taskReport.rows.map((r) => (
-                    <tr
-                      key={r.leadId}
-                      onClick={() => selectLead(r.leadId, r.phone, r.callId)}
-                      className="cursor-pointer hover:bg-[var(--bg-subtle)]"
-                      style={selectedLeadId === r.leadId ? { background: 'var(--bg-subtle)', boxShadow: 'inset 3px 0 0 #2563eb' } : undefined}
-                    >
-                      <td className="py-2 pr-4 font-medium text-slate-700">{r.name}</td>
-                      <td className="py-2 pr-4 text-slate-500">{r.phone}</td>
-                      <td className="py-2 pr-4">{r.status}</td>
-                      <td className="py-2 pr-4">{formatDuration(r.duration)}</td>
-                      <td className="py-2 pr-4">
-                        <span className="px-2 py-0.5 rounded-md text-[10px] font-semibold" style={{ color: SENTIMENT_COLOR[r.sentiment], backgroundColor: `${SENTIMENT_COLOR[r.sentiment]}1a` }}>
-                          {r.sentiment}
-                        </span>
-                      </td>
-                      <td className="py-2 pr-4">{r.intent}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </div>
+          {taskReport && (() => {
+            type TaskReportRow = typeof taskReport.rows[number];
+            const columns: Column<TaskReportRow>[] = [
+              { key: 'lead', header: 'Lead', cell: (r) => <span className="font-medium text-slate-700">{r.name}</span> },
+              { key: 'phone', header: 'Phone', cell: (r) => <span className="text-slate-500">{r.phone}</span> },
+              { key: 'status', header: 'Status', cell: (r) => <>{r.status}</> },
+              { key: 'duration', header: 'Duration', cell: (r) => <>{formatDuration(r.duration)}</> },
+              {
+                key: 'sentiment',
+                header: 'Sentiment',
+                cell: (r) => (
+                  <span className="px-2 py-0.5 rounded-md text-[10px] font-semibold" style={{ color: SENTIMENT_COLOR[r.sentiment], backgroundColor: `${SENTIMENT_COLOR[r.sentiment]}1a` }}>
+                    {r.sentiment}
+                  </span>
+                ),
+              },
+              { key: 'intent', header: 'Intent', cell: (r) => <>{r.intent}</> },
+            ];
+            return (
+              <DataTable
+                bare
+                resizable
+                paginated
+                columns={columns}
+                rows={taskReport.rows}
+                rowKey={(r) => r.leadId}
+                onRowClick={(r) => selectLead(r.leadId, r.phone, r.callId)}
+                rowClassName={(r) => (selectedLeadId === r.leadId ? 'bg-[var(--bg-subtle)] shadow-[inset_3px_0_0_#2563eb]' : '')}
+              />
+            );
+          })()}
         </Widget>
 
         {/* Lead detail sidebar — opens on clicking a row in the table above.
@@ -454,60 +447,40 @@ export default function ReportsView({ callLogs, dialerTasks, leads, costPerMinut
                     <span className="h-3 w-3 border-2 border-slate-300 border-t-blue-500 rounded-full animate-spin" />
                     Loading answers…
                   </div>
-                ) : (
-                  <div className="bg-white border border-slate-200 rounded-xl overflow-hidden">
-                    <table className="w-full text-left text-xs">
-                      <thead>
-                        <tr className="border-b border-slate-100 text-[10px] font-bold text-slate-400 uppercase tracking-widest">
-                          <th className="py-2 px-3.5">Field</th>
-                          <th className="py-2 px-3.5">Value</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-slate-100">
-                        <tr>
-                          <td className="py-2 px-3.5 font-semibold text-slate-500 uppercase tracking-wide text-[10px] whitespace-nowrap align-top">Name</td>
-                          <td className="py-2 px-3.5 text-slate-700">{selectedRow.name}</td>
-                        </tr>
-                        <tr>
-                          <td className="py-2 px-3.5 font-semibold text-slate-500 uppercase tracking-wide text-[10px] whitespace-nowrap align-top">Phone</td>
-                          <td className="py-2 px-3.5 text-slate-700">{selectedRow.phone}</td>
-                        </tr>
-                        <tr>
-                          <td className="py-2 px-3.5 font-semibold text-slate-500 uppercase tracking-wide text-[10px] whitespace-nowrap align-top">Status</td>
-                          <td className="py-2 px-3.5 text-slate-700">{selectedRow.status}</td>
-                        </tr>
-                        <tr>
-                          <td className="py-2 px-3.5 font-semibold text-slate-500 uppercase tracking-wide text-[10px] whitespace-nowrap align-top">Duration</td>
-                          <td className="py-2 px-3.5 text-slate-700">{formatDuration(selectedRow.duration)}</td>
-                        </tr>
-                        <tr>
-                          <td className="py-2 px-3.5 font-semibold text-slate-500 uppercase tracking-wide text-[10px] whitespace-nowrap align-top">Sentiment</td>
-                          <td className="py-2 px-3.5">
-                            <span className="px-2 py-0.5 rounded-md text-[10px] font-semibold" style={{ color: SENTIMENT_COLOR[selectedRow.sentiment], backgroundColor: `${SENTIMENT_COLOR[selectedRow.sentiment]}1a` }}>
-                              {selectedRow.sentiment}
-                            </span>
-                          </td>
-                        </tr>
-                        <tr>
-                          <td className="py-2 px-3.5 font-semibold text-slate-500 uppercase tracking-wide text-[10px] whitespace-nowrap align-top">Intent</td>
-                          <td className="py-2 px-3.5 text-slate-700">{selectedRow.intent}</td>
-                        </tr>
-                        {answers && answers.length > 0 ? (
-                          answers.map((a, i) => (
-                            <tr key={i}>
-                              <td className="py-2 px-3.5 font-semibold text-slate-500 uppercase tracking-wide text-[10px] whitespace-nowrap align-top">{a.label || a.question}</td>
-                              <td className="py-2 px-3.5 text-slate-700 break-words">{a.answer}</td>
-                            </tr>
-                          ))
-                        ) : (
-                          <tr>
-                            <td colSpan={2} className="py-2 px-3.5 text-slate-400 italic">No workflow answers captured for this call.</td>
-                          </tr>
-                        )}
-                      </tbody>
-                    </table>
-                  </div>
-                )
+                ) : (() => {
+                  type FieldRow = { key: string; field: string; value: ReactNode };
+                  const rows: FieldRow[] = [
+                    { key: 'name', field: 'Name', value: selectedRow.name },
+                    { key: 'phone', field: 'Phone', value: selectedRow.phone },
+                    { key: 'status', field: 'Status', value: selectedRow.status },
+                    { key: 'duration', field: 'Duration', value: formatDuration(selectedRow.duration) },
+                    {
+                      key: 'sentiment',
+                      field: 'Sentiment',
+                      value: (
+                        <span className="px-2 py-0.5 rounded-md text-[10px] font-semibold" style={{ color: SENTIMENT_COLOR[selectedRow.sentiment], backgroundColor: `${SENTIMENT_COLOR[selectedRow.sentiment]}1a` }}>
+                          {selectedRow.sentiment}
+                        </span>
+                      ),
+                    },
+                    { key: 'intent', field: 'Intent', value: selectedRow.intent },
+                    ...(answers && answers.length > 0
+                      ? answers.map((a, i) => ({ key: `answer-${i}`, field: a.label || a.question, value: <span className="break-words">{a.answer}</span> }))
+                      : []),
+                  ];
+                  const columns: Column<FieldRow>[] = [
+                    { key: 'field', header: 'Field', width: '35%', cell: (r) => <span className="font-semibold text-slate-500 uppercase tracking-wide text-[10px] whitespace-nowrap">{r.field}</span> },
+                    { key: 'value', header: 'Value', cell: (r) => <span className="text-slate-700">{r.value}</span> },
+                  ];
+                  return (
+                    <div className="bg-white border border-slate-200 rounded-xl overflow-hidden">
+                      <DataTable bare resizable columns={columns} rows={rows} rowKey={(r) => r.key} />
+                      {(!answers || answers.length === 0) && (
+                        <p className="py-2 px-3.5 text-slate-400 italic text-xs border-t border-slate-100">No workflow answers captured for this call.</p>
+                      )}
+                    </div>
+                  );
+                })()
               )}
             </SlideOver>
           );
