@@ -1,16 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { apiFetch } from '../lib/api';
-import {
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  Legend,
-  ResponsiveContainer
-} from 'recharts';
-import { PhoneIncoming, PhoneOutgoing, Clock, DollarSign, Smile, CheckCircle2, ListChecks, FileDown, ChevronDown, ChevronRight, Download, FileText } from 'lucide-react';
+import { PhoneOutgoing, Clock, DollarSign, Smile, CheckCircle2, ListChecks, FileDown, ChevronDown, ChevronRight, Download, FileText } from 'lucide-react';
 import PageShell from './ui/PageShell';
 import Button from './ui/Button';
 import Widget from './ui/Widget';
@@ -20,11 +10,6 @@ import { callCostInr, formatInr, COST_PER_MINUTE_INR_FALLBACK } from '../lib/pri
 import PrintableReport from './PrintableReport';
 import FilterBar from './ui/FilterBar';
 
-// Colors chosen to match this app's existing conventions (blue = primary/
-// AI accent used throughout, amber = the paired categorical hue) rather
-// than a new palette — same blue/orange pairing the dataviz reference
-// palette validates as its first two categorical slots.
-const DIRECTION_COLOR = { inbound: '#2563eb', outbound: '#f97316' };
 const SENTIMENT_COLOR: Record<string, string> = {
   Positive: '#059669',
   Negative: '#e11d48',
@@ -64,13 +49,6 @@ interface ReportsViewProps {
   leads: { id: string; name: string; phone: string }[];
   costPerMinuteInr?: number;
   orgName?: string;
-}
-
-function bucketKey(dateStr: string, granularity: Granularity): string {
-  const d = new Date(dateStr);
-  if (granularity === 'year') return String(d.getFullYear());
-  if (granularity === 'month') return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-  return d.toISOString().slice(0, 10);
 }
 
 function formatDuration(totalSeconds: number): string {
@@ -162,17 +140,6 @@ export default function ReportsView({ callLogs, dialerTasks, leads, costPerMinut
     return { total, totalDuration, totalCost, sentimentCounts, statusCounts, positivePct };
   }, [filteredCalls, costPerMinuteInr]);
 
-  const trendData = useMemo(() => {
-    const buckets: Record<string, { period: string; inbound: number; outbound: number }> = {};
-    for (const c of filteredCalls) {
-      const key = bucketKey(c.createdAt, granularity);
-      if (!buckets[key]) buckets[key] = { period: key, inbound: 0, outbound: 0 };
-      if (c.direction === 'inbound') buckets[key].inbound++;
-      else if (c.direction === 'outbound') buckets[key].outbound++;
-    }
-    return Object.values(buckets).sort((a, b) => a.period.localeCompare(b.period));
-  }, [filteredCalls, granularity]);
-
   const selectedTask = dialerTasks.find((t) => t.id === selectedTaskId) || null;
   const taskReport = useMemo(() => {
     if (!selectedTask) return null;
@@ -256,7 +223,6 @@ export default function ReportsView({ callLogs, dialerTasks, leads, costPerMinut
       }
     >
         {/* Summary stat tiles */}
-        <KpiCard colSpan={2} icon={PhoneIncoming} iconBg="#eff6ff" iconColor="#2563eb" label="Total Calls" value={summary.total} />
         <KpiCard colSpan={2} icon={Clock} iconBg="#f0fdf4" iconColor="#16a34a" label="Total Duration" value={formatDuration(summary.totalDuration)} />
         <KpiCard colSpan={3} icon={DollarSign} iconBg="#fffbeb" iconColor="#d97706" label="Total Cost" value={formatInr(summary.totalCost)} sub={`at ₹${costPerMinuteInr}/min`} />
         <KpiCard colSpan={2} icon={Smile} iconBg="#fdf4ff" iconColor="#9333ea" label="Positive Sentiment" value={`${summary.positivePct}%`} />
@@ -310,27 +276,6 @@ export default function ReportsView({ callLogs, dialerTasks, leads, costPerMinut
               </>
             }
           />
-        </Widget>
-
-        {/* Trend chart */}
-        <Widget colSpan={12} title="Call Volume Over Time" padding="none">
-          <div className="p-5">
-          {trendData.length === 0 ? (
-            <p className="text-xs text-slate-400 py-12 text-center">No calls in this period.</p>
-          ) : (
-            <ResponsiveContainer width="100%" height={260}>
-              <BarChart data={trendData} barGap={2}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#e1e0d9" vertical={false} />
-                <XAxis dataKey="period" tick={{ fontSize: 10, fill: '#898781' }} axisLine={{ stroke: '#c3c2b7' }} tickLine={false} />
-                <YAxis tick={{ fontSize: 10, fill: '#898781' }} axisLine={false} tickLine={false} allowDecimals={false} />
-                <Tooltip contentStyle={{ fontSize: 11, borderRadius: 8, border: '1px solid #e1e0d9' }} />
-                <Legend wrapperStyle={{ fontSize: 11 }} />
-                <Bar dataKey="inbound" name="Incoming" fill={DIRECTION_COLOR.inbound} radius={[3, 3, 0, 0]} />
-                <Bar dataKey="outbound" name="Outgoing" fill={DIRECTION_COLOR.outbound} radius={[3, 3, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
-          )}
-          </div>
         </Widget>
 
         {/* Sentiment breakdown */}

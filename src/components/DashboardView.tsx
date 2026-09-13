@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import {
   TrendingUp,
-  PhoneCall,
   PhoneIncoming,
   DollarSign,
   UserCheck,
@@ -136,13 +135,6 @@ export default function DashboardView({
     (new Date(orgSettings.billingPeriodEnd).getTime() - Date.now()) / (1000 * 60 * 60 * 24)
   ));
 
-  // AI call conversion: % of completed calls with positive sentiment
-  const completedCalls = callLogs.filter(c => c.status === 'Completed' || c.duration > 0);
-  const positiveCalls = completedCalls.filter(c => c.sentiment === 'Positive');
-  const aiCallConversionPct = completedCalls.length > 0
-    ? Math.round((positiveCalls.length / completedCalls.length) * 100)
-    : null;
-
   // Calls in period + volume-over-time trend — same "Report by Task" view
   // from ReportsView, ported here so the exec desk gives a quick pulse
   // without needing to jump to the full Reports page. Fixed to the last 30
@@ -268,18 +260,6 @@ export default function DashboardView({
         sub={`${formatInr(orgSettings.aiMinutesUsed * costPerMinuteInr)} at ₹${costPerMinuteInr}/min`}
         badge={`${daysLeft}d Left`}
         badgeColor="neutral"
-      />
-
-      <KpiCard
-        colSpan={3}
-        icon={PhoneCall}
-        iconBg="#f0fdf4"
-        iconColor="#16a34a"
-        label="AI Call Conversion"
-        value={aiCallConversionPct !== null ? `${aiCallConversionPct}%` : '—'}
-        sub={`${positiveCalls.length} positive of ${completedCalls.length} calls`}
-        badge={aiCallConversionPct !== null && aiCallConversionPct >= 50 ? 'Good' : completedCalls.length === 0 ? 'No data' : 'Low'}
-        badgeColor={aiCallConversionPct !== null && aiCallConversionPct >= 50 ? 'green' : 'neutral'}
       />
 
       <KpiCard
