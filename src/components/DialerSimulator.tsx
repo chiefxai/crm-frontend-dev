@@ -27,7 +27,6 @@ import {
   ChevronRight,
   ArrowLeft,
   ChevronLeft,
-  PhoneIncoming,
   Inbox,
   History,
   PhoneForwarded
@@ -69,6 +68,9 @@ interface DialerSimulatorProps {
   teamMembers?: TeamMember[];
   industry?: string;
   flows?: QuestionFlow[];
+  /** Outbound/Inbound sub-page, driven by the sidebar's Voice Simulator group */
+  mode?: 'outbound' | 'inbound';
+  setMode?: (mode: 'outbound' | 'inbound') => void;
 }
 
 // Broad language list for per-task selection — a generic "speak fluently
@@ -229,11 +231,17 @@ export default function DialerSimulator({
   companyName,
   teamMembers = [],
   industry,
-  flows = []
+  flows = [],
+  mode,
+  setMode
 }: DialerSimulatorProps) {
   const isInsurance = industry === 'insurance';
-  // Inbound Call states
-  const [dialerMode, setDialerMode] = useState<'outbound' | 'inbound'>('outbound');
+  // Outbound/Inbound sub-page — driven by the sidebar's Voice Simulator group
+  // when the parent supplies mode/setMode; falls back to internal state so
+  // the component still works standalone (e.g. in isolation/tests).
+  const [internalDialerMode, setInternalDialerMode] = useState<'outbound' | 'inbound'>('outbound');
+  const dialerMode = mode ?? internalDialerMode;
+  const setDialerMode = setMode ?? setInternalDialerMode;
 
   const activeVirtualNumbers = virtualNumbers;
 
@@ -1349,40 +1357,9 @@ Currently on question ${nextIndex} out of ${selectedTask.questions.length}. Next
       subtitle="Configure automated workflows, initiate sequential campaigns, or trigger dynamic incoming calls to your virtual phone lines."
       layout="fill"
       action={
-        <div className="flex items-center gap-3">
-          <div className="bg-[var(--bg-subtle)] p-1 rounded-xl border border-[var(--border)]/80 flex">
-            <button
-              onClick={() => setDialerMode('outbound')}
-              className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                dialerMode === 'outbound'
-                  ? 'bg-[var(--bg-surface)] text-blue-600 shadow-sm border border-[var(--border)]/40'
-                  : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'
-              }`}
-            >
-              <PhoneCall className="h-3.5 w-3.5" />
-              <span>Outbound Campaigns</span>
-            </button>
-            <button
-              onClick={() => setDialerMode('inbound')}
-              className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-bold transition-all cursor-pointer relative ${
-                dialerMode === 'inbound'
-                  ? 'bg-[var(--bg-surface)] text-blue-600 shadow-sm border border-[var(--border)]/40'
-                  : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'
-              }`}
-            >
-              <PhoneIncoming className="h-3.5 w-3.5" />
-              <span>Inbound Virtual Center</span>
-              <span className="absolute -top-1 -right-1 flex h-2 w-2">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75 animate-duration-1000"></span>
-                <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
-              </span>
-            </button>
-          </div>
-
-          {dialerMode === 'outbound' && (
-            <IconButton icon={Plus} label="Assign Dialing Task" onClick={openCreateTaskModal} />
-          )}
-        </div>
+        dialerMode === 'outbound' ? (
+          <IconButton icon={Plus} label="Assign Dialing Task" onClick={openCreateTaskModal} />
+        ) : undefined
       }
     >
       <div className="overflow-y-auto flex-1 px-8 pb-8 pt-6 space-y-6">

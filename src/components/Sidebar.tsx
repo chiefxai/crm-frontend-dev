@@ -5,6 +5,7 @@ import {
   Users,
   GitBranch,
   PhoneCall,
+  PhoneIncoming,
   Settings,
   Layers,
   Contact,
@@ -51,13 +52,23 @@ const LENDING_ONLY_TAB_IDS = new Set(['loans']);
 const DASHBOARD_GROUP_KEY = 'dashboard-group';
 
 interface SubItem { id: string; label: string; icon: React.ElementType; }
-interface SidebarGroup { tabId: string; label: string; icon: React.ElementType; subItems: SubItem[]; }
+interface SidebarGroup { tabId: string; label: string; icon: React.ElementType; subItems: SubItem[]; adminOnly?: boolean; }
 
 const SIDEBAR_GROUPS: SidebarGroup[] = [
+  {
+    tabId: 'dialer',
+    label: 'Voice Simulator',
+    icon: PhoneCall,
+    subItems: [
+      { id: 'outbound', label: 'Outbound Campaigns',       icon: PhoneCall },
+      { id: 'inbound',  label: 'Inbound Virtual Center',   icon: PhoneIncoming },
+    ],
+  },
   {
     tabId: 'company',
     label: 'Company Profile',
     icon: Building2,
+    adminOnly: true,
     subItems: [
       { id: 'profile',    label: 'Organization Profile',   icon: UserCheck },
       { id: 'legal',      label: 'Legal & Registration',   icon: Scale },
@@ -69,6 +80,7 @@ const SIDEBAR_GROUPS: SidebarGroup[] = [
     tabId: 'settings',
     label: 'Administration',
     icon: Settings,
+    adminOnly: true,
     subItems: [
       { id: 'numbers',  label: 'Virtual Numbers', icon: Phone },
       { id: 'team',     label: 'Staff & Teams',   icon: Users },
@@ -238,7 +250,6 @@ export default function Sidebar({
   const allMenuItems = [
     { id: 'contacts',     label: 'Contact Directory', icon: Contact },
     { id: 'workflows',    label: 'Workflow Builder',  icon: GitBranch },
-    { id: 'dialer',       label: 'Voice Simulator',   icon: PhoneCall },
     { id: 'call-logs',    label: 'Call Logs',         icon: History },
     { id: 'inbox',        label: 'Unified Inbox',     icon: Inbox },
     { id: 'agent-studio', label: 'Agent Studio',      icon: Sparkles },
@@ -255,6 +266,13 @@ export default function Sidebar({
     if (flagKey && !isEnabled(flagKey)) return false;
     return true;
   });
+
+  const visibleGroups = SIDEBAR_GROUPS.filter((group) => {
+    const flagKey = TAB_TO_FLAG[group.tabId];
+    return !flagKey || isEnabled(flagKey);
+  });
+  const publicGroups = visibleGroups.filter((g) => !g.adminOnly);
+  const configGroups = visibleGroups.filter((g) => g.adminOnly);
 
   // "Dashboard" section — groups the two overview-style pages (Executive
   // Desk, Reports) under one collapsible header, same visual treatment as
@@ -295,6 +313,77 @@ export default function Sidebar({
     isActive
       ? { background: '#2563eb', color: '#ffffff' }
       : { color: 'var(--text-secondary)' };
+
+  const renderGroup = (group: SidebarGroup) => {
+    const GroupIcon = group.icon;
+    const isGroupActive = activeTab === group.tabId;
+    const isExpanded = expandedGroups.has(group.tabId) && !collapsed;
+    const ChevronIcon = isExpanded ? ChevronDown : ChevronRight;
+    const flyoutOpen = collapsed && flyoutGroup === group.tabId;
+
+    const groupBtn = (
+      <button
+        id={`nav-${group.tabId}`}
+        onClick={(e) => {
+          toggleGroup(group.tabId, e.currentTarget);
+          if (!collapsed) setActiveSubTab(group.subItems[0].id, group.tabId);
+        }}
+        className={navBtnCls(isGroupActive)}
+        style={navBtnStyle(isGroupActive)}
+      >
+        <GroupIcon className={iconCls(isGroupActive)} style={iconStyle(isGroupActive)} />
+        {!collapsed && (
+          <>
+            <span className="flex-1 text-left truncate min-w-0">{group.label}</span>
+            <ChevronIcon className="h-3.5 w-3.5 shrink-0" style={{ color: isGroupActive ? '#ffffff99' : 'var(--text-muted)' }} />
+          </>
+        )}
+      </button>
+    );
+
+    return (
+      <div key={group.tabId} className="relative">
+        {/* In collapsed mode wrap with tooltip; flyout is separate */}
+        {collapsed ? (
+          <CollapsedTooltip label={group.label}>{groupBtn}</CollapsedTooltip>
+        ) : groupBtn}
+
+        {/* Flyout for collapsed mode */}
+        {flyoutOpen && flyoutRect && (
+          <GroupFlyout
+            group={group}
+            activeTab={activeTab}
+            activeSubTab={activeSubTab}
+            anchorRect={flyoutRect}
+            onSelect={(subId) => { setActiveSubTab(subId, group.tabId); setFlyoutGroup(null); setFlyoutRect(null); }}
+            onClose={() => { setFlyoutGroup(null); setFlyoutRect(null); }}
+          />
+        )}
+
+        {/* Inline sub-items for expanded mode */}
+        {isExpanded && (
+          <div className="mt-1.5 space-y-1.5">
+            {group.subItems.map((sub) => {
+              const SubIcon = sub.icon;
+              const isSubActive = isGroupActive && activeSubTab === sub.id;
+              return (
+                <button
+                  key={sub.id}
+                  id={`nav-${group.tabId}-${sub.id}`}
+                  onClick={() => setActiveSubTab(sub.id, group.tabId)}
+                  className={subBtnCls(isSubActive)}
+                  style={subBtnStyle(isSubActive)}
+                >
+                  <SubIcon className="h-4 w-4 mr-3 shrink-0" style={iconStyle(isSubActive)} />
+                  <span className="truncate min-w-0 flex-1 text-left">{sub.label}</span>
+                </button>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    );
+  };
 
   return (
     <aside
@@ -433,6 +522,9 @@ export default function Sidebar({
           );
         })()}
 
+        {/* Public sidebar groups (e.g. Voice Simulator) — visible to all roles */}
+        {publicGroups.map((group) => renderGroup(group))}
+
         {/* Flat menu items */}
         {menuItems.map((item) => {
           const Icon = item.icon;
@@ -460,76 +552,7 @@ export default function Sidebar({
             <p className="px-2 text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">Configuration</p>
           )}
 
-          {SIDEBAR_GROUPS.map((group) => {
-            const GroupIcon = group.icon;
-            const isGroupActive = activeTab === group.tabId;
-            const isExpanded = expandedGroups.has(group.tabId) && !collapsed;
-            const ChevronIcon = isExpanded ? ChevronDown : ChevronRight;
-            const flyoutOpen = collapsed && flyoutGroup === group.tabId;
-
-            const groupBtn = (
-              <button
-                id={`nav-${group.tabId}`}
-                onClick={(e) => {
-                  toggleGroup(group.tabId, e.currentTarget);
-                  if (!collapsed) setActiveSubTab(group.subItems[0].id, group.tabId);
-                }}
-                className={navBtnCls(isGroupActive)}
-                style={navBtnStyle(isGroupActive)}
-              >
-                <GroupIcon className={iconCls(isGroupActive)} style={iconStyle(isGroupActive)} />
-                {!collapsed && (
-                  <>
-                    <span className="flex-1 text-left truncate min-w-0">{group.label}</span>
-                    <ChevronIcon className="h-3.5 w-3.5 shrink-0" style={{ color: isGroupActive ? '#ffffff99' : 'var(--text-muted)' }} />
-                  </>
-                )}
-              </button>
-            );
-
-            return (
-              <div key={group.tabId} className="relative">
-                {/* In collapsed mode wrap with tooltip; flyout is separate */}
-                {collapsed ? (
-                  <CollapsedTooltip label={group.label}>{groupBtn}</CollapsedTooltip>
-                ) : groupBtn}
-
-                {/* Flyout for collapsed mode */}
-                {flyoutOpen && flyoutRect && (
-                  <GroupFlyout
-                    group={group}
-                    activeTab={activeTab}
-                    activeSubTab={activeSubTab}
-                    anchorRect={flyoutRect}
-                    onSelect={(subId) => { setActiveSubTab(subId, group.tabId); setFlyoutGroup(null); setFlyoutRect(null); }}
-                    onClose={() => { setFlyoutGroup(null); setFlyoutRect(null); }}
-                  />
-                )}
-
-                {/* Inline sub-items for expanded mode */}
-                {isExpanded && (
-                  <div className="mt-1.5 space-y-1.5">
-                    {group.subItems.map((sub) => {
-                      const SubIcon = sub.icon;
-                      const isSubActive = isGroupActive && activeSubTab === sub.id;
-                      return (
-                        <button
-                          key={sub.id}
-                          id={`nav-${group.tabId}-${sub.id}`}
-                          onClick={() => setActiveSubTab(sub.id, group.tabId)}
-                          className={subBtnCls(isSubActive)}
-                          style={subBtnStyle(isSubActive)}
-                        >
-                          <SubIcon className="h-4 w-4 mr-3 shrink-0" style={iconStyle(isSubActive)} />
-                          <span className="truncate min-w-0 flex-1 text-left">{sub.label}</span>
-                        </button>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
-            );
-          })}
+          {configGroups.map((group) => renderGroup(group))}
         </div>}
       </nav>
 

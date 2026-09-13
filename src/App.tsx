@@ -273,6 +273,7 @@ export default function App() {
   const DEFAULT_SUB_TAB: Record<string, string> = {
     company: 'profile',
     settings: 'numbers',
+    dialer: 'outbound',
   };
   const activeSubTab = subSlug || DEFAULT_SUB_TAB[activeTab] || '';
 
@@ -765,6 +766,8 @@ export default function App() {
             teamMembers={teamMembers}
             industry={orgSettings.industry}
             flows={questionFlows}
+            mode={activeSubTab === 'inbound' ? 'inbound' : 'outbound'}
+            setMode={(m) => setActiveSubTab(m, 'dialer')}
           />
         );
       case 'loans':
