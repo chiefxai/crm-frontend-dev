@@ -58,6 +58,14 @@ interface DataTableProps<T> {
     onPageChange: (page: number) => void;
     onPageSizeChange: (pageSize: number) => void;
   };
+  /**
+   * Renders an extra full-width row directly under a given row (an
+   * inline editor, an accordion detail panel, etc.) — provide both this
+   * and `isRowExpanded` to opt in. Neither is called when omitted, so
+   * tables that don't need this pay nothing for it.
+   */
+  renderExpandedRow?: (row: T, index: number) => React.ReactNode;
+  isRowExpanded?: (row: T) => boolean;
 }
 
 const MIN_COL_WIDTH_DEFAULT = 60;
@@ -79,6 +87,8 @@ export default function DataTable<T>({
   pageSizeOptions = PAGE_SIZE_OPTIONS_DEFAULT,
   defaultPageSize = 25,
   serverPagination,
+  renderExpandedRow,
+  isRowExpanded,
 }: DataTableProps<T>) {
   const isPaginated = paginated || !!serverPagination;
   // bare=true: no card chrome, no overflow wrapper (caller's scroll container handles it)
@@ -190,22 +200,33 @@ export default function DataTable<T>({
                 </td>
               </tr>
             ) : (
-              visibleRows.map((row, i) => (
-                <tr
-                  key={rowKey(row)}
-                  onClick={onRowClick ? () => onRowClick(row) : undefined}
-                  className={`border-b border-slate-50 dark:border-[var(--border-subtle)] last:border-0 transition-colors duration-100 ${onRowClick ? 'cursor-pointer hover:bg-slate-50 dark:hover:bg-[var(--bg-subtle)]' : ''} ${rowClassName ? rowClassName(row, i) : ''}`}
-                >
-                  {columns.map(col => (
-                    <td
-                      key={col.key}
-                      className={`px-5 py-3 text-slate-700 dark:text-[var(--text-secondary)] ${col.align === 'right' ? 'text-right' : col.align === 'center' ? 'text-center' : ''} ${resizable ? 'overflow-hidden truncate' : ''}`}
+              visibleRows.map((row, i) => {
+                const expanded = isRowExpanded?.(row) ?? false;
+                return (
+                  <React.Fragment key={rowKey(row)}>
+                    <tr
+                      onClick={onRowClick ? () => onRowClick(row) : undefined}
+                      className={`border-b border-slate-50 dark:border-[var(--border-subtle)] last:border-0 transition-colors duration-100 ${onRowClick ? 'cursor-pointer hover:bg-slate-50 dark:hover:bg-[var(--bg-subtle)]' : ''} ${expanded ? 'border-b-0' : ''} ${rowClassName ? rowClassName(row, i) : ''}`}
                     >
-                      {col.cell(row, i)}
-                    </td>
-                  ))}
-                </tr>
-              ))
+                      {columns.map(col => (
+                        <td
+                          key={col.key}
+                          className={`px-5 py-3 text-slate-700 dark:text-[var(--text-secondary)] ${col.align === 'right' ? 'text-right' : col.align === 'center' ? 'text-center' : ''} ${resizable ? 'overflow-hidden truncate' : ''}`}
+                        >
+                          {col.cell(row, i)}
+                        </td>
+                      ))}
+                    </tr>
+                    {expanded && renderExpandedRow && (
+                      <tr className="border-b border-slate-50 dark:border-[var(--border-subtle)] last:border-0">
+                        <td colSpan={columns.length} className="px-0 py-0">
+                          {renderExpandedRow(row, i)}
+                        </td>
+                      </tr>
+                    )}
+                  </React.Fragment>
+                );
+              })
             )}
           </tbody>
         </table>

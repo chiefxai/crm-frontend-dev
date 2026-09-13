@@ -31,6 +31,7 @@ import IconButton from './ui/IconButton';
 import PageShell from './ui/PageShell';
 import Widget from './ui/Widget';
 import Modal from './ui/Modal';
+import DataTable, { Column } from './ui/DataTable';
 
 interface SettingsViewProps {
   virtualNumbers: VirtualNumber[];
@@ -443,7 +444,6 @@ export default function SettingsView({
                 icon={Hash}
                 accent="#6366f1"
                 padding="none"
-                scrollable
                 action={
                   <button
                     onClick={() => setShowProviderForm(true)}
@@ -461,55 +461,58 @@ export default function SettingsView({
                     <p className="text-sm font-medium text-slate-600">No virtual numbers yet</p>
                     <p className="text-xs text-slate-400 mt-1 max-w-xs">Click "Add Provider" to connect your Twilio or Vobiz.ai account and provision your first virtual line.</p>
                   </div>
-                ) : (
-                  <table className="w-full text-left">
-                    <thead className="sticky top-0 z-10" style={{ background: 'var(--bg-surface)' }}>
-                      <tr className="border-b border-slate-100 text-[10px] font-bold text-slate-400 uppercase tracking-widest">
-                        <th className="p-4 px-6">Telephone Number</th>
-                        <th className="p-4 px-6">Gateway Provider</th>
-                        <th className="p-4 px-6">Dial Load (In / Out)</th>
-                        <th className="p-4 px-6 text-right">Status</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-100 text-sm text-slate-700">
-                      {virtualNumbers.map((num) => (
-                        <tr key={num.id} className="hover:bg-[var(--bg-subtle)]">
-                          <td className="p-4 px-6">
-                            <div className="flex items-center gap-2.5">
-                              <div className="h-7 w-7 rounded-lg bg-indigo-50 flex items-center justify-center shrink-0">
-                                <Phone className="h-3.5 w-3.5 text-indigo-400" />
-                              </div>
-                              <div>
-                                <p className="font-semibold text-slate-800">{num.number}</p>
-                                {num.friendlyName && <p className="text-xs text-slate-400 mt-0.5">{num.friendlyName}</p>}
-                              </div>
-                            </div>
-                          </td>
-                          <td className="p-4 px-6">
-                            <ProviderBadge provider={num.provider} />
-                          </td>
-                          <td className="p-4 px-6 text-xs text-slate-500">{num.incomingCallCount} in / {num.outgoingCallCount} out</td>
-                          <td className="p-4 px-6 text-right">
-                            <div className="flex items-center justify-end gap-3">
-                              {num.status === 'Active' ? (
-                                <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" /> Active
-                                </span>
-                              ) : (
-                                <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-500 border border-slate-200">
-                                  <span className="h-1.5 w-1.5 rounded-full bg-slate-400" /> Inactive
-                                </span>
-                              )}
-                              <button onClick={() => handleDeleteNumber(num.id)} className="text-rose-400 hover:text-rose-600 p-1.5 rounded-lg hover:bg-rose-50 transition-colors" title="Delete number">
-                                <Trash2 className="h-3.5 w-3.5" />
-                              </button>
-                            </div>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                )}
+                ) : (() => {
+                  const columns: Column<VirtualNumber>[] = [
+                    {
+                      key: 'number',
+                      header: 'Telephone Number',
+                      cell: (num) => (
+                        <div className="flex items-center gap-2.5">
+                          <div className="h-7 w-7 rounded-lg bg-indigo-50 dark:bg-indigo-500/10 flex items-center justify-center shrink-0">
+                            <Phone className="h-3.5 w-3.5 text-indigo-400" />
+                          </div>
+                          <div>
+                            <p className="font-semibold text-slate-800 dark:text-[var(--text-primary)]">{num.number}</p>
+                            {num.friendlyName && <p className="text-xs text-slate-400 dark:text-[var(--text-muted)] mt-0.5">{num.friendlyName}</p>}
+                          </div>
+                        </div>
+                      ),
+                    },
+                    { key: 'provider', header: 'Gateway Provider', cell: (num) => <ProviderBadge provider={num.provider} /> },
+                    { key: 'load', header: 'Dial Load (In / Out)', cell: (num) => <span className="text-xs text-slate-500 dark:text-[var(--text-secondary)]">{num.incomingCallCount} in / {num.outgoingCallCount} out</span> },
+                    {
+                      key: 'status',
+                      header: 'Status',
+                      align: 'right',
+                      cell: (num) => (
+                        <div className="flex items-center justify-end gap-3">
+                          {num.status === 'Active' ? (
+                            <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-500/30">
+                              <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" /> Active
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 dark:bg-[var(--bg-subtle)] text-slate-500 dark:text-[var(--text-muted)] border border-slate-200 dark:border-[var(--border)]">
+                              <span className="h-1.5 w-1.5 rounded-full bg-slate-400" /> Inactive
+                            </span>
+                          )}
+                          <button onClick={() => handleDeleteNumber(num.id)} className="text-rose-400 hover:text-rose-600 p-1.5 rounded-lg hover:bg-rose-50 dark:hover:bg-rose-500/10 transition-colors" title="Delete number">
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
+                      ),
+                    },
+                  ];
+                  return (
+                    <DataTable
+                      bare
+                      resizable
+                      paginated
+                      columns={columns}
+                      rows={virtualNumbers}
+                      rowKey={(num) => num.id}
+                    />
+                  );
+                })()}
               </Widget>
 
               {/* Add Provider overlay modal */}
@@ -739,147 +742,158 @@ export default function SettingsView({
                 icon={Users}
                 accent="#6366f1"
                 padding="none"
-                scrollable
                 action={<IconButton icon={Plus} label="Add Member" onClick={() => setShowAddStaff(true)} />}
               >
-                <table className="w-full text-left">
-                  <thead className="sticky top-0 z-10" style={{ background: 'var(--bg-surface)' }}>
-                    <tr className="border-b border-slate-100 text-[10px] font-bold text-slate-400 uppercase tracking-widest">
-                      <th className="p-4 px-6">Enlisted Representative</th>
-                      <th className="p-4 px-6">Administrative Role</th>
-                      <th className="p-4 px-6">Feature Access</th>
-                      <th className="p-4 px-6 text-right">CRM Status</th>
-                      <th className="p-4 px-6 text-right">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100 text-sm text-slate-700">
-                    {teamMembers.map((member) => (
-                      <React.Fragment key={member.id}>
-                        <tr className="hover:bg-[var(--bg-subtle)]">
-                          <td className="p-4 px-6">
-                            <div>
-                              <p className="font-semibold text-slate-800">{member.name}</p>
-                              <p className="text-[10px] text-slate-400 mt-0.5">{member.email}</p>
-                              {member.phone && (
-                                <p className="text-[10px] text-slate-400 mt-0.5">{member.phone}</p>
-                              )}
+                {(() => {
+                  const columns: Column<TeamMember>[] = [
+                    {
+                      key: 'member',
+                      header: 'Enlisted Representative',
+                      cell: (member) => (
+                        <div>
+                          <p className="font-semibold text-slate-800 dark:text-[var(--text-primary)]">{member.name}</p>
+                          <p className="text-[10px] text-slate-400 dark:text-[var(--text-muted)] mt-0.5">{member.email}</p>
+                          {member.phone && (
+                            <p className="text-[10px] text-slate-400 dark:text-[var(--text-muted)] mt-0.5">{member.phone}</p>
+                          )}
+                        </div>
+                      ),
+                    },
+                    {
+                      key: 'role',
+                      header: 'Administrative Role',
+                      cell: (member) => (
+                        <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-indigo-50 dark:bg-indigo-500/10 text-indigo-700 dark:text-indigo-400">
+                          {member.role}
+                        </span>
+                      ),
+                    },
+                    {
+                      key: 'access',
+                      header: 'Feature Access',
+                      cell: (member) => member.role === 'Organization Admin' || member.role === 'Super Admin' ? (
+                        <span className="flex items-center gap-1.5 text-[10px] font-semibold text-emerald-600 dark:text-emerald-400">
+                          <Flag className="h-3 w-3" />
+                          Full Access
+                        </span>
+                      ) : (
+                        <button
+                          onClick={() => editFlagsFor === member.id ? setEditFlagsFor(null) : openFlagEditor(member)}
+                          className="flex items-center gap-1.5 text-[10px] font-semibold text-indigo-600 dark:text-indigo-400 hover:text-indigo-800 dark:hover:text-indigo-300 transition-colors"
+                        >
+                          <Flag className="h-3 w-3" />
+                          {(member.featureFlags || []).length} granted
+                        </button>
+                      ),
+                    },
+                    {
+                      key: 'status',
+                      header: 'CRM Status',
+                      align: 'right',
+                      cell: (member) => (
+                        <button
+                          onClick={() => handleToggleStaffStatus(member.id)}
+                          className={`px-3 py-1 text-[10px] font-bold rounded-lg transition-all ${
+                            member.status === 'Active'
+                              ? 'bg-emerald-50 dark:bg-emerald-500/10 hover:bg-rose-50 dark:hover:bg-rose-500/10 text-emerald-700 dark:text-emerald-400 hover:text-rose-700 dark:hover:text-rose-400 border border-emerald-200 dark:border-emerald-500/30 hover:border-rose-200 dark:hover:border-rose-500/30'
+                              : 'bg-slate-100 dark:bg-[var(--bg-subtle)] hover:bg-emerald-50 dark:hover:bg-emerald-500/10 text-slate-600 dark:text-[var(--text-secondary)] hover:text-emerald-700 dark:hover:text-emerald-400 border border-slate-200 dark:border-[var(--border)]'
+                          }`}
+                        >
+                          {member.status === 'Active' ? 'Deactivate' : 'Reactivate'}
+                        </button>
+                      ),
+                    },
+                    {
+                      key: 'actions',
+                      header: 'Actions',
+                      align: 'right',
+                      cell: (member) => {
+                        const isSelf = currentUserEmail && member.email.toLowerCase() === currentUserEmail.toLowerCase();
+                        const isSelfAdmin = isSelf && member.role === 'Organization Admin';
+                        return (
+                          <button
+                            onClick={() => handleRemoveStaff(member.id, member.name, member.email, member.role)}
+                            title={isSelfAdmin ? 'Hand over Org Admin role first, then ask the new admin to remove your account' : undefined}
+                            className={`px-3 py-1 text-[10px] font-bold rounded-lg transition-all border ${
+                              isSelfAdmin
+                                ? 'bg-slate-50 dark:bg-[var(--bg-subtle)] text-slate-300 dark:text-[var(--text-muted)] border-slate-200 dark:border-[var(--border)] cursor-not-allowed'
+                                : 'bg-rose-50 dark:bg-rose-500/10 hover:bg-rose-100 dark:hover:bg-rose-500/20 text-rose-600 dark:text-rose-400 hover:text-rose-700 dark:hover:text-rose-300 border-rose-200 dark:border-rose-500/30'
+                            }`}
+                          >
+                            {isSelfAdmin ? 'Cannot Remove' : 'Remove'}
+                          </button>
+                        );
+                      },
+                    },
+                  ];
+                  return (
+                    <DataTable
+                      bare
+                      resizable
+                      paginated
+                      columns={columns}
+                      rows={teamMembers}
+                      rowKey={(member) => member.id}
+                      isRowExpanded={(member) => editFlagsFor === member.id}
+                      renderExpandedRow={(member) => (
+                        <div className="px-6 pb-4 pt-0 bg-indigo-50/40 dark:bg-indigo-500/5">
+                          <div className="border border-indigo-100 dark:border-indigo-500/20 rounded-xl p-4 bg-white dark:bg-[var(--bg-surface)] space-y-3">
+                            <p className="text-[10px] font-bold text-slate-400 dark:text-[var(--text-muted)] uppercase tracking-wider">
+                              Feature Access — {member.name}
+                            </p>
+                            <FlagGroupPicker
+                              availableKeys={orgAllowedFlags}
+                              onApply={(keys) => setEditFlagsValue(keys)}
+                            />
+                            <div className="flex flex-wrap gap-2">
+                              {FEATURE_REGISTRY.filter(f => orgAllowedFlags.includes(f.key)).map((flag) => {
+                                const active = editFlagsValue.includes(flag.key);
+                                return (
+                                  <button
+                                    key={flag.key}
+                                    type="button"
+                                    onClick={() =>
+                                      setEditFlagsValue(prev =>
+                                        prev.includes(flag.key)
+                                          ? prev.filter(k => k !== flag.key)
+                                          : [...prev, flag.key]
+                                      )
+                                    }
+                                    className={`px-3 py-1 rounded-full text-[11px] font-semibold border transition-all ${
+                                      active
+                                        ? 'bg-indigo-600 text-white border-indigo-600'
+                                        : 'bg-white dark:bg-[var(--bg-subtle)] text-slate-500 dark:text-[var(--text-secondary)] border-slate-200 dark:border-[var(--border)] hover:border-indigo-400 hover:text-indigo-600 dark:hover:text-indigo-400'
+                                    }`}
+                                  >
+                                    {flag.label}
+                                  </button>
+                                );
+                              })}
                             </div>
-                          </td>
-                          <td className="p-4 px-6">
-                            <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-indigo-50 text-indigo-700">
-                              {member.role}
-                            </span>
-                          </td>
-                          <td className="p-4 px-6">
-                            {member.role === 'Organization Admin' || member.role === 'Super Admin' ? (
-                              <span className="flex items-center gap-1.5 text-[10px] font-semibold text-emerald-600">
-                                <Flag className="h-3 w-3" />
-                                Full Access
-                              </span>
-                            ) : (
+                            <div className="flex items-center gap-2 justify-end pt-1">
                               <button
-                                onClick={() => editFlagsFor === member.id ? setEditFlagsFor(null) : openFlagEditor(member)}
-                                className="flex items-center gap-1.5 text-[10px] font-semibold text-indigo-600 hover:text-indigo-800 transition-colors"
+                                type="button"
+                                onClick={() => setEditFlagsFor(null)}
+                                className="text-xs text-slate-400 dark:text-[var(--text-muted)] hover:text-slate-600 dark:hover:text-[var(--text-primary)] font-medium px-3 py-1.5 cursor-pointer"
                               >
-                                <Flag className="h-3 w-3" />
-                                {(member.featureFlags || []).length} granted
+                                Cancel
                               </button>
-                            )}
-                          </td>
-                          <td className="p-4 px-6 text-right">
-                            <button
-                              onClick={() => handleToggleStaffStatus(member.id)}
-                              className={`px-3 py-1 text-[10px] font-bold rounded-lg transition-all ${
-                                member.status === 'Active'
-                                  ? 'bg-emerald-50 hover:bg-rose-50 text-emerald-700 hover:text-rose-700 border border-emerald-200 hover:border-rose-200'
-                                  : 'bg-slate-100 hover:bg-emerald-50 text-slate-600 hover:text-emerald-700 border border-slate-200'
-                              }`}
-                            >
-                              {member.status === 'Active' ? 'Deactivate' : 'Reactivate'}
-                            </button>
-                          </td>
-                          <td className="p-4 px-6 text-right">
-                            {(() => {
-                              const isSelf = currentUserEmail && member.email.toLowerCase() === currentUserEmail.toLowerCase();
-                              const isSelfAdmin = isSelf && member.role === 'Organization Admin';
-                              return (
-                                <button
-                                  onClick={() => handleRemoveStaff(member.id, member.name, member.email, member.role)}
-                                  title={isSelfAdmin ? 'Hand over Org Admin role first, then ask the new admin to remove your account' : undefined}
-                                  className={`px-3 py-1 text-[10px] font-bold rounded-lg transition-all border ${
-                                    isSelfAdmin
-                                      ? 'bg-slate-50 text-slate-300 border-slate-200 cursor-not-allowed'
-                                      : 'bg-rose-50 hover:bg-rose-100 text-rose-600 hover:text-rose-700 border-rose-200'
-                                  }`}
-                                >
-                                  {isSelfAdmin ? 'Cannot Remove' : 'Remove'}
-                                </button>
-                              );
-                            })()}
-                          </td>
-                        </tr>
-                        {editFlagsFor === member.id && (
-                          <tr>
-                            <td colSpan={5} className="px-6 pb-4 pt-0 bg-indigo-50/40">
-                              <div className="border border-indigo-100 rounded-xl p-4 bg-white space-y-3">
-                                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
-                                  Feature Access — {member.name}
-                                </p>
-                                <FlagGroupPicker
-                                  availableKeys={orgAllowedFlags}
-                                  onApply={(keys) => setEditFlagsValue(keys)}
-                                />
-                                <div className="flex flex-wrap gap-2">
-                                  {FEATURE_REGISTRY.filter(f => orgAllowedFlags.includes(f.key)).map((flag) => {
-                                    const active = editFlagsValue.includes(flag.key);
-                                    return (
-                                      <button
-                                        key={flag.key}
-                                        type="button"
-                                        onClick={() =>
-                                          setEditFlagsValue(prev =>
-                                            prev.includes(flag.key)
-                                              ? prev.filter(k => k !== flag.key)
-                                              : [...prev, flag.key]
-                                          )
-                                        }
-                                        className={`px-3 py-1 rounded-full text-[11px] font-semibold border transition-all ${
-                                          active
-                                            ? 'bg-indigo-600 text-white border-indigo-600'
-                                            : 'bg-white text-slate-500 border-slate-200 hover:border-indigo-400 hover:text-indigo-600'
-                                        }`}
-                                      >
-                                        {flag.label}
-                                      </button>
-                                    );
-                                  })}
-                                </div>
-                                <div className="flex items-center gap-2 justify-end pt-1">
-                                  <button
-                                    type="button"
-                                    onClick={() => setEditFlagsFor(null)}
-                                    className="text-xs text-slate-400 hover:text-slate-600 font-medium px-3 py-1.5 cursor-pointer"
-                                  >
-                                    Cancel
-                                  </button>
-                                  <button
-                                    type="button"
-                                    onClick={() => handleSaveFlags(member.id)}
-                                    disabled={savingFlags}
-                                    className="bg-indigo-600 hover:bg-indigo-500 disabled:opacity-60 text-white text-xs font-semibold rounded-lg px-4 py-1.5 transition-all cursor-pointer flex items-center gap-1.5"
-                                  >
-                                    {savingFlags ? <Loader2 className="h-3 w-3 animate-spin" /> : null}
-                                    Save Access
-                                  </button>
-                                </div>
-                              </div>
-                            </td>
-                          </tr>
-                        )}
-                      </React.Fragment>
-                    ))}
-                  </tbody>
-                </table>
+                              <button
+                                type="button"
+                                onClick={() => handleSaveFlags(member.id)}
+                                disabled={savingFlags}
+                                className="bg-indigo-600 hover:bg-indigo-500 disabled:opacity-60 text-white text-xs font-semibold rounded-lg px-4 py-1.5 transition-all cursor-pointer flex items-center gap-1.5"
+                              >
+                                {savingFlags ? <Loader2 className="h-3 w-3 animate-spin" /> : null}
+                                Save Access
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                    />
+                  );
+                })()}
               </Widget>
 
               {/* Add Member overlay modal */}
@@ -997,32 +1011,25 @@ export default function SettingsView({
                 icon={ScrollText}
                 accent="#6366f1"
                 padding="none"
-                scrollable
                 action={
-                  <span className="text-[10px] font-mono text-slate-400">Total events: {auditLogs.length}</span>
+                  <span className="text-[10px] font-mono text-slate-400 dark:text-[var(--text-muted)]">Total events: {auditLogs.length}</span>
                 }
               >
                 {auditLogs.length === 0 ? (
-                  <div className="p-6 text-center text-slate-400 text-xs">No admin actions recorded yet.</div>
+                  <div className="p-6 text-center text-slate-400 dark:text-[var(--text-muted)] text-xs">No admin actions recorded yet.</div>
                 ) : (
-                  <table className="w-full text-left">
-                    <thead className="sticky top-0 z-10" style={{ background: 'var(--bg-surface)' }}>
-                      <tr className="border-b border-slate-100 text-[10px] font-bold text-slate-400 uppercase tracking-widest">
-                        <th className="p-4 px-6">Action</th>
-                        <th className="p-4 px-6">Actor</th>
-                        <th className="p-4 px-6 text-right">Time</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-100 text-xs text-slate-600 font-mono">
-                      {auditLogs.map((log) => (
-                        <tr key={log.id} className="hover:bg-[var(--bg-subtle)]">
-                          <td className="p-4 px-6 font-medium text-slate-700">{log.action}</td>
-                          <td className="p-4 px-6 text-slate-400">{log.actorEmail || '—'}</td>
-                          <td className="p-4 px-6 text-right text-[9px] text-slate-400">{new Date(log.createdAt).toLocaleTimeString()}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                  <DataTable
+                    bare
+                    resizable
+                    paginated
+                    columns={[
+                      { key: 'action', header: 'Action', cell: (log: AuditEntry) => <span className="font-medium text-slate-700 dark:text-[var(--text-primary)] font-mono text-xs">{log.action}</span> },
+                      { key: 'actor', header: 'Actor', cell: (log: AuditEntry) => <span className="text-slate-400 dark:text-[var(--text-muted)] font-mono text-xs">{log.actorEmail || '—'}</span> },
+                      { key: 'time', header: 'Time', align: 'right', cell: (log: AuditEntry) => <span className="text-[9px] text-slate-400 dark:text-[var(--text-muted)] font-mono">{new Date(log.createdAt).toLocaleTimeString()}</span> },
+                    ]}
+                    rows={auditLogs}
+                    rowKey={(log) => log.id}
+                  />
                 )}
               </Widget>
             </div>

@@ -157,7 +157,7 @@ function ProfileMenu({ kcUser, dbRole, logout }: ProfileMenuProps) {
                 </p>
                 <p className="text-xs truncate" style={{ color: 'var(--text-muted)' }}>{kcUser?.email || ''}</p>
                 {role && (
-                  <span className="inline-block mt-1 text-[10px] font-bold tracking-wide uppercase bg-blue-50 text-blue-700 px-2 py-0.5 rounded-full">
+                  <span className="inline-block mt-1 text-[10px] font-bold tracking-wide uppercase bg-blue-50 dark:bg-blue-500/10 text-blue-700 dark:text-blue-400 px-2 py-0.5 rounded-full">
                     {role}
                   </span>
                 )}
@@ -884,10 +884,10 @@ export default function App() {
           </div>
         )}
         {/* Global Floating Header */}
-        <header className="h-16 bg-white border-b border-slate-100 flex items-center justify-between px-8 shrink-0 relative z-50">
+        <header className="h-16 bg-white dark:bg-[var(--bg-surface)] border-b border-slate-100 dark:border-[var(--border)] flex items-center justify-between px-8 shrink-0 relative z-50">
           <div className="flex items-center space-x-2">
-            <span className="text-xs font-mono text-slate-400">workspace:</span>
-            <span className="text-xs font-mono font-semibold px-2 py-0.5 rounded text-blue-600 bg-blue-50">
+            <span className="text-xs font-mono text-slate-400 dark:text-[var(--text-muted)]">workspace:</span>
+            <span className="text-xs font-mono font-semibold px-2 py-0.5 rounded text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-500/10">
               {orgSettings.workspaceName}.chief.ai
             </span>
           </div>

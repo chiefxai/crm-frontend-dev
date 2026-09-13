@@ -79,7 +79,7 @@ export default function NotificationBell({ notifications, onMarkAllRead, onClear
               </div>
             ) : (
               notifications.map(n => (
-                <div key={n.id} className={`flex items-start gap-3 px-4 py-3 border-b border-slate-50 last:border-0 ${n.read ? '' : 'bg-blue-50/40'}`}>
+                <div key={n.id} className={`flex items-start gap-3 px-4 py-3 border-b border-slate-50 dark:border-[var(--border-subtle)] last:border-0 ${n.read ? '' : 'bg-blue-50/40 dark:bg-blue-500/10'}`}>
                   <div className="mt-0.5">{typeIcon(n.type)}</div>
                   <div className="flex-1 min-w-0">
                     <p className="text-xs text-slate-700 leading-snug">{n.message}</p>
