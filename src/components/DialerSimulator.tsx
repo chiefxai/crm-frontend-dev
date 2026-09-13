@@ -20,7 +20,6 @@ import {
   CheckCircle2,
   XCircle,
   Disc,
-  Sparkles,
   HelpCircle,
   FileSpreadsheet,
   Check,
@@ -1950,23 +1949,13 @@ Currently on question ${nextIndex} out of ${selectedTask.questions.length}. Next
                 )}
               </div>
             </Widget>
-
-            <div className="theme-panel p-4 rounded-2xl border relative overflow-hidden shrink-0">
-              <div className="absolute right-0 bottom-0 w-32 h-32 bg-blue-500/10 rounded-full blur-2xl"></div>
-              <div className="relative z-10 flex items-center space-x-3 text-xs leading-normal">
-                <Sparkles className="h-5 w-5 text-emerald-400 shrink-0" />
-                <p className="text-[11px]" style={{color:'var(--panel-muted)'}}>
-                  Real calls to any connected number above are answered live by <strong style={{color:'var(--panel-text)'}}>{agentDisplayName}</strong>, transcribed, and logged here automatically — nothing on this tab is simulated.
-                </p>
-              </div>
-            </div>
           </div>
 
           {/* RIGHT COLUMN: Real Inbound Call History */}
           <div className="col-span-12 lg:col-span-8 flex flex-col h-full space-y-6">
-            <Widget showHeader={false} className="h-full min-h-[580px]" bodyClassName="flex flex-col justify-between h-full">
-              <div className="space-y-4">
-                <div className="flex items-center justify-between">
+            <Widget showHeader={false} className="h-full min-h-[580px]" bodyClassName="flex flex-col h-full">
+              <div className="flex flex-col h-full">
+                <div className="flex items-center justify-between shrink-0">
                   <div>
                     <h3 className="text-sm font-bold text-[var(--text-primary)] uppercase tracking-widest flex items-center gap-1.5">
                       <History className="h-4.5 w-4.5 text-blue-600" /> Inbound Dialogue History
@@ -1976,7 +1965,7 @@ Currently on question ${nextIndex} out of ${selectedTask.questions.length}. Next
                 </div>
 
                 {/* Logs list */}
-                <div className="space-y-3 max-h-[380px] overflow-y-auto pr-1">
+                <div className="flex-1 min-h-0 overflow-y-auto space-y-3 pr-1 mt-4">
                   {realInboundCallLogs.map((log) => (
                     <div
                       key={log.id}
@@ -2022,17 +2011,6 @@ Currently on question ${nextIndex} out of ${selectedTask.questions.length}. Next
                       <p className="text-[10px] text-[var(--text-muted)]">Real calls to a connected virtual number will appear here automatically as they happen.</p>
                     </div>
                   )}
-                </div>
-              </div>
-
-              {/* Information badge footer */}
-              <div className="theme-panel p-4 rounded-2xl border relative overflow-hidden shrink-0 mt-4">
-                <div className="absolute right-0 bottom-0 w-32 h-32 bg-blue-500/10 rounded-full blur-2xl"></div>
-                <div className="relative z-10 flex items-center space-x-3 text-xs leading-normal">
-                  <Sparkles className="h-5 w-5 text-emerald-400 shrink-0" />
-                  <p className="text-[11px]" style={{color:'var(--panel-muted)'}}>
-                    Our virtual number routing maps inbound SIP audio streaming directly to the <strong style={{color:'var(--panel-text)'}}>{agentDisplayName} CRM Intelligence engine</strong>, recording and parsing customer responses in real time.
-                  </p>
                 </div>
               </div>
             </Widget>
