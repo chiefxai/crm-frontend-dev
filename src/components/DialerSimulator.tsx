@@ -1643,10 +1643,11 @@ Currently on question ${nextIndex} out of ${selectedTask.questions.length}. Next
       </div>
 
       {/* Two columns workspace: Live Active Telephone Screen AND Call Cassette Tape Transcript History Player */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-stretch">
         {/* Active Telephone Simulator Frame */}
         <Widget
           colSpan={6}
+          className="h-full"
           icon={Disc}
           title="AI Call Simulator Screen"
           action={callState === 'connected' ? (
@@ -1785,10 +1786,11 @@ Currently on question ${nextIndex} out of ${selectedTask.questions.length}. Next
         {/* Live Active Transcript / Simulation Speech Feed */}
         <Widget
           colSpan={6}
+          className="h-full"
           icon={MessageSquare}
           title="Active Dialogue Feed"
           padding="none"
-          bodyClassName="flex flex-col h-[400px] p-0"
+          bodyClassName="flex flex-col h-full min-h-[400px] p-0"
           action={
             <div className="flex items-center space-x-1.5">
               <span className="h-2 w-2 rounded-full bg-emerald-500"></span>
