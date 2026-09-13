@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { apiFetch } from '../lib/api';
 import { PhoneOutgoing, Clock, DollarSign, Smile, CheckCircle2, ListChecks, FileDown, ChevronDown, ChevronRight, Download, FileText } from 'lucide-react';
 import PageShell from './ui/PageShell';
@@ -37,6 +37,8 @@ interface DialTaskCallResult {
 interface DialTask {
   id: string;
   name: string;
+  workflowId?: string;
+  workflowName?: string;
   leadIds: string[];
   status: string;
   createdAt: string;
@@ -72,6 +74,41 @@ export default function ReportsView({ callLogs, dialerTasks, leads, costPerMinut
   const [fromDate, setFromDate] = useState(daysAgo(30));
   const [toDate, setToDate] = useState(daysAgo(0));
   const [selectedTaskId, setSelectedTaskId] = useState<string>('');
+
+  // Default to the most recently created task instead of an empty/org-wide
+  // view — and fall back to it again if the current selection stops
+  // existing (e.g. tasks reloaded). This is the whole page's primary
+  // driver now: everything below reflects whichever task is selected.
+  useEffect(() => {
+    if (dialerTasks.length === 0) return;
+    if (selectedTaskId && dialerTasks.some((t) => t.id === selectedTaskId)) return;
+    const latest = [...dialerTasks].sort(
+      (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+    )[0];
+    setSelectedTaskId(latest.id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dialerTasks]);
+
+  // Groups tasks by the workflow they were created from, so repeated runs
+  // of the same workflow ("Loan Follow-up — Week 1", "...— Week 2") sit
+  // together in the dropdown instead of being an undifferentiated flat
+  // list. Tasks created before workflowName existed have no group to join
+  // — they fall back into "Other Tasks". Groups are ordered by their own
+  // most-recently-created task, and tasks within a group newest-first.
+  const taskGroups = useMemo(() => {
+    const byWorkflow = new Map<string, DialTask[]>();
+    for (const t of dialerTasks) {
+      const key = t.workflowName || 'Other Tasks';
+      if (!byWorkflow.has(key)) byWorkflow.set(key, []);
+      byWorkflow.get(key)!.push(t);
+    }
+    const groups = Array.from(byWorkflow.entries()).map(([label, tasks]) => ({
+      label,
+      tasks: [...tasks].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()),
+    }));
+    groups.sort((a, b) => new Date(b.tasks[0].createdAt).getTime() - new Date(a.tasks[0].createdAt).getTime());
+    return groups;
+  }, [dialerTasks]);
   const [showPreview, setShowPreview] = useState(false);
   // Prefer callId when a task result has one (exact match against exactly
   // this call, via /api/calls/:id/lead-responses) — phone alone returns
@@ -126,20 +163,6 @@ export default function ReportsView({ callLogs, dialerTasks, leads, costPerMinut
     });
   }, [callLogs, fromDate, toDate, direction]);
 
-  const summary = useMemo(() => {
-    const total = filteredCalls.length;
-    const totalDuration = filteredCalls.reduce((sum, c) => sum + (c.duration || 0), 0);
-    const totalCost = filteredCalls.reduce((sum, c) => sum + callCostInr(c.duration || 0, costPerMinuteInr), 0);
-    const sentimentCounts = { Positive: 0, Neutral: 0, Negative: 0, Unknown: 0 } as Record<string, number>;
-    const statusCounts: Record<string, number> = {};
-    for (const c of filteredCalls) {
-      sentimentCounts[c.sentiment] = (sentimentCounts[c.sentiment] || 0) + 1;
-      statusCounts[c.status] = (statusCounts[c.status] || 0) + 1;
-    }
-    const positivePct = total > 0 ? Math.round((sentimentCounts.Positive / total) * 100) : 0;
-    return { total, totalDuration, totalCost, sentimentCounts, statusCounts, positivePct };
-  }, [filteredCalls, costPerMinuteInr]);
-
   const selectedTask = dialerTasks.find((t) => t.id === selectedTaskId) || null;
   const taskReport = useMemo(() => {
     if (!selectedTask) return null;
@@ -161,8 +184,13 @@ export default function ReportsView({ callLogs, dialerTasks, leads, costPerMinut
     const completed = rows.filter((r) => r.status === 'Completed').length;
     const interested = rows.filter((r) => r.intent === 'Interested').length;
     const conversionRate = completed > 0 ? Math.round((interested / completed) * 100) : 0;
-    return { rows, completed, interested, conversionRate, total: rows.length };
-  }, [selectedTask, leads]);
+    const totalDuration = rows.reduce((sum, r) => sum + (r.duration || 0), 0);
+    const totalCost = rows.reduce((sum, r) => sum + callCostInr(r.duration || 0, costPerMinuteInr), 0);
+    const sentimentCounts = { Positive: 0, Neutral: 0, Negative: 0, Unknown: 0 } as Record<string, number>;
+    for (const r of rows) sentimentCounts[r.sentiment] = (sentimentCounts[r.sentiment] || 0) + 1;
+    const positivePct = rows.length > 0 ? Math.round((sentimentCounts.Positive / rows.length) * 100) : 0;
+    return { rows, completed, interested, conversionRate, total: rows.length, totalDuration, totalCost, sentimentCounts, positivePct };
+  }, [selectedTask, leads, costPerMinuteInr]);
 
   // Fetches every lead's answers (reusing the same cache the expandable
   // rows use) and lays them out wide — one row per lead, one column per
@@ -215,23 +243,39 @@ export default function ReportsView({ callLogs, dialerTasks, leads, costPerMinut
   return (
     <PageShell
       title="Reports"
-      subtitle="Call analytics — day, month, or year, incoming or outgoing, overall or per task."
+      subtitle={selectedTask ? `Report by Task — ${selectedTask.name}` : 'Report by Task — pick a task below, defaults to your most recent.'}
       action={
         <Button icon={FileText} onClick={() => setShowPreview(true)}>
           Preview Report
         </Button>
       }
     >
-        {/* Summary stat tiles */}
-        <KpiCard colSpan={2} icon={Clock} iconBg="#f0fdf4" iconColor="#16a34a" label="Total Duration" value={formatDuration(summary.totalDuration)} />
-        <KpiCard colSpan={3} icon={DollarSign} iconBg="#fffbeb" iconColor="#d97706" label="Total Cost" value={formatInr(summary.totalCost)} sub={`at ₹${costPerMinuteInr}/min`} />
-        <KpiCard colSpan={2} icon={Smile} iconBg="#fdf4ff" iconColor="#9333ea" label="Positive Sentiment" value={`${summary.positivePct}%`} />
-        <KpiCard colSpan={3} icon={CheckCircle2} iconBg="#f0fdf4" iconColor="#16a34a" label="Completed" value={summary.statusCounts['Completed'] || 0} />
+        {/* Task-scoped KPI tiles — reflect whichever task is selected below */}
+        <KpiCard colSpan={2} icon={PhoneOutgoing} iconBg="#eff6ff" iconColor="#2563eb" label="Leads in Task" value={taskReport?.total ?? 0} />
+        <KpiCard colSpan={2} icon={CheckCircle2} iconBg="#f0fdf4" iconColor="#16a34a" label="Completed" value={taskReport?.completed ?? 0} />
+        <KpiCard colSpan={2} icon={Smile} iconBg="#fdf4ff" iconColor="#9333ea" label="Conversion Rate" value={`${taskReport?.conversionRate ?? 0}%`} />
+        <KpiCard colSpan={2} icon={Clock} iconBg="#f0fdf4" iconColor="#16a34a" label="Total Duration" value={formatDuration(taskReport?.totalDuration ?? 0)} />
+        <KpiCard colSpan={2} icon={DollarSign} iconBg="#fffbeb" iconColor="#d97706" label="Total Cost" value={formatInr(taskReport?.totalCost ?? 0)} sub={`at ₹${costPerMinuteInr}/min`} />
+        <KpiCard colSpan={2} icon={Smile} iconBg="#fdf4ff" iconColor="#9333ea" label="Positive Sentiment" value={`${taskReport?.positivePct ?? 0}%`} />
 
-        {/* Filters */}
+        {/* Filters — task dropdown (grouped by source workflow, so repeated
+            runs of the same workflow sit together) drives the whole page;
+            direction/date-range/granularity are separate and only scope the
+            Preview Report / CSV export tools further down. */}
         <Widget colSpan={12} showHeader={false} padding="md">
           <FilterBar
             selects={[
+              {
+                key: 'task',
+                label: 'Task',
+                value: selectedTaskId,
+                onChange: setSelectedTaskId,
+                groups: taskGroups.map((g) => ({
+                  label: g.label,
+                  options: g.tasks.map((t) => ({ label: t.name, value: t.id })),
+                })),
+                placeholder: dialerTasks.length === 0 ? 'No tasks yet' : 'Select a task…',
+              },
               {
                 key: 'direction',
                 label: 'Direction',
@@ -261,6 +305,15 @@ export default function ReportsView({ callLogs, dialerTasks, leads, costPerMinut
             ]}
             actions={
               <>
+                {selectedTask && (
+                  <button
+                    onClick={() => exportTaskCsv(selectedTask, taskReport)}
+                    disabled={exportingCsv}
+                    className="flex items-center gap-1.5 px-3 py-2 text-[11px] font-semibold bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white rounded-lg"
+                  >
+                    <Download className="h-3.5 w-3.5" /> {exportingCsv ? 'Exporting…' : 'Export to CSV'}
+                  </button>
+                )}
                 {[7, 30, 90].map((n) => (
                   <button
                     key={n}
@@ -278,12 +331,12 @@ export default function ReportsView({ callLogs, dialerTasks, leads, costPerMinut
           />
         </Widget>
 
-        {/* Sentiment breakdown */}
+        {/* Sentiment breakdown — for the selected task's calls */}
         <Widget colSpan={12} title="Sentiment Breakdown" padding="md">
           <div className="flex h-3 rounded-full overflow-hidden bg-slate-100">
             {(['Positive', 'Neutral', 'Negative', 'Unknown'] as const).map((s) => {
-              const count = summary.sentimentCounts[s] || 0;
-              const pct = summary.total > 0 ? (count / summary.total) * 100 : 0;
+              const count = taskReport?.sentimentCounts[s] || 0;
+              const pct = taskReport && taskReport.total > 0 ? (count / taskReport.total) * 100 : 0;
               return pct > 0 ? <div key={s} style={{ width: `${pct}%`, backgroundColor: SENTIMENT_COLOR[s] }} title={`${s}: ${count}`} /> : null;
             })}
           </div>
@@ -291,47 +344,18 @@ export default function ReportsView({ callLogs, dialerTasks, leads, costPerMinut
             {(['Positive', 'Neutral', 'Negative', 'Unknown'] as const).map((s) => (
               <div key={s} className="flex items-center gap-1.5 text-[11px] text-slate-600">
                 <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: SENTIMENT_COLOR[s] }} />
-                {s} ({summary.sentimentCounts[s] || 0})
+                {s} ({taskReport?.sentimentCounts[s] || 0})
               </div>
             ))}
           </div>
         </Widget>
 
         {/* Task-wise report */}
-        <Widget colSpan={12} title="Report by Task" icon={ListChecks} padding="none" scrollable
-          action={
-            <div className="flex items-center gap-2">
-              <select
-                value={selectedTaskId}
-                onChange={(e) => setSelectedTaskId(e.target.value)}
-                className="bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-blue-500 min-w-[200px]"
-              >
-                <option value="">Select an outbound task…</option>
-                {dialerTasks.map((t) => (
-                  <option key={t.id} value={t.id}>{t.name}</option>
-                ))}
-              </select>
-              {selectedTask && (
-                <button
-                  onClick={() => exportTaskCsv(selectedTask, taskReport)}
-                  disabled={exportingCsv}
-                  className="flex items-center gap-1.5 px-3 py-2 text-[11px] font-semibold bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white rounded-lg"
-                >
-                  <Download className="h-3.5 w-3.5" /> {exportingCsv ? 'Exporting…' : 'Export to CSV'}
-                </button>
-              )}
-            </div>
-          }
-        >
+        <Widget colSpan={12} title={selectedTask ? selectedTask.name : 'Report by Task'} icon={ListChecks} padding="none" scrollable>
         <div className="p-5">
-          {!selectedTask && <p className="text-xs text-slate-400 text-center py-8">Pick a task above to see its per-lead outcomes and conversion rate.</p>}
+          {!selectedTask && <p className="text-xs text-slate-400 text-center py-8">{dialerTasks.length === 0 ? 'No dialer tasks yet — create one from the Voice Simulator.' : 'Pick a task above to see its per-lead outcomes and conversion rate.'}</p>}
           {taskReport && (
             <>
-              <div className="grid grid-cols-3 gap-4 mb-4">
-                <KpiCard icon={PhoneOutgoing} iconBg="#eff6ff" iconColor="#2563eb" label="Leads in Task" value={taskReport.total} />
-                <KpiCard icon={CheckCircle2} iconBg="#f0fdf4" iconColor="#16a34a" label="Completed" value={taskReport.completed} />
-                <KpiCard icon={Smile} iconBg="#fdf4ff" iconColor="#9333ea" label="Conversion Rate" value={`${taskReport.conversionRate}%`} />
-              </div>
               <div className="overflow-x-auto">
                 <table className="w-full text-left text-xs">
                   <thead>

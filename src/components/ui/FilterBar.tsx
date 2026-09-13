@@ -8,7 +8,12 @@ export interface FilterSelect {
   label: string;
   value: string;
   onChange: (v: string) => void;
-  options: { label: string; value: string }[];
+  /** Flat option list — ignored when `groups` is also given. */
+  options?: { label: string; value: string }[];
+  /** Renders <optgroup> sections instead of a flat list (e.g. tasks grouped by their source workflow). */
+  groups?: { label: string; options: { label: string; value: string }[] }[];
+  /** Shown as a disabled first option when the select otherwise has no natural "none" value. */
+  placeholder?: string;
 }
 
 export interface FilterDate {
@@ -33,7 +38,7 @@ export interface FilterBarProps {
 
 // ── Select control ───────────────────────────────────────────────────────────
 
-function Select({ label, value, onChange, options }: FilterSelect) {
+function Select({ label, value, onChange, options, groups, placeholder }: FilterSelect) {
   return (
     <div className="flex flex-col gap-0.5 min-w-0">
       <span
@@ -55,11 +60,20 @@ function Select({ label, value, onChange, options }: FilterSelect) {
           backgroundPosition: 'right 8px center',
         }}
       >
-        {options.map((o) => (
-          <option key={o.value} value={o.value}>
-            {o.label}
-          </option>
-        ))}
+        {placeholder && <option value="" disabled>{placeholder}</option>}
+        {groups
+          ? groups.map((g) => (
+              <optgroup key={g.label} label={g.label}>
+                {g.options.map((o) => (
+                  <option key={o.value} value={o.value}>{o.label}</option>
+                ))}
+              </optgroup>
+            ))
+          : options?.map((o) => (
+              <option key={o.value} value={o.value}>
+                {o.label}
+              </option>
+            ))}
       </select>
     </div>
   );

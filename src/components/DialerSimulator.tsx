@@ -181,6 +181,12 @@ function buildQuestionsPayload(task: DialTask | null | undefined): { label: stri
 interface DialTask {
   id: string;
   name: string;
+  // The workflow this task was created from — lets Reports group repeated
+  // runs of the same workflow together (a task never had this before, so
+  // there was no way to tell "Loan Follow-up — Week 1" and "...— Week 2"
+  // came from the same workflow without string-matching the name).
+  workflowId?: string;
+  workflowName?: string;
   questions: string[];
   // Short key per question (e.g. "customer_budget"), same order/length as
   // `questions` — set from the workflow builder's WorkflowVariable.name.
@@ -472,6 +478,8 @@ Real Tamil speakers do not say the "correct" written form of a word. They contra
     const newTask: DialTask = {
       id: `TASK-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`,
       name: wizardTaskTitle.trim(),
+      workflowId: workflow.id,
+      workflowName: workflow.name,
       questions,
       questionLabels,
       leadIds: allLeadIds,
