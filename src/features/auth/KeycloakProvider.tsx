@@ -131,7 +131,25 @@ export function KeycloakProvider({ children }: { children: React.ReactNode }) {
     };
 
     keycloak.onAuthRefreshSuccess = () => {
-      setUser(extractUser(keycloak));
+      // A token refresh happens routinely (every ~30s before expiry) and
+      // hands back a new `tokenParsed` (fresh iat/exp/jti) even when the
+      // user's actual identity is unchanged — extractUser() always builds
+      // a brand-new object, so naively calling setUser() here churned the
+      // `user` reference on every refresh. Anything downstream depending
+      // on the whole object (App.tsx used to) re-ran on every refresh,
+      // including data reloads that themselves make API calls, each of
+      // which triggers keycloak-js's own updateToken(10) check before the
+      // request — creating a feedback loop that pinned the JS thread ("Maximum
+      // update depth exceeded") and starved real UI updates like sidebar
+      // navigation. Skip the update when identity fields haven't changed
+      // so a refresh only reference-churns the token, not the user object.
+      setUser(prev => {
+        const next = extractUser(keycloak);
+        if (prev && prev.id === next.id && prev.email === next.email && prev.role === next.role && prev.name === next.name) {
+          return prev;
+        }
+        return next;
+      });
     };
 
     keycloak.onAuthLogout = () => {

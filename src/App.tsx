@@ -446,7 +446,19 @@ export default function App() {
     } finally {
       setHasLoaded(true);
     }
-  }, [kcUser, orgSettings.industry]);
+  // kcUser?.id (not the whole kcUser object) — KeycloakProvider's
+  // onAuthRefreshSuccess calls setUser(extractUser(keycloak)) on every
+  // token refresh, handing back a brand-new object reference even though
+  // the id/email/role are unchanged. Depending on the object itself made
+  // this effect (and the two below) re-fire on every refresh, which
+  // re-ran refreshData()'s 10 parallel apiFetch calls — each of which
+  // calls keycloak.updateToken(10) internally — creating a feedback loop:
+  // refresh -> new kcUser ref -> refetch everything -> more token checks
+  // -> another refresh -> ... This is what caused "Maximum update depth
+  // exceeded" and made the UI appear to stop responding to navigation
+  // (React was saturated re-running this cascade, so the render for
+  // wherever you'd actually clicked kept getting starved).
+  }, [kcUser?.id, orgSettings.industry]);
 
   // Load database content once Keycloak has authenticated the user.
   useEffect(() => {
@@ -474,7 +486,8 @@ export default function App() {
     fetchUserFlags();
     setHasLoaded(false);
     refreshData();
-  }, [kcUser]);
+  // kcUser?.id, not the object — see the comment on the effect above.
+  }, [kcUser?.id]);
 
   // Live call events — SSE stream, authenticated via ?token= query param.
   useEffect(() => {
@@ -523,7 +536,9 @@ export default function App() {
       closed = true;
       source?.close();
     };
-  }, [kcUser, hasLoaded]);
+  // kcUser?.id, not the object — see the comment above; otherwise every
+  // token refresh tore down and reopened this SSE connection too.
+  }, [kcUser?.id, hasLoaded]);
 
   // Redirect if a non-lending org lands on a lending-only route or a retired route.
   useEffect(() => {

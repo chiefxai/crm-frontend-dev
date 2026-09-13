@@ -94,8 +94,18 @@ export default function PageShell({ title, subtitle, action, toolbar, children, 
   React.useEffect(() => {
     if (!pageHeaderCtx || !isActiveTab) return;
     pageHeaderCtx.setHeader({ title, subtitle, action, toolbar, onRefresh: refresh });
+    // Depend on pageHeaderCtx.setHeader specifically, NOT the pageHeaderCtx
+    // object itself — setHeader is a stable useState setter, so this only
+    // re-fires on a real prop change. Depending on the whole context object
+    // was an infinite loop: PageHeaderProvider used to hand back a brand-new
+    // { header, setHeader } object every render (now memoized, but even
+    // memoized it still legitimately changes reference whenever `header`
+    // updates), so calling setHeader() here always re-triggered this same
+    // effect, which called setHeader() again, forever — this alone was
+    // enough to saturate React's render queue and make the whole app
+    // (including sidebar navigation elsewhere) stop responding.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pageHeaderCtx, isActiveTab, title, subtitle, action, toolbar, refresh]);
+  }, [pageHeaderCtx?.setHeader, isActiveTab, title, subtitle, action, toolbar, refresh]);
 
   const renderOwnHeader = !pageHeaderCtx;
 

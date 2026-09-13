@@ -25,8 +25,16 @@ const PageHeaderContext = createContext<PageHeaderContextValue | null>(null);
 // updates, not the DOM node itself.
 export function PageHeaderProvider({ children }: { children: React.ReactNode }) {
   const [header, setHeader] = useState<PageHeaderConfig | null>(null);
+  // Memoized so consumers only see a new context value when `header` itself
+  // actually changes — `setHeader` is already stable from useState. Without
+  // this, every render created a brand-new { header, setHeader } object,
+  // which fed straight into an infinite loop with PageShell's effect (see
+  // that file's comment): its effect depended on this whole object, so a
+  // fresh reference every render re-triggered setHeader() every render,
+  // which re-rendered this provider, which created another fresh object...
+  const value = React.useMemo(() => ({ header, setHeader }), [header]);
   return (
-    <PageHeaderContext.Provider value={{ header, setHeader }}>
+    <PageHeaderContext.Provider value={value}>
       {children}
     </PageHeaderContext.Provider>
   );
