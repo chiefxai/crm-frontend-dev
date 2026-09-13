@@ -39,6 +39,7 @@ const EMPTY_ORG_SETTINGS: OrganizationSettings = {
 import { useTheme } from './shared/theme/ThemeContext';
 import { Sun, Moon, Monitor, LogOut, ChevronDown } from 'lucide-react';
 import Sidebar from './components/Sidebar';
+import { ErrorBoundary } from './components/ErrorBoundary';
 import DashboardView from './components/DashboardView';
 import WorkflowsView from './features/workflows/WorkflowsView';
 import { QuestionFlow } from './features/workflows/types';
@@ -896,7 +897,9 @@ export default function App() {
                     style={{ display: tab === activeTab ? 'flex' : 'none' }}
                   >
                     <ActiveTabProvider active={tab === activeTab}>
-                      {renderTabContent(tab)}
+                      <ErrorBoundary label={tab}>
+                        {renderTabContent(tab)}
+                      </ErrorBoundary>
                     </ActiveTabProvider>
                   </div>
                 ))}
