@@ -358,6 +358,17 @@ Real Tamil speakers do not say the "correct" written form of a word. They contra
   const timerRef = useRef<NodeJS.Timeout | null>(null);
   const chatBottomRef = useRef<HTMLDivElement | null>(null);
 
+  // Set when the agent clicks "Cancel Outbound Connection" while a call is
+  // still being placed (the brief window between clicking Dial and the
+  // provider's API actually returning a callSid). Without this, Cancel only
+  // reset the local UI — the outbound call itself was already in flight and
+  // kept ringing/connecting on the real phone with no UI left to hang it up
+  // from, since callState had already gone back to 'idle'. Checked the
+  // moment each provider's initiate call resolves so an accidental dial
+  // gets hung up for real no matter which side of that race the click
+  // lands on.
+  const cancelDialRequestedRef = useRef(false);
+
   // Outbound numbers this org has actually provisioned (Settings > Numbers)
   // that can really place a call — Twilio, Vobiz, and PIOPIY are wired to
   // real dialing; other provider labels are display-only for inbound routing.
@@ -538,6 +549,7 @@ Real Tamil speakers do not say the "correct" written form of a word. They contra
   const handleInitiateVobizCall = async (lead: Lead) => {
     if (callState === 'dialing' || callState === 'connected') return;
 
+    cancelDialRequestedRef.current = false;
     setActiveLead(lead);
     setCallState('dialing');
     setDuration(0);
@@ -567,6 +579,16 @@ Real Tamil speakers do not say the "correct" written form of a word. They contra
       });
       const data = await res.json();
       if (data.success && data.callSid) {
+        if (cancelDialRequestedRef.current) {
+          // Agent already clicked Cancel before this resolved — the call is
+          // real now, so actually hang it up instead of showing it as
+          // connected (see cancelDialRequestedRef's own comment for why).
+          cancelDialRequestedRef.current = false;
+          setVobizCallSid(null);
+          setCallState('idle');
+          apiFetch('/api/vobiz/hangup', { method: 'POST', body: JSON.stringify({ callSid: data.callSid }) }).catch(() => {});
+          return;
+        }
         setVobizCallSid(data.callSid);
         setCallState('connected');
         setTranscript([
@@ -592,6 +614,7 @@ Real Tamil speakers do not say the "correct" written form of a word. They contra
 
   const handleInitiatePiopiyCall = async (lead: Lead) => {
     if (callState === 'dialing' || callState === 'connected') return;
+    cancelDialRequestedRef.current = false;
     setActiveLead(lead);
     setCallState('dialing');
     setDuration(0);
@@ -620,6 +643,13 @@ Real Tamil speakers do not say the "correct" written form of a word. They contra
       });
       const data = await res.json();
       if (data.success && data.callSid) {
+        if (cancelDialRequestedRef.current) {
+          cancelDialRequestedRef.current = false;
+          setPiopiyCallSid(null);
+          setCallState('idle');
+          apiFetch('/api/piopiy/hangup', { method: 'POST', body: JSON.stringify({ callSid: data.callSid }) }).catch(() => {});
+          return;
+        }
         setPiopiyCallSid(data.callSid);
         setCallState('connected');
         setTranscript([{ speaker: 'AI', text: `[Piopiy Call Started] Dialing ${lead.name} at ${lead.phone}...`, timestamp: new Date().toTimeString().split(' ')[0] }]);
@@ -645,6 +675,7 @@ Real Tamil speakers do not say the "correct" written form of a word. They contra
   const handleInitiateTwilioCall = async (lead: Lead) => {
     if (callState === 'dialing' || callState === 'connected') return;
 
+    cancelDialRequestedRef.current = false;
     setActiveLead(lead);
     setCallState('dialing');
     setDuration(0);
@@ -673,6 +704,13 @@ Real Tamil speakers do not say the "correct" written form of a word. They contra
       });
       const data = await res.json();
       if (data.success && data.callSid) {
+        if (cancelDialRequestedRef.current) {
+          cancelDialRequestedRef.current = false;
+          setTwilioCallSid(null);
+          setCallState('idle');
+          apiFetch('/api/twilio/hangup', { method: 'POST', body: JSON.stringify({ callSid: data.callSid }) }).catch(() => {});
+          return;
+        }
         setTwilioCallSid(data.callSid);
         setCallState('connected');
         setTranscript([
@@ -1748,7 +1786,22 @@ Currently on question ${nextIndex} out of ${selectedTask.questions.length}. Next
                       <Volume2 className="h-6 w-6" />
                     </div>
                     <p className="text-xs text-amber-600 dark:text-amber-400 font-mono">Securing carrier trunk line...</p>
-                    <Button variant="danger" size="xs" onClick={() => setCallState('idle')}>
+                    <Button
+                      variant="danger"
+                      size="xs"
+                      onClick={() => {
+                        // The call may already be live by the time this is
+                        // clicked (callState flips to 'connected' the moment
+                        // the provider returns a callSid, often before the
+                        // phone has actually started ringing) — flag it so
+                        // whichever handleInitiate*Call is in flight hangs
+                        // the real call up the instant its callSid arrives,
+                        // instead of just resetting this local state and
+                        // leaving an accidental call running unattended.
+                        cancelDialRequestedRef.current = true;
+                        setCallState('idle');
+                      }}
+                    >
                       Cancel Outbound Connection
                     </Button>
                   </div>
