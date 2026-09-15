@@ -466,7 +466,7 @@ Real Tamil speakers do not say the "correct" written form of a word. They contra
   };
 
     // Wizard: submit final task
-  const handleCreateTask = () => {
+  const handleCreateTask = async () => {
     const workflow = flows.find(f => f.id === wizardWorkflowId);
     if (!workflow) return;
 
@@ -518,6 +518,24 @@ Real Tamil speakers do not say the "correct" written form of a word. They contra
     setTasks(prev => [...prev, newTask]);
     setSelectedTaskId(newTask.id);
     setShowCreateModal(false);
+
+    // Every new task now dials in the background by default — the
+    // frontend's periodic full-table /sync can take up to 800ms, so this
+    // pushes the task to the backend directly first (a single-row create,
+    // not the delete+reinsert /sync) and only then starts auto-dial,
+    // instead of racing a start call against a task the backend doesn't
+    // know about yet. If either call fails (offline, backend hiccup), the
+    // task still exists locally and the "Run in Background (Server)"
+    // button lets the user retry manually — this isn't the only way in.
+    try {
+      await apiFetch('/api/dialer-tasks', { method: 'POST', body: JSON.stringify(newTask) });
+      await apiFetch(`/api/dialer-tasks/${newTask.id}/auto-dial/start`, {
+        method: 'POST',
+        body: JSON.stringify({ outboundNumber: selectedOutboundNumber || undefined }),
+      });
+    } catch (err) {
+      console.error('Failed to start background auto-dial for new task:', err);
+    }
   };
 
   const openCreateTaskModal = () => {
@@ -1047,7 +1065,10 @@ Currently on question ${nextIndex} out of ${selectedTask.questions.length}. Next
     if (!selectedTask) return;
     setServerAutoDialBusy(true);
     try {
-      const res = await apiFetch(`/api/dialer-tasks/${selectedTask.id}/auto-dial/start`, { method: 'POST' });
+      const res = await apiFetch(`/api/dialer-tasks/${selectedTask.id}/auto-dial/start`, {
+        method: 'POST',
+        body: JSON.stringify({ outboundNumber: selectedOutboundNumber || undefined }),
+      });
       const updated = await res.json();
       if (!res.ok) throw new Error(updated.error || 'Failed to start server-side auto-dial');
       setTasks((prev) => prev.map((t) => (t.id === selectedTask.id ? { ...t, ...updated } : t)));

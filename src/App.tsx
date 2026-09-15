@@ -385,6 +385,24 @@ export default function App() {
     ]);
   };
 
+  // Lightweight refresh for just the dialer tasks — used to keep
+  // auto-dial progress (autoDialStatus, callResults) live in the UI
+  // without re-fetching everything else refreshData() does. The backend
+  // (src/crm/autoDialEngine.js) is the actual source of truth here: this
+  // component never drives the dialing itself for a server-run task, it
+  // only reflects whatever the backend row currently says — which is also
+  // exactly what makes "open the app mid-campaign and see where it's at"
+  // and "the process got killed mid-call, does the UI still make sense"
+  // both just work for free, with no special-case recovery logic needed.
+  const refreshDialerTasks = useCallback(async () => {
+    if (!kcUser) return;
+    try {
+      const res = await apiFetch('/api/dialer-tasks');
+      const rows = await res.json();
+      if (Array.isArray(rows)) setDialerTasks(rows);
+    } catch { /* transient — next poll tick or SSE event will retry */ }
+  }, [kcUser]);
+
   // Fetch all CRM data from the backend and update state.
   // Exposed as `refreshData` so page-level refresh buttons can call it directly.
   const refreshData = useCallback(async () => {
@@ -525,6 +543,14 @@ export default function App() {
               setCallLogs((prev) => [{ ...data.callLog, providerCallSid: data.providerCallSid }, ...prev]);
             }
             pushNotification('call_completed', `Call completed${data.callLog?.leadName ? ` with ${data.callLog.leadName}` : ''}`);
+          } else if (data.type === 'auto_dial_progress') {
+            // Refetch immediately instead of trying to patch the specific
+            // task/field this event mentions — the backend row is the
+            // single source of truth for auto-dial state, and re-reading
+            // it here is simpler and can't drift out of sync with whatever
+            // shape a given progress event happens to carry.
+            refreshDialerTasks();
+            if (data.message) pushNotification(data.type, data.message);
           } else if (data.message) {
             pushNotification(data.type || 'info', data.message);
           }
@@ -629,6 +655,19 @@ export default function App() {
   useDebouncedSync('/api/call-logs/sync', callLogs, hasLoaded);
 
   useEffect(() => { saveToStorage('chiefx_dialer_tasks', dialerTasks); }, [dialerTasks]);
+
+  // Backstop poll for auto-dial progress, in case an auto_dial_progress
+  // SSE event is missed (a brief reconnect gap, a background tab getting
+  // throttled) — same "poll is the source of truth, the event is just a
+  // latency optimization" reasoning as autoDialEngine.js's own poll loop
+  // on the backend. Only runs while at least one task is actually
+  // server-auto-dialing, so it costs nothing the rest of the time.
+  const hasActiveAutoDial = dialerTasks.some((t: any) => t.autoDialEnabled);
+  useEffect(() => {
+    if (!hasActiveAutoDial) return;
+    const id = setInterval(() => { refreshDialerTasks(); }, 8000);
+    return () => clearInterval(id);
+  }, [hasActiveAutoDial, refreshDialerTasks]);
   useDebouncedSync('/api/dialer-tasks/sync', dialerTasks, hasLoaded);
 
   useEffect(() => { saveToStorage('chiefx_loans', loans); }, [loans]);
