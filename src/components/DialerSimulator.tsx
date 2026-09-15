@@ -1053,7 +1053,16 @@ Currently on question ${nextIndex} out of ${selectedTask.questions.length}. Next
   const processedCallLogIdRef = useRef<string | null>(null);
   useEffect(() => {
     if (callState !== 'connected' || !activeLead) return;
-    const sanitize = (n: string) => (n || '').replace(/[\s\-\(\)\+]+/g, '');
+    // Compare only the last 10 digits (the actual subscriber number),
+    // not the full sanitized string — activeLead.phone and the
+    // callerNumber Vobiz reports back can differ in country-code/leading
+    // formatting (e.g. lead stored as "6384670687" but Vobiz reports
+    // "+916384670687"), which made the previous exact-string comparison
+    // never match: the dialer UI stayed stuck on "connected" forever even
+    // though the backend had already logged the call and broadcast
+    // call_completed. Confirmed via production logs — call_logs row and
+    // broadcast both fired, but this effect's match stayed undefined.
+    const sanitize = (n: string) => (n || '').replace(/[\s\-\(\)\+]+/g, '').slice(-10);
     const targetPhone = sanitize(activeLead.phone);
     // Scan the most recent entries, not just callLogs[0] — a broadcast for
     // an unrelated call (a different concurrent inbound call, or a
@@ -1066,6 +1075,7 @@ Currently on question ${nextIndex} out of ${selectedTask.questions.length}. Next
     const match = callLogs.slice(0, 10).find((log) =>
       log.direction === 'outbound' &&
       processedCallLogIdRef.current !== log.id &&
+      targetPhone.length === 10 &&
       sanitize(log.callerNumber || log.leadName || '') === targetPhone
     );
     if (!match) return;
