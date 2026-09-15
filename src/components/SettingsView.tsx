@@ -56,6 +56,27 @@ interface AuditEntry {
   createdAt: string;
 }
 
+// One row per Gemini Live session — see crm-backend-demo's
+// src/ai/geminiUsageTracker.js / GET /api/ai-usage. Cost figures are
+// application-level ESTIMATES, not the Google Cloud invoice.
+interface AiUsageSession {
+  id: string;
+  callId: string;
+  sessionId: string | null;
+  adminId: string | null;
+  provider: string;
+  model: string;
+  status: 'in_progress' | 'completed' | 'failed';
+  inputTokens: number;
+  outputTokens: number;
+  totalTokens: number;
+  totalCost: number;
+  currency: string;
+  durationSeconds: number | null;
+  sessionStartedAt: string;
+  errorMessage: string | null;
+}
+
 function ProviderBadge({ provider }: { provider: string }) {
   const p = (provider || '').toLowerCase();
   if (p === 'twilio') {
@@ -116,6 +137,33 @@ export default function SettingsView({
   };
   useEffect(() => {
     if (subTab === 'api') loadAuditLogs();
+  }, [subTab]);
+
+  // Gemini Live usage/cost tracking (crm-backend-demo's
+  // src/ai/geminiUsageTracker.js — see docs/ai-usage-tracking.md). Every
+  // figure here is an application-level ESTIMATE computed from token
+  // counts, never the authoritative Google Cloud invoice — labeled as
+  // such wherever it's shown below.
+  const [aiUsageSummary, setAiUsageSummary] = useState<{ sessionCount: number; callCount: number; totalInputTokens: number; totalOutputTokens: number; totalTokens: number; totalCost: number; failedCount: number; currency: string } | null>(null);
+  const [aiUsageByAdmin, setAiUsageByAdmin] = useState<{ adminId: string; sessionCount: number; totalTokens: number; totalCost: number }[]>([]);
+  const [aiUsageSessions, setAiUsageSessions] = useState<AiUsageSession[]>([]);
+  const [loadingAiUsage, setLoadingAiUsage] = useState(false);
+  const loadAiUsage = () => {
+    setLoadingAiUsage(true);
+    Promise.all([
+      apiFetch('/api/ai-usage/summary').then((r) => (r.ok ? r.json() : null)).catch(() => null),
+      apiFetch('/api/ai-usage/by-admin').then((r) => (r.ok ? r.json() : null)).catch(() => null),
+      apiFetch('/api/ai-usage?page=1&limit=20').then((r) => (r.ok ? r.json() : null)).catch(() => null),
+    ])
+      .then(([summary, byAdmin, sessions]) => {
+        setAiUsageSummary(summary);
+        setAiUsageByAdmin(Array.isArray(byAdmin?.rows) ? byAdmin.rows : []);
+        setAiUsageSessions(Array.isArray(sessions?.rows) ? sessions.rows : []);
+      })
+      .finally(() => setLoadingAiUsage(false));
+  };
+  useEffect(() => {
+    if (subTab === 'billing') loadAiUsage();
   }, [subTab]);
 
 
@@ -983,6 +1031,99 @@ export default function SettingsView({
                     <span className="text-[10px] text-slate-400 uppercase tracking-wider block">Phone Charges</span>
                     <strong className="text-md text-slate-800 font-mono">${orgSettings.phoneCharges.toFixed(2)}</strong>
                   </div>
+                </div>
+              </Widget>
+
+              {/* Gemini Live model usage & cost — see
+                  docs/ai-usage-tracking.md. Every figure here is an
+                  application-level ESTIMATE computed from token counts
+                  and this app's own pricing config, NOT the authoritative
+                  Google Cloud invoice amount. */}
+              <Widget
+                title="Gemini AI Model Usage & Cost"
+                subtitle="Estimated — computed from token usage, not your Google Cloud invoice"
+                icon={Activity}
+                accent="#6366f1"
+                padding="md"
+                action={
+                  <button
+                    onClick={loadAiUsage}
+                    disabled={loadingAiUsage}
+                    className="text-[10px] font-mono text-slate-400 hover:text-slate-600 disabled:opacity-50 cursor-pointer"
+                  >
+                    {loadingAiUsage ? 'Loading…' : 'Refresh'}
+                  </button>
+                }
+              >
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 pt-2">
+                  <div className="bg-slate-50 p-4 rounded-xl text-center">
+                    <span className="text-[10px] text-slate-400 uppercase tracking-wider block">Sessions</span>
+                    <strong className="text-md text-slate-800 font-mono">{aiUsageSummary?.sessionCount ?? 0}</strong>
+                  </div>
+                  <div className="bg-slate-50 p-4 rounded-xl text-center">
+                    <span className="text-[10px] text-slate-400 uppercase tracking-wider block">Total Tokens</span>
+                    <strong className="text-md text-slate-800 font-mono">{(aiUsageSummary?.totalTokens ?? 0).toLocaleString()}</strong>
+                  </div>
+                  <div className="bg-slate-50 p-4 rounded-xl text-center">
+                    <span className="text-[10px] text-slate-400 uppercase tracking-wider block">Est. Cost ({aiUsageSummary?.currency || 'USD'})</span>
+                    <strong className="text-md text-slate-800 font-mono">${(aiUsageSummary?.totalCost ?? 0).toFixed(4)}</strong>
+                  </div>
+                  <div className="bg-slate-50 p-4 rounded-xl text-center">
+                    <span className="text-[10px] text-slate-400 uppercase tracking-wider block">Failed Sessions</span>
+                    <strong className={`text-md font-mono ${(aiUsageSummary?.failedCount ?? 0) > 0 ? 'text-rose-600' : 'text-slate-800'}`}>{aiUsageSummary?.failedCount ?? 0}</strong>
+                  </div>
+                </div>
+
+                {aiUsageByAdmin.length > 0 && (
+                  <div className="mt-5">
+                    <p className="text-[10px] font-semibold text-slate-500 uppercase tracking-wide mb-2">Cost by Admin</p>
+                    <div className="space-y-1.5">
+                      {aiUsageByAdmin.map((row) => (
+                        <div key={row.adminId} className="flex items-center justify-between text-xs bg-slate-50 rounded-lg px-3 py-2">
+                          {/* adminId is the authenticated user's id, not an
+                              email — no reliable id-to-email lookup is
+                              available here, so shown as-is rather than
+                              guessing at a name. */}
+                          <span className="font-mono text-slate-600" title={row.adminId || undefined}>{row.adminId ? `${row.adminId.slice(0, 8)}…` : 'Unknown'}</span>
+                          <span className="text-slate-400">{row.sessionCount} sessions · {row.totalTokens.toLocaleString()} tokens</span>
+                          <span className="font-mono font-bold text-slate-700">${row.totalCost.toFixed(4)}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                <div className="mt-5">
+                  <p className="text-[10px] font-semibold text-slate-500 uppercase tracking-wide mb-2">Recent Sessions</p>
+                  {aiUsageSessions.length === 0 ? (
+                    <div className="p-6 text-center text-slate-400 text-xs bg-slate-50 rounded-xl">
+                      {loadingAiUsage ? 'Loading…' : 'No Gemini Live sessions tracked yet.'}
+                    </div>
+                  ) : (
+                    <DataTable
+                      bare
+                      resizable
+                      columns={[
+                        { key: 'provider', header: 'Provider', cell: (s: AiUsageSession) => <span className="font-mono text-xs text-slate-600 capitalize">{s.provider}</span> },
+                        { key: 'model', header: 'Model', cell: (s: AiUsageSession) => <span className="font-mono text-[10px] text-slate-500">{s.model}</span> },
+                        {
+                          key: 'status', header: 'Status', cell: (s: AiUsageSession) => (
+                            <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${
+                              s.status === 'completed' ? 'bg-emerald-100 text-emerald-700'
+                                : s.status === 'failed' ? 'bg-rose-100 text-rose-700'
+                                : 'bg-amber-100 text-amber-700'
+                            }`}>{s.status}</span>
+                          )
+                        },
+                        { key: 'tokens', header: 'Tokens (in/out)', align: 'right', cell: (s: AiUsageSession) => <span className="font-mono text-xs text-slate-600">{s.inputTokens.toLocaleString()} / {s.outputTokens.toLocaleString()}</span> },
+                        { key: 'cost', header: 'Est. Cost', align: 'right', cell: (s: AiUsageSession) => <span className="font-mono text-xs font-bold text-slate-700">${s.totalCost.toFixed(4)}</span> },
+                        { key: 'duration', header: 'Duration', align: 'right', cell: (s: AiUsageSession) => <span className="font-mono text-xs text-slate-500">{s.durationSeconds != null ? `${Math.round(s.durationSeconds)}s` : '—'}</span> },
+                        { key: 'started', header: 'Started', align: 'right', cell: (s: AiUsageSession) => <span className="text-[9px] text-slate-400 font-mono">{new Date(s.sessionStartedAt).toLocaleString()}</span> },
+                      ]}
+                      rows={aiUsageSessions}
+                      rowKey={(s) => s.id}
+                    />
+                  )}
                 </div>
               </Widget>
             </div>
