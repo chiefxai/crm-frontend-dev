@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useState, ReactNode } from 'react';
 import { apiFetch } from '../lib/api';
-import { PhoneOutgoing, Clock, DollarSign, Smile, CheckCircle2, ListChecks, FileDown, Download, FileText } from 'lucide-react';
+import { PhoneOutgoing, Clock, DollarSign, Smile, CheckCircle2, ListChecks, FileDown, Download, FileText, Phone, Flame } from 'lucide-react';
 import PageShell from './ui/PageShell';
 import Button from './ui/Button';
 import Widget from './ui/Widget';
 import PieChart from './ui/PieChart';
 import KpiCard from './ui/KpiCard';
+import Badge from './ui/Badge';
 import SlideOver from './ui/SlideOver';
 import { CallLog } from '../types';
 import { callCostInr, formatInr, COST_PER_MINUTE_INR_FALLBACK } from '../lib/pricing';
@@ -70,6 +71,19 @@ interface ReportsViewProps {
   orgName?: string;
 }
 
+// Moved here from the Executive Desk — same /api/dashboard/metrics
+// response, just this one field.
+interface InterestedClient {
+  leadId: string;
+  name: string;
+  phone: string | null;
+  amountRequested: number | null;
+  score: number | null;
+  intent: string | null;
+  lastCallSummary: string | null;
+  lastCallAt: string;
+}
+
 function formatDuration(totalSeconds: number): string {
   const h = Math.floor(totalSeconds / 3600);
   const m = Math.floor((totalSeconds % 3600) / 60);
@@ -91,6 +105,17 @@ export default function ReportsView({ callLogs, dialerTasks, leads, costPerMinut
   const [fromDate, setFromDate] = useState(daysAgo(30));
   const [toDate, setToDate] = useState(daysAgo(0));
   const [selectedTaskId, setSelectedTaskId] = useState<string>('');
+
+  // Interested Clients — moved here from Executive Desk; same
+  // /api/dashboard/metrics call that page used to make, just for this one
+  // field, fetched independently of everything else on this page.
+  const [topInterestedClients, setTopInterestedClients] = useState<InterestedClient[]>([]);
+  useEffect(() => {
+    apiFetch('/api/dashboard/metrics')
+      .then(r => { if (!r.ok) throw new Error(); return r.json(); })
+      .then((data: { topInterestedClients?: InterestedClient[] }) => setTopInterestedClients(data.topInterestedClients ?? []))
+      .catch(err => console.error('Failed to load interested clients:', err));
+  }, []);
 
   // Default to the most recently created task instead of an empty/org-wide
   // view — and fall back to it again if the current selection stops
@@ -466,6 +491,102 @@ export default function ReportsView({ callLogs, dialerTasks, leads, costPerMinut
                 rowKey={(r) => r.rowKey}
                 onRowClick={(r) => selectLead(r.rowKey, r.phone, r.callId)}
                 rowClassName={(r) => (selectedLeadId === r.rowKey ? 'bg-[var(--bg-subtle)] shadow-[inset_3px_0_0_#2563eb]' : '')}
+              />
+            );
+          })()}
+        </Widget>
+
+        {/* Calls in Period — moved here from Executive Desk; unlike that
+            fixed-30-days version, this one already respects the
+            From/To/Direction filters above (filteredCalls), so it doubles
+            as this page's own detailed call list. Paginated client-side. */}
+        <Widget colSpan={12} title={`Calls in Period (${filteredCalls.length})`} padding="none" scrollable>
+          {(() => {
+            const sortedCalls = [...filteredCalls].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()).slice(0, 200);
+            type CallRow = typeof sortedCalls[number];
+            const columns: Column<CallRow>[] = [
+              { key: 'caller', header: 'Caller', cell: (c) => <span className="font-semibold text-slate-800">{c.leadName}</span> },
+              { key: 'direction', header: 'Direction', cell: (c) => <span className="text-slate-500 capitalize">{c.direction || '—'}</span> },
+              { key: 'duration', header: 'Duration', cell: (c) => <span className="font-mono">{formatDuration(c.duration)}</span> },
+              { key: 'cost', header: 'Cost', cell: (c) => <span className="font-mono">{formatInr(callCostInr(c.duration, costPerMinuteInr))}</span> },
+              {
+                key: 'sentiment',
+                header: 'Sentiment',
+                cell: (c) => (
+                  <span className="px-2 py-0.5 rounded-md text-[10px] font-semibold" style={{ color: SENTIMENT_COLOR[c.sentiment], backgroundColor: `${SENTIMENT_COLOR[c.sentiment]}1a` }}>
+                    {c.sentiment}
+                  </span>
+                ),
+              },
+              { key: 'when', header: 'When', cell: (c) => <span className="text-slate-400">{new Date(c.createdAt).toLocaleString()}</span> },
+            ];
+            return (
+              <DataTable
+                bare
+                paginated
+                columns={columns}
+                rows={sortedCalls}
+                rowKey={(c) => c.id}
+                emptyMessage="No calls in this period."
+              />
+            );
+          })()}
+        </Widget>
+
+        {/* Interested Clients — moved here from Executive Desk. */}
+        <Widget
+          colSpan={12}
+          title="Interested Clients"
+          subtitle="Leads whose most recent call had positive sentiment — ranked by lead score, call them back first."
+          icon={Flame}
+          accent="#e11d48"
+          padding="none"
+          hover
+          scrollable
+        >
+          {(() => {
+            const clientColumns: Column<InterestedClient>[] = [
+              { key: 'name', header: 'Name', cell: r => <span className="font-semibold text-slate-800">{r.name}</span> },
+              {
+                key: 'phone',
+                header: 'Phone',
+                cell: r => r.phone
+                  ? <span className="flex items-center gap-1.5 text-slate-500"><Phone className="h-3 w-3" />{r.phone}</span>
+                  : <span className="text-slate-300">—</span>,
+              },
+              {
+                key: 'score',
+                header: 'Score',
+                cell: r => r.score != null
+                  ? <Badge color="green">{r.score}</Badge>
+                  : <span className="text-slate-300">—</span>,
+              },
+              {
+                key: 'amount',
+                header: 'Amount',
+                cell: r => r.amountRequested != null
+                  ? <span className="text-slate-600">{formatInr(r.amountRequested)}</span>
+                  : <span className="text-slate-300">—</span>,
+              },
+              { key: 'intent', header: 'Intent', cell: r => <span className="text-slate-500">{r.intent || '—'}</span> },
+              {
+                key: 'summary',
+                header: 'Last Call Summary',
+                cell: r => (
+                  <span className="text-slate-500 truncate block max-w-xs" title={r.lastCallSummary || ''}>
+                    {r.lastCallSummary || '—'}
+                  </span>
+                ),
+              },
+            ];
+            return (
+              <DataTable
+                bare
+                paginated
+                columns={clientColumns}
+                rows={topInterestedClients}
+                rowKey={r => r.leadId}
+                emptyMessage="No positive-sentiment calls yet — interested clients will appear here as calls are analyzed."
               />
             );
           })()}

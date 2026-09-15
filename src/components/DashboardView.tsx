@@ -4,8 +4,6 @@ import {
   DollarSign,
   UserCheck,
   Clock,
-  Flame,
-  Phone,
   Activity,
 } from 'lucide-react';
 import {
@@ -20,10 +18,9 @@ import {
 } from 'recharts';
 import { apiFetch } from '../lib/api';
 import { Lead, Loan, CallLog, OrganizationSettings } from '../types';
-import { COST_PER_MINUTE_INR_FALLBACK, formatInr, callCostInr } from '../lib/pricing';
+import { COST_PER_MINUTE_INR_FALLBACK, formatInr } from '../lib/pricing';
 import PageShell from './ui/PageShell';
 import Widget from './ui/Widget';
-import DataTable, { Column } from './ui/DataTable';
 import EmptyState from './ui/EmptyState';
 import KpiCard from './ui/KpiCard';
 
@@ -73,22 +70,6 @@ const CHART_TOOLTIP = {
   },
 };
 
-const SENTIMENT_COLOR: Record<string, string> = {
-  Positive: '#059669',
-  Negative: '#e11d48',
-  Neutral: '#64748b',
-  Unknown: '#94a3b8',
-};
-
-function formatDuration(totalSeconds: number): string {
-  const h = Math.floor(totalSeconds / 3600);
-  const m = Math.floor((totalSeconds % 3600) / 60);
-  const s = Math.floor(totalSeconds % 60);
-  if (h > 0) return `${h}h ${m}m`;
-  if (m > 0) return `${m}m ${s}s`;
-  return `${s}s`;
-}
-
 export default function DashboardView({
   leads,
   loans,
@@ -136,50 +117,6 @@ export default function DashboardView({
     }
     return Object.values(buckets).sort((a, b) => a.period.localeCompare(b.period));
   }, [callsInPeriod]);
-
-  // ── Interested clients table columns ─────────────────────────────────────
-  const clientColumns: Column<InterestedClient>[] = [
-    {
-      key: 'name',
-      header: 'Name',
-      cell: r => <span className="font-semibold text-slate-800 dark:text-[var(--text-primary)]">{r.name}</span>,
-    },
-    {
-      key: 'phone',
-      header: 'Phone',
-      cell: r => r.phone
-        ? <span className="flex items-center gap-1.5 text-slate-500"><Phone className="h-3 w-3" />{r.phone}</span>
-        : <span className="text-slate-300">—</span>,
-    },
-    {
-      key: 'score',
-      header: 'Score',
-      cell: r => r.score != null
-        ? <Badge color="green">{r.score}</Badge>
-        : <span className="text-slate-300">—</span>,
-    },
-    {
-      key: 'amount',
-      header: 'Amount',
-      cell: r => r.amountRequested != null
-        ? <span className="text-slate-600">{formatInr(r.amountRequested)}</span>
-        : <span className="text-slate-300">—</span>,
-    },
-    {
-      key: 'intent',
-      header: 'Intent',
-      cell: r => <span className="text-slate-500">{r.intent || '—'}</span>,
-    },
-    {
-      key: 'summary',
-      header: 'Last Call Summary',
-      cell: r => (
-        <span className="text-slate-500 truncate block max-w-xs" title={r.lastCallSummary || ''}>
-          {r.lastCallSummary || '—'}
-        </span>
-      ),
-    },
-  ];
 
   return (
     <PageShell
@@ -306,62 +243,6 @@ export default function DashboardView({
             <EmptyState heading="No calls in the last 30 days" />
           )}
         </div>
-      </Widget>
-
-      {/* Detailed call list — moved here from Reports so the exec desk is a
-          complete pulse-check on its own; capped at 200 rows, newest first,
-          paginated client-side (DataTable's own `paginated` prop) since
-          callsInPeriod is already a bounded 30-day slice held in memory. */}
-      <Widget colSpan={12} title={`Calls in Period (${callsInPeriod.length})`} padding="none" scrollable>
-        {(() => {
-          const sortedCalls = [...callsInPeriod].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()).slice(0, 200);
-          const columns: Column<CallLog>[] = [
-            { key: 'caller', header: 'Caller', cell: (c) => <span className="font-semibold text-slate-800">{c.leadName}</span> },
-            { key: 'direction', header: 'Direction', cell: (c) => <span className="text-slate-500 capitalize">{c.direction || '—'}</span> },
-            { key: 'duration', header: 'Duration', cell: (c) => <span className="font-mono">{formatDuration(c.duration)}</span> },
-            { key: 'cost', header: 'Cost', cell: (c) => <span className="font-mono">{formatInr(callCostInr(c.duration, costPerMinuteInr))}</span> },
-            {
-              key: 'sentiment',
-              header: 'Sentiment',
-              cell: (c) => (
-                <span className="px-2 py-0.5 rounded-md text-[10px] font-semibold" style={{ color: SENTIMENT_COLOR[c.sentiment], backgroundColor: `${SENTIMENT_COLOR[c.sentiment]}1a` }}>
-                  {c.sentiment}
-                </span>
-              ),
-            },
-            { key: 'when', header: 'When', cell: (c) => <span className="text-slate-400">{new Date(c.createdAt).toLocaleString()}</span> },
-          ];
-          return (
-            <DataTable
-              bare
-              paginated
-              columns={columns}
-              rows={sortedCalls}
-              rowKey={(c) => c.id}
-              emptyMessage="No calls in the last 30 days."
-            />
-          );
-        })()}
-      </Widget>
-
-      {/* ── Row 3: Interested Clients table ── */}
-      <Widget
-        colSpan={12}
-        title="Interested Clients"
-        subtitle="Leads whose most recent call had positive sentiment — ranked by lead score, call them back first."
-        icon={Flame}
-        accent="#e11d48"
-        padding="none"
-        hover
-        scrollable
-      >
-        <DataTable
-          bare
-          columns={clientColumns}
-          rows={metrics?.topInterestedClients ?? []}
-          rowKey={r => r.leadId}
-          emptyMessage="No positive-sentiment calls yet — interested clients will appear here as calls are analyzed."
-        />
       </Widget>
 
     </PageShell>
