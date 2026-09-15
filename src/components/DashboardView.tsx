@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import {
-  TrendingUp,
   PhoneIncoming,
   DollarSign,
   UserCheck,
@@ -10,8 +9,6 @@ import {
   Activity,
 } from 'lucide-react';
 import {
-  AreaChart,
-  Area,
   XAxis,
   YAxis,
   CartesianGrid,
@@ -246,63 +243,9 @@ export default function DashboardView({
 
       {/* ── Row 2: Charts ── */}
 
-      {/* Area chart — portfolio/records trend */}
-      <Widget
-        colSpan={6}
-        title={isLending ? 'Loan Portfolio Growth' : `${primaryObject?.objectLabel || 'Records'} Over Time`}
-        subtitle={isLending ? 'Total loan amount disbursed per month, last 6 months.' : 'New records created per month, last 6 months.'}
-        icon={TrendingUp}
-        accent="#2563eb"
-        padding="md"
-        hover
-      >
-        <div className="h-64 w-full mt-1">
-          {isLending
-            ? metrics?.portfolioTrend?.some(m => m.loanCount > 0)
-              ? (
-                <ResponsiveContainer width="100%" height="100%">
-                  <AreaChart data={metrics.portfolioTrend} margin={{ top: 8, right: 8, left: -20, bottom: 0 }}>
-                    <defs>
-                      <linearGradient id="colorPortfolio" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="#2563eb" stopOpacity={0.2} />
-                        <stop offset="95%" stopColor="#2563eb" stopOpacity={0} />
-                      </linearGradient>
-                    </defs>
-                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                    <XAxis dataKey="month" stroke="#94a3b8" fontSize={11} tickLine={false} />
-                    <YAxis stroke="#94a3b8" fontSize={11} tickLine={false} axisLine={false} />
-                    <Tooltip {...CHART_TOOLTIP} />
-                    <Area type="monotone" dataKey="totalDisbursed" name="Total Disbursed" stroke="#2563eb" fillOpacity={1} fill="url(#colorPortfolio)" strokeWidth={2.5} />
-                  </AreaChart>
-                </ResponsiveContainer>
-              )
-              : <EmptyState heading="No loan activity yet" message="Loan data will appear here once disbursals are recorded." />
-            : primaryObject?.recordsTrend?.some(m => m.count > 0)
-              ? (
-                <ResponsiveContainer width="100%" height="100%">
-                  <AreaChart data={primaryObject.recordsTrend} margin={{ top: 8, right: 8, left: -20, bottom: 0 }}>
-                    <defs>
-                      <linearGradient id="colorRecords" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="#2563eb" stopOpacity={0.2} />
-                        <stop offset="95%" stopColor="#2563eb" stopOpacity={0} />
-                      </linearGradient>
-                    </defs>
-                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                    <XAxis dataKey="month" stroke="#94a3b8" fontSize={11} tickLine={false} />
-                    <YAxis stroke="#94a3b8" fontSize={11} tickLine={false} axisLine={false} />
-                    <Tooltip {...CHART_TOOLTIP} />
-                    <Area type="monotone" dataKey="count" name="New Records" stroke="#2563eb" fillOpacity={1} fill="url(#colorRecords)" strokeWidth={2.5} />
-                  </AreaChart>
-                </ResponsiveContainer>
-              )
-              : <EmptyState heading="No records yet" />
-          }
-        </div>
-      </Widget>
-
       {/* Bar chart — leads by source / pipeline stage */}
       <Widget
-        colSpan={6}
+        colSpan={12}
         title={isLending ? 'Leads by Source' : `${primaryObject?.objectLabel || 'Pipeline'} by Stage`}
         subtitle={isLending ? 'How your leads are actually arriving.' : 'Where records currently sit in the pipeline.'}
         icon={Activity}
@@ -366,41 +309,39 @@ export default function DashboardView({
       </Widget>
 
       {/* Detailed call list — moved here from Reports so the exec desk is a
-          complete pulse-check on its own; capped at 200 rows, newest first. */}
+          complete pulse-check on its own; capped at 200 rows, newest first,
+          paginated client-side (DataTable's own `paginated` prop) since
+          callsInPeriod is already a bounded 30-day slice held in memory. */}
       <Widget colSpan={12} title={`Calls in Period (${callsInPeriod.length})`} padding="none" scrollable>
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-xs mt-3">
-            <thead>
-              <tr className="bg-slate-50/75 border-y border-slate-100 text-[10px] font-bold text-slate-400 uppercase tracking-widest">
-                <th className="p-3 px-5">Caller</th>
-                <th className="p-3 px-5">Direction</th>
-                <th className="p-3 px-5">Duration</th>
-                <th className="p-3 px-5">Cost</th>
-                <th className="p-3 px-5">Sentiment</th>
-                <th className="p-3 px-5">When</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {[...callsInPeriod].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()).slice(0, 200).map((c) => (
-                <tr key={c.id} className="hover:bg-[var(--bg-subtle)]">
-                  <td className="p-3 px-5 font-semibold text-slate-800">{c.leadName}</td>
-                  <td className="p-3 px-5 text-slate-500 capitalize">{c.direction || '—'}</td>
-                  <td className="p-3 px-5 font-mono">{formatDuration(c.duration)}</td>
-                  <td className="p-3 px-5 font-mono">{formatInr(callCostInr(c.duration, costPerMinuteInr))}</td>
-                  <td className="p-3 px-5">
-                    <span className="px-2 py-0.5 rounded-md text-[10px] font-semibold" style={{ color: SENTIMENT_COLOR[c.sentiment], backgroundColor: `${SENTIMENT_COLOR[c.sentiment]}1a` }}>
-                      {c.sentiment}
-                    </span>
-                  </td>
-                  <td className="p-3 px-5 text-slate-400">{new Date(c.createdAt).toLocaleString()}</td>
-                </tr>
-              ))}
-              {callsInPeriod.length === 0 && (
-                <tr><td colSpan={6} className="p-8 text-center text-slate-400">No calls in the last 30 days.</td></tr>
-              )}
-            </tbody>
-          </table>
-        </div>
+        {(() => {
+          const sortedCalls = [...callsInPeriod].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()).slice(0, 200);
+          const columns: Column<CallLog>[] = [
+            { key: 'caller', header: 'Caller', cell: (c) => <span className="font-semibold text-slate-800">{c.leadName}</span> },
+            { key: 'direction', header: 'Direction', cell: (c) => <span className="text-slate-500 capitalize">{c.direction || '—'}</span> },
+            { key: 'duration', header: 'Duration', cell: (c) => <span className="font-mono">{formatDuration(c.duration)}</span> },
+            { key: 'cost', header: 'Cost', cell: (c) => <span className="font-mono">{formatInr(callCostInr(c.duration, costPerMinuteInr))}</span> },
+            {
+              key: 'sentiment',
+              header: 'Sentiment',
+              cell: (c) => (
+                <span className="px-2 py-0.5 rounded-md text-[10px] font-semibold" style={{ color: SENTIMENT_COLOR[c.sentiment], backgroundColor: `${SENTIMENT_COLOR[c.sentiment]}1a` }}>
+                  {c.sentiment}
+                </span>
+              ),
+            },
+            { key: 'when', header: 'When', cell: (c) => <span className="text-slate-400">{new Date(c.createdAt).toLocaleString()}</span> },
+          ];
+          return (
+            <DataTable
+              bare
+              paginated
+              columns={columns}
+              rows={sortedCalls}
+              rowKey={(c) => c.id}
+              emptyMessage="No calls in the last 30 days."
+            />
+          );
+        })()}
       </Widget>
 
       {/* ── Row 3: Interested Clients table ── */}
