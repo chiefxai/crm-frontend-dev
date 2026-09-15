@@ -1053,24 +1053,34 @@ Currently on question ${nextIndex} out of ${selectedTask.questions.length}. Next
   const processedCallLogIdRef = useRef<string | null>(null);
   useEffect(() => {
     if (callState !== 'connected' || !activeLead) return;
-    const latest = callLogs[0];
-    if (!latest || latest.direction !== 'outbound') return;
-    if (processedCallLogIdRef.current === latest.id) return;
     const sanitize = (n: string) => (n || '').replace(/[\s\-\(\)\+]+/g, '');
-    const logPhone = sanitize(latest.callerNumber || latest.leadName || '');
-    if (logPhone !== sanitize(activeLead.phone)) return;
-    processedCallLogIdRef.current = latest.id;
+    const targetPhone = sanitize(activeLead.phone);
+    // Scan the most recent entries, not just callLogs[0] — a broadcast for
+    // an unrelated call (a different concurrent inbound call, or a
+    // duration-correction patch racing the initial create) can land ahead
+    // of this call's own completion in the array. Checking only the very
+    // top entry meant that one out-of-order arrival permanently missed
+    // this call's real completion broadcast, leaving the dialer UI stuck
+    // showing it as active. 10 is comfortably more than could arrive
+    // between two polls of this effect in practice.
+    const match = callLogs.slice(0, 10).find((log) =>
+      log.direction === 'outbound' &&
+      processedCallLogIdRef.current !== log.id &&
+      sanitize(log.callerNumber || log.leadName || '') === targetPhone
+    );
+    if (!match) return;
+    processedCallLogIdRef.current = match.id;
     handleHangupCall({
-      recordingUrl: latest.recordingUrl,
-      duration: latest.duration,
-      sentiment: latest.sentiment,
-      summary: latest.summary,
-      callId: latest.id,
-      transcript: latest.transcript,
+      recordingUrl: match.recordingUrl,
+      duration: match.duration,
+      sentiment: match.sentiment,
+      summary: match.summary,
+      callId: match.id,
+      transcript: match.transcript,
       // Backend broadcasts this as { label, question, answer }[]; the
       // shared CallLog type declares `answers` as a plain string map for
       // other (non-workflow) callers of that type, so it's re-asserted here.
-      answers: latest.answers as unknown as { label?: string; question: string; answer: string }[] | undefined,
+      answers: match.answers as unknown as { label?: string; question: string; answer: string }[] | undefined,
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [callLogs, callState, activeLead]);
