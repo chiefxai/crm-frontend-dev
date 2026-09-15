@@ -215,6 +215,12 @@ interface DialTask {
       recordingUrl?: string;
     }
   };
+  // Server-side auto-dial runtime state — set by src/crm/autoDialEngine.js
+  // on the backend (crm-backend-demo), not by this app. Present once the
+  // task has been started via POST /api/dialer-tasks/:id/auto-dial/start;
+  // absent on tasks that have never been auto-dialed.
+  autoDialEnabled?: boolean;
+  autoDialStatus?: 'idle' | 'dialing' | 'waiting' | 'paused' | 'completed';
 }
 
 export default function DialerSimulator({
@@ -1026,6 +1032,47 @@ Currently on question ${nextIndex} out of ${selectedTask.questions.length}. Next
     else handleInitiateTwilioCall(lead);
   };
 
+  const [serverAutoDialBusy, setServerAutoDialBusy] = useState(false);
+
+  // Server-side auto-dial: the backend (src/crm/autoDialEngine.js) walks
+  // the task's lead list on its own polling loop and keeps going even if
+  // this tab is closed, unlike the local "Auto-Dial Next List Target"
+  // toggle above, which stops the instant the browser does. This just
+  // flips the task's auto_dial_enabled flag server-side — the engine does
+  // the actual dialing; this component only reflects its progress via the
+  // task object refreshing (App.tsx already re-fetches /api/dialer-tasks
+  // periodically, and auto_dial_progress broadcasts show as toast
+  // notifications through App.tsx's existing SSE handler).
+  const handleStartServerAutoDial = async () => {
+    if (!selectedTask) return;
+    setServerAutoDialBusy(true);
+    try {
+      const res = await apiFetch(`/api/dialer-tasks/${selectedTask.id}/auto-dial/start`, { method: 'POST' });
+      const updated = await res.json();
+      if (!res.ok) throw new Error(updated.error || 'Failed to start server-side auto-dial');
+      setTasks((prev) => prev.map((t) => (t.id === selectedTask.id ? { ...t, ...updated } : t)));
+    } catch (err: any) {
+      alert(`Couldn't start background auto-dial: ${err.message}`);
+    } finally {
+      setServerAutoDialBusy(false);
+    }
+  };
+
+  const handleStopServerAutoDial = async () => {
+    if (!selectedTask) return;
+    setServerAutoDialBusy(true);
+    try {
+      const res = await apiFetch(`/api/dialer-tasks/${selectedTask.id}/auto-dial/stop`, { method: 'POST' });
+      const updated = await res.json();
+      if (!res.ok) throw new Error(updated.error || 'Failed to stop server-side auto-dial');
+      setTasks((prev) => prev.map((t) => (t.id === selectedTask.id ? { ...t, ...updated } : t)));
+    } catch (err: any) {
+      alert(`Couldn't stop background auto-dial: ${err.message}`);
+    } finally {
+      setServerAutoDialBusy(false);
+    }
+  };
+
   // Detects the REAL end of a live outbound call (the AI hanging up via
   // end_call, or the callee hanging up) — without this, `callState` only
   // ever flipped to 'completed' from a manual "Hang Up" button click, so
@@ -1553,17 +1600,36 @@ Currently on question ${nextIndex} out of ${selectedTask.questions.length}. Next
                 <h3 className="text-lg font-bold text-[var(--text-primary)] uppercase tracking-widest">Active Working List</h3>
               </div>
 
-              <Button
-                variant={autoDialOn ? 'danger' : 'secondary'}
-                size="sm"
-                icon={PhoneCall}
-                onClick={() => setAutoDialOn((v) => !v)}
-                disabled={dialableNumbers.length === 0}
-                title={autoDialOn ? 'Stops after the current call finishes' : 'Dials the next pending lead now, then keeps going through the rest of the list automatically'}
-              >
-                {autoDialOn ? 'Stop Auto-Dial' : 'Auto-Dial Next List Target'}
-              </Button>
+              <div className="flex flex-wrap items-center gap-2">
+                <Button
+                  variant={autoDialOn ? 'danger' : 'secondary'}
+                  size="sm"
+                  icon={PhoneCall}
+                  onClick={() => setAutoDialOn((v) => !v)}
+                  disabled={dialableNumbers.length === 0}
+                  title={autoDialOn ? 'Stops after the current call finishes (only while this tab stays open)' : 'Dials the next pending lead now, then keeps going through the rest of the list automatically — stops if this tab is closed'}
+                >
+                  {autoDialOn ? 'Stop Auto-Dial' : 'Auto-Dial Next List Target'}
+                </Button>
+                <Button
+                  variant={selectedTask.autoDialEnabled ? 'danger' : 'primary'}
+                  size="sm"
+                  icon={PhoneCall}
+                  disabled={serverAutoDialBusy}
+                  onClick={selectedTask.autoDialEnabled ? handleStopServerAutoDial : handleStartServerAutoDial}
+                  title={selectedTask.autoDialEnabled
+                    ? 'Stops the server from placing any further calls for this task (a call already in progress is left to finish)'
+                    : 'Runs this task on the server — keeps dialing through every pending lead even if you close this tab or the app'}
+                >
+                  {selectedTask.autoDialEnabled ? 'Stop Background Run' : 'Run in Background (Server)'}
+                </Button>
+              </div>
             </div>
+            {selectedTask.autoDialEnabled && (
+              <p className="text-[11px] text-emerald-600 dark:text-emerald-400 -mt-2">
+                🤖 Running on the server — this task keeps auto-dialing pending leads even if you close this page. Status: {selectedTask.autoDialStatus || 'dialing'}.
+              </p>
+            )}
 
             {/* List Queue Table */}
             <div className="flex-1 min-h-0">
