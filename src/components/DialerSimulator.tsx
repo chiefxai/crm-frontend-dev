@@ -239,6 +239,10 @@ interface DialTask {
       // happen — present only when status is "Callback Scheduled" and the
       // caller gave a specific enough time to resolve one.
       callbackTime?: string;
+      // True only when the callee actually engaged — a lead can be status
+      // "Completed" while this is false (picked up, said nothing/"wrong
+      // number", hung up). See callFinalizer.js.
+      callAnswered?: boolean;
     }
   };
   // Server-side auto-dial runtime state — set by src/crm/autoDialEngine.js
@@ -847,7 +851,7 @@ Real Tamil speakers do not say the "correct" written form of a word. They contra
   // player always showed "No recording available" even though the call
   // really was recorded: this function only ever wrote the local
   // simulated timer/transcript, never the real Supabase-hosted recording URL.
-  const handleHangupCall = (realCallLog?: { recordingUrl?: string; duration?: number; sentiment?: string; summary?: string; callId?: string; transcript?: { speaker: 'AI' | 'Customer'; text: string; timestamp: string }[]; answers?: { label?: string; question: string; answer: string }[]; status?: string; callbackTime?: string }) => {
+  const handleHangupCall = (realCallLog?: { recordingUrl?: string; duration?: number; sentiment?: string; summary?: string; callId?: string; transcript?: { speaker: 'AI' | 'Customer'; text: string; timestamp: string }[]; answers?: { label?: string; question: string; answer: string }[]; status?: string; callbackTime?: string; callAnswered?: boolean }) => {
     if (!activeLead) return;
     setCallState('completed');
 
@@ -915,6 +919,7 @@ Real Tamil speakers do not say the "correct" written form of a word. They contra
               // answer that phone number ever gave, across every call).
               callId: realCallLog?.callId,
               callbackTime: realCallLog?.callbackTime,
+              callAnswered: realCallLog?.callAnswered,
             }
           }
         };
@@ -1269,6 +1274,7 @@ Currently on question ${nextIndex} out of ${selectedTask.questions.length}. Next
       answers: match.answers as unknown as { label?: string; question: string; answer: string }[] | undefined,
       status: match.status,
       callbackTime: match.callbackTime,
+      callAnswered: match.callAnswered,
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [callLogs, callState, activeLead, vobizCallSid, twilioCallSid, piopiyCallSid]);
@@ -1308,6 +1314,11 @@ Currently on question ${nextIndex} out of ${selectedTask.questions.length}. Next
         <div className="flex items-center gap-2">
           <span className="text-[9px] font-mono text-blue-600 uppercase tracking-widest font-bold bg-blue-50 border border-blue-200 px-2 py-0.5 rounded-full">Archive Room</span>
           <span className="text-[9px] font-mono text-emerald-600 uppercase tracking-widest font-bold bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full">{isOutbound ? 'Outbound Dial' : 'Inbound Line'}</span>
+          {/* Picked up but never actually engaged — still status
+              "Completed" but no real conversation happened. */}
+          {activeTapeResult.status === 'Completed' && activeTapeResult.callAnswered === false && (
+            <span className="text-[9px] font-mono text-rose-600 uppercase tracking-widest font-bold bg-rose-50 border border-rose-200 px-2 py-0.5 rounded-full">Not Answered</span>
+          )}
         </div>
 
         {/* Recording player */}
@@ -1751,6 +1762,15 @@ Currently on question ${nextIndex} out of ${selectedTask.questions.length}. Next
                                   : 'Callback time not specified — will retry soon'}
                               </p>
                             )}
+                            {/* Picked up but never actually engaged — still
+                                "Completed" (someone answered, wasn't a
+                                machine, no callback asked for) but not a
+                                real conversation. See callFinalizer.js. */}
+                            {result.status === 'Completed' && result.callAnswered === false && (
+                              <span className="block mt-1 text-[9px] font-bold text-rose-600 bg-rose-50 border border-rose-100 px-1.5 py-0.5 rounded w-fit">
+                                Not Answered
+                              </span>
+                            )}
                           </>
                         ) : (
                           <span className="inline-flex items-center gap-1 text-[10px] font-medium text-[var(--text-muted)] bg-[var(--bg-subtle)] px-2 py-0.5 rounded-md">
@@ -2080,6 +2100,11 @@ Currently on question ${nextIndex} out of ${selectedTask.questions.length}. Next
                           <span className="text-[9px] font-mono text-[var(--text-muted)] bg-[var(--bg-subtle)] px-1.5 py-0.5 rounded-full">
                             {formatInr(callCostInr(log.duration))}
                           </span>
+                          {log.status === 'Completed' && log.callAnswered === false && (
+                            <span className="text-[9px] font-bold text-rose-600 bg-rose-50 border border-rose-100 px-1.5 py-0.5 rounded-full">
+                              Not Answered
+                            </span>
+                          )}
                         </div>
                       </div>
 

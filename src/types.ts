@@ -111,6 +111,12 @@ export interface CallLog {
   // time for the backend to resolve one — see
   // src/ai/postCallAgents.js:extractFollowUp.
   callbackTime?: string;
+  // True only when the callee actually engaged (said more than a
+  // throwaway word or two) — a call can still be status "Completed" while
+  // this is false, e.g. picked up, said nothing/"wrong number", hung up.
+  // See callFinalizer.js's callerWordCount heuristic. Undefined on data
+  // captured before this field existed.
+  callAnswered?: boolean;
 }
 
 export interface LoanDocument {

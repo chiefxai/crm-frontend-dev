@@ -50,6 +50,8 @@ interface DialTaskCallResult {
   // call/task). Absent on data captured before this field existed.
   callId?: string;
   callbackTime?: string;
+  // True only when the callee actually engaged — see callFinalizer.js.
+  callAnswered?: boolean;
 }
 
 interface DialTask {
