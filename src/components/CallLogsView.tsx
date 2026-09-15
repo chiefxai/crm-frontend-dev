@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Phone, PlayCircle, Download, X, Check, ChevronDown } from 'lucide-react';
-import Modal from './ui/Modal';
+import SlideOver from './ui/SlideOver';
 import { CallLog, Lead } from '../types';
 import { callCostInr, formatInr } from '../lib/pricing';
 import { normalizePhone, formatPhone } from '../lib/phone';
@@ -236,12 +236,12 @@ export default function CallLogsView({ callLogs, costPerMinuteInr, leads = [] }:
 
       {/* Detail modal */}
       {selected && (
-        <Modal
+        <SlideOver
           open
           onClose={() => setSelected(null)}
           title={resolveCallerName(selected)}
           subtitle={`${new Date(selected.createdAt).toLocaleString()} · ${formatDuration(selected.duration)} · ${formatInr(callCostInr(selected.duration, costPerMinuteInr))} · ${selected.direction ?? 'unknown'}`}
-          maxWidth="max-w-3xl"
+          maxWidth="max-w-2xl"
         >
           <div className="space-y-5">
 
@@ -343,7 +343,7 @@ export default function CallLogsView({ callLogs, costPerMinuteInr, leads = [] }:
             </div>
 
           </div>
-        </Modal>
+        </SlideOver>
       )}
       </div>
     </PageShell>

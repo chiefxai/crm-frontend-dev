@@ -41,6 +41,7 @@ import SearchInput from './ui/SearchInput';
 import Button from './ui/Button';
 import EmptyState from './ui/EmptyState';
 import DataTable, { Column } from './ui/DataTable';
+import SlideOver from './ui/SlideOver';
 import { apiFetch, getPlayableRecordingUrl } from '../lib/api';
 import { callCostInr, formatInr } from '../lib/pricing';
 
@@ -1244,7 +1245,17 @@ Currently on question ${nextIndex} out of ${selectedTask.questions.length}. Next
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [callLogs, callState, activeLead, vobizCallSid, twilioCallSid, piopiyCallSid]);
 
-  if (playingTapeId && activeTapeResult) {
+  // Call/recording detail — a SlideOver (docked side panel, see
+  // ./ui/SlideOver) instead of the full-page takeover this used to be.
+  // Computed here (rather than left as an early `return`) so the rest of
+  // the page stays mounted underneath it, exactly like every other
+  // "click a row, see detail" panel in this app (ReportsView.tsx,
+  // LeadManagementView.tsx) already does.
+  const tapeSlideOverOpen = !!(playingTapeId && activeTapeResult);
+  let tapeDisplayTitle = '';
+  let tapeDisplaySubtitle = '';
+  let tapeDetailContent: React.ReactNode = null;
+  if (tapeSlideOverOpen && activeTapeResult) {
     const isOutbound = playingTapeType === 'outbound';
     // activeTapeResult is a CallLog when inbound (from realInboundCallLogs)
     // or a dialer-task callResults entry when outbound — the two don't
@@ -1252,253 +1263,201 @@ Currently on question ${nextIndex} out of ${selectedTask.questions.length}. Next
     // isOutbound at runtime; this cast just tells TS what that guard
     // already guarantees instead of it widening to the union.
     const inboundLog = !isOutbound ? (activeTapeResult as CallLog) : null;
-    const displayTitle = isOutbound && activeTapeLead
+    tapeDisplayTitle = isOutbound && activeTapeLead
       ? `${activeTapeLead.name} Call Analysis`
       : `${inboundLog?.leadName} Inbound Call Analysis`;
 
-    const displaySubtitle = isOutbound
-      ? `Campaign: ${selectedTask.name}`
+    tapeDisplaySubtitle = isOutbound
+      ? `Campaign: ${selectedTask?.name}`
       : `Caller: ${inboundLog?.leadName} • Recorded ${inboundLog ? new Date(inboundLog.createdAt).toLocaleString() : ''}`;
 
     const filename = isOutbound && activeTapeLead
       ? `📼 ${activeTapeLead.name.toUpperCase()}_recording.wav`
       : `📼 ${String(inboundLog?.leadName).toUpperCase()}_inbound_recording.wav`;
 
-    return (
-      <div id="voice-agent-dialer" className="p-6 md:p-8 space-y-6 overflow-y-auto h-screen w-full font-sans bg-[var(--bg-subtle)]/50 text-[var(--text-primary)] animate-fadeIn flex flex-col">
-        {/* Navigation & Header with Compact Media Player */}
-        <div className="bg-[var(--bg-surface)] border border-[var(--border)]/80 rounded-2xl p-5 shadow-sm space-y-4 shrink-0 relative overflow-hidden">
-          <div className="absolute -right-20 -bottom-20 w-80 h-80 bg-blue-500/5 rounded-full blur-3xl pointer-events-none"></div>
-          
-          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 relative z-10">
-            {/* Left: Info */}
-            <div className="flex items-center space-x-4">
+    tapeDetailContent = (
+      <div className="space-y-5 font-sans text-[var(--text-primary)]">
+        <div className="flex items-center gap-2">
+          <span className="text-[9px] font-mono text-blue-600 uppercase tracking-widest font-bold bg-blue-50 border border-blue-200 px-2 py-0.5 rounded-full">Archive Room</span>
+          <span className="text-[9px] font-mono text-emerald-600 uppercase tracking-widest font-bold bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full">{isOutbound ? 'Outbound Dial' : 'Inbound Line'}</span>
+        </div>
+
+        {/* Recording player */}
+        <div className="bg-[var(--bg-subtle)] border border-[var(--border)] rounded-xl p-3 flex items-center gap-3">
+          {playableTapeRecordingUrl && (
+            <audio
+              ref={audioElRef}
+              src={playableTapeRecordingUrl}
+              preload="metadata"
+              onLoadedMetadata={(e) => setTapeDuration(e.currentTarget.duration || 0)}
+              onTimeUpdate={(e) => {
+                const el = e.currentTarget;
+                if (el.duration) setTapeProgress((el.currentTime / el.duration) * 100);
+              }}
+              onEnded={() => {
+                setIsTapePlaying(false);
+                setTapeProgress(100);
+              }}
+              style={{ display: 'none' }}
+            />
+          )}
+          <button
+            onClick={() => setIsTapePlaying(!isTapePlaying)}
+            disabled={!playableTapeRecordingUrl}
+            className="h-9 w-9 shrink-0 rounded-lg flex items-center justify-center bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40 disabled:cursor-not-allowed text-white transition-all cursor-pointer active:scale-95 shadow-md shadow-emerald-600/10"
+            title={!playableTapeRecordingUrl ? 'No recording available' : isTapePlaying ? 'Pause Tape' : 'Play Tape'}
+          >
+            {isTapePlaying ? (
+              <Pause className="h-4 w-4 fill-white text-white" />
+            ) : (
+              <Play className="h-4 w-4 fill-white text-white ml-0.5" />
+            )}
+          </button>
+          <div className="flex-1 min-w-0 space-y-1">
+            <div className="flex justify-between items-center text-[10px] font-mono text-[var(--text-muted)]">
+              <span className="truncate font-semibold text-blue-600">{filename}</span>
+              <span className="shrink-0 font-medium" style={{ color: 'var(--text-secondary)' }}>
+                {activeTapeResult.recordingUrl
+                  ? `${formatTime(Math.round(((tapeDuration || activeTapeResult.duration) * tapeProgress) / 100))} / ${formatTime(Math.round(tapeDuration || activeTapeResult.duration))}`
+                  : 'No recording available'}
+              </span>
+            </div>
+            <div className="relative h-1.5 bg-[var(--bg-subtle)] rounded-full overflow-hidden">
+              <div className="bg-emerald-500 h-1.5 transition-all" style={{ width: `${tapeProgress}%` }}></div>
+            </div>
+          </div>
+          <div className="flex border border-[var(--border)] bg-[var(--bg-surface)] rounded-lg overflow-hidden text-[10px] h-8 items-center shrink-0">
+            {[1, 1.5, 2].map((sp) => (
               <button
-                onClick={() => {
-                  setPlayingTapeId(null);
-                  setIsTapePlaying(false);
-                }}
-                className="p-2.5 bg-[var(--bg-subtle)] hover:bg-[var(--bg-subtle)] border border-[var(--border)] rounded-xl hover:text-[var(--text-primary)] transition-all cursor-pointer flex items-center justify-center gap-2 font-medium" style={{ color: 'var(--text-secondary)' }}
+                key={sp}
+                onClick={() => setTapeSpeed(sp)}
+                className={`px-2 h-full font-mono font-bold ${tapeSpeed === sp ? 'bg-blue-600 text-white' : 'text-[var(--text-muted)] hover:bg-[var(--bg-subtle)]'} cursor-pointer transition-all`}
               >
-                <ArrowLeft className="h-4.5 w-4.5" />
-                <span className="text-xs">Back</span>
+                {sp}x
               </button>
-              <div className="h-8 w-[1px] bg-[var(--bg-subtle)] hidden sm:block"></div>
-              <div>
-                <div className="flex items-center gap-2">
-                  <span className="text-[9px] font-mono text-blue-600 uppercase tracking-widest font-bold bg-blue-50 border border-blue-200 px-2 py-0.5 rounded-full">Archive Room</span>
-                  <span className="text-[9px] font-mono text-emerald-600 uppercase tracking-widest font-bold bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full">{isOutbound ? 'Outbound Dial' : 'Inbound Line'}</span>
-                </div>
-                <h2 className="text-lg font-bold text-[var(--text-primary)] font-display mt-0.5">{displayTitle}</h2>
-                <p className="text-[11px] text-[var(--text-muted)]">{displaySubtitle}</p>
-              </div>
-            </div>
-
-            {/* MINIMAL HORIZONTAL RECORDING PLAYER — plays the real uploaded
-                recording via activeTapeResult.recordingUrl; no recording
-                means no playback, not a simulated animation. */}
-            <div className="flex-1 max-w-2xl bg-[var(--bg-subtle)] border border-[var(--border)] rounded-xl p-3 flex items-center gap-4">
-              {playableTapeRecordingUrl && (
-                <audio
-                  ref={audioElRef}
-                  src={playableTapeRecordingUrl}
-                  preload="metadata"
-                  onLoadedMetadata={(e) => setTapeDuration(e.currentTarget.duration || 0)}
-                  onTimeUpdate={(e) => {
-                    const el = e.currentTarget;
-                    if (el.duration) setTapeProgress((el.currentTime / el.duration) * 100);
-                  }}
-                  onEnded={() => {
-                    setIsTapePlaying(false);
-                    setTapeProgress(100);
-                  }}
-                  style={{ display: 'none' }}
-                />
-              )}
-
-              {/* Play/Pause Button */}
-              <button
-                onClick={() => setIsTapePlaying(!isTapePlaying)}
-                disabled={!playableTapeRecordingUrl}
-                className="h-9 w-9 shrink-0 rounded-lg flex items-center justify-center bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40 disabled:cursor-not-allowed text-white transition-all cursor-pointer active:scale-95 shadow-md shadow-emerald-600/10"
-                title={!playableTapeRecordingUrl ? 'No recording available' : isTapePlaying ? 'Pause Tape' : 'Play Tape'}
-              >
-                {isTapePlaying ? (
-                  <Pause className="h-4 w-4 fill-white text-white" />
-                ) : (
-                  <Play className="h-4 w-4 fill-white text-white ml-0.5" />
-                )}
-              </button>
-
-              {/* Progress & Label */}
-              <div className="flex-1 min-w-0 space-y-1">
-                <div className="flex justify-between items-center text-[10px] font-mono text-[var(--text-muted)]">
-                  <span className="truncate font-semibold text-blue-600">{filename}</span>
-                  <span className="shrink-0 font-medium" style={{ color: 'var(--text-secondary)' }}>
-                    {activeTapeResult.recordingUrl
-                      ? `${formatTime(Math.round(((tapeDuration || activeTapeResult.duration) * tapeProgress) / 100))} / ${formatTime(Math.round(tapeDuration || activeTapeResult.duration))}`
-                      : 'No recording available'}
-                  </span>
-                </div>
-                <div className="relative h-1.5 bg-[var(--bg-subtle)] rounded-full overflow-hidden">
-                  <div className="bg-emerald-500 h-1.5 transition-all" style={{ width: `${tapeProgress}%` }}></div>
-                </div>
-              </div>
-
-              {/* Tape Reels Animation (Compact version) */}
-              <div className="hidden sm:flex items-center space-x-2.5 px-2 bg-[var(--bg-subtle)] rounded-lg border border-[var(--border)] h-8">
-                <div className="h-4 w-4 rounded-full border border-[var(--border)] bg-[var(--bg-surface)] flex items-center justify-center">
-                  <div className={`h-1.5 w-1.5 rounded-full bg-slate-500 ${isTapePlaying ? 'animate-spin' : ''}`} style={{ borderStyle: 'dashed' }}></div>
-                </div>
-                <div className="h-4 w-4 rounded-full border border-[var(--border)] bg-[var(--bg-surface)] flex items-center justify-center">
-                  <div className={`h-1.5 w-1.5 rounded-full bg-slate-500 ${isTapePlaying ? 'animate-spin' : ''}`} style={{ borderStyle: 'dashed' }}></div>
-                </div>
-              </div>
-
-              {/* Play Speed selector */}
-              <div className="flex border border-[var(--border)] bg-[var(--bg-surface)] rounded-lg overflow-hidden text-[10px] h-8 items-center">
-                {[1, 1.5, 2].map((sp) => (
-                  <button
-                    key={sp}
-                    onClick={() => setTapeSpeed(sp)}
-                    className={`px-2 h-full font-mono font-bold ${tapeSpeed === sp ? 'bg-blue-600 text-white' : 'text-[var(--text-muted)] hover:bg-[var(--bg-subtle)]'} cursor-pointer transition-all`}
-                  >
-                    {sp}x
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Cognitive Metrics */}
-            <div className="flex items-center gap-3 shrink-0">
-              <div className="bg-[var(--bg-subtle)] border border-[var(--border)] px-3 py-1.5 rounded-xl text-center">
-                <span className="text-[8px] font-mono text-[var(--text-muted)] uppercase tracking-wider block">Intent</span>
-                <span className="text-xs font-bold text-blue-600">{activeTapeResult.intent}</span>
-              </div>
-              <div className="bg-[var(--bg-subtle)] border border-[var(--border)] px-3 py-1.5 rounded-xl text-center">
-                <span className="text-[8px] font-mono text-[var(--text-muted)] uppercase tracking-wider block">Sentiment</span>
-                <span className="text-xs font-bold text-emerald-600">{activeTapeResult.sentiment}</span>
-              </div>
-              <div className="bg-[var(--bg-subtle)] border border-[var(--border)] px-3 py-1.5 rounded-xl text-center">
-                <span className="text-[8px] font-mono text-[var(--text-muted)] uppercase tracking-wider block">Cost</span>
-                <span className="text-xs font-bold text-[var(--text-secondary)]">{formatInr(callCostInr(activeTapeResult.duration))}</span>
-              </div>
-            </div>
+            ))}
           </div>
         </div>
 
-        {/* Full-width Workspace: Wide Conversation Panel & Right Checklist Panel */}
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 flex-1 min-h-0 overflow-hidden">
-          
-          {/* LEFT: Complete conversation dialogue timeline (FULL PAGE VIEW) */}
-          <div className="lg:col-span-8 bg-[var(--bg-surface)] p-6 rounded-2xl border border-[var(--border)] flex flex-col h-full shadow-sm overflow-hidden">
-            <div className="flex items-center justify-between pb-4 border-b border-[var(--border)] mb-4 shrink-0">
-              <span className="text-xs font-mono text-[var(--text-secondary)] uppercase tracking-widest font-bold flex items-center gap-2">
-                <MessageSquare className="h-4.5 w-4.5 text-blue-500 animate-pulse" />
-                Conversation Dialogue Transcript
-              </span>
-              <span className="text-[10px] font-mono text-[var(--text-muted)]">Dual-channel synthesis</span>
-            </div>
-
-            <div className="flex-1 overflow-y-auto space-y-5 pr-2">
-              {activeTapeResult.transcript && activeTapeResult.transcript.length > 0 ? (
-                activeTapeResult.transcript.map((line: any, idx: number) => {
-                  const isAI = line.speaker === 'AI';
-                  const speakerLabel = isAI
-                    ? `🤖 AI ${agentDisplayName}`
-                    : `👤 ${isOutbound && activeTapeLead ? activeTapeLead.name : inboundLog?.leadName}`;
-                  return (
-                    <div key={idx} className="flex flex-col" style={{ alignItems: isAI ? 'flex-start' : 'flex-end' }}>
-                      <div className="flex items-center space-x-1.5 mb-1.5 text-[9px] text-[var(--text-muted)] font-mono">
-                        <span className="font-bold" style={{ color: 'var(--text-secondary)' }}>{speakerLabel}</span>
-                        <span>•</span>
-                        <span>{line.timestamp}</span>
-                      </div>
-                      <div
-                        className={`max-w-[85%] rounded-2xl px-5 py-3 text-[13px] font-sans leading-relaxed shadow-sm border ${
-                          isAI
-                            ? 'bg-blue-50/70 text-[var(--text-primary)] rounded-tl-none border-blue-100/80'
-                            : 'bg-[var(--bg-subtle)] text-[var(--text-secondary)] rounded-tr-none border-[var(--border)]'
-                        }`}
-                      >
-                        {line.text}
-                      </div>
-                    </div>
-                  );
-                })
-              ) : (
-                <p className="text-xs text-[var(--text-muted)] text-center py-12">No conversation script captured.</p>
-              )}
-            </div>
+        {/* Cognitive Metrics */}
+        <div className="grid grid-cols-3 gap-2">
+          <div className="bg-[var(--bg-subtle)] border border-[var(--border)] px-3 py-2 rounded-xl text-center">
+            <span className="text-[8px] font-mono text-[var(--text-muted)] uppercase tracking-wider block">Intent</span>
+            <span className="text-xs font-bold text-blue-600">{activeTapeResult.intent}</span>
           </div>
+          <div className="bg-[var(--bg-subtle)] border border-[var(--border)] px-3 py-2 rounded-xl text-center">
+            <span className="text-[8px] font-mono text-[var(--text-muted)] uppercase tracking-wider block">Sentiment</span>
+            <span className="text-xs font-bold text-emerald-600">{activeTapeResult.sentiment}</span>
+          </div>
+          <div className="bg-[var(--bg-subtle)] border border-[var(--border)] px-3 py-2 rounded-xl text-center">
+            <span className="text-[8px] font-mono text-[var(--text-muted)] uppercase tracking-wider block">Cost</span>
+            <span className="text-xs font-bold text-[var(--text-secondary)]">{formatInr(callCostInr(activeTapeResult.duration))}</span>
+          </div>
+        </div>
 
-          {/* RIGHT: Checklist & Extraction Dashboard */}
-          <div className="lg:col-span-4 bg-[var(--bg-surface)] p-6 rounded-2xl border border-[var(--border)] flex flex-col h-full shadow-sm overflow-hidden">
-            {/* AI Summary Section */}
-            <div className="mb-4 shrink-0 bg-[var(--bg-subtle)] border border-[var(--border)]/60 rounded-xl p-4 space-y-1.5">
-              <span className="text-[9px] font-mono text-[var(--text-muted)] uppercase tracking-widest font-bold block">AI Summarized Intake</span>
-              <p className="text-[var(--text-secondary)] leading-relaxed text-xs italic font-sans">
-                "{activeTapeResult.summary}"
-              </p>
-            </div>
+        {/* AI Summary */}
+        <div className="bg-[var(--bg-subtle)] border border-[var(--border)]/60 rounded-xl p-4 space-y-1.5">
+          <span className="text-[9px] font-mono text-[var(--text-muted)] uppercase tracking-widest font-bold block">AI Summarized Intake</span>
+          <p className="text-[var(--text-secondary)] leading-relaxed text-xs italic font-sans">
+            "{activeTapeResult.summary}"
+          </p>
+        </div>
 
-            {isOutbound ? (
-              <>
-                <span className="text-xs font-mono text-[var(--text-secondary)] uppercase tracking-widest font-bold pb-3 border-b border-[var(--border)] mb-4 flex items-center gap-2 shrink-0">
-                  <Check className="h-4.5 w-4.5 text-emerald-500" />
-                  Extracted Campaign Answers
-                </span>
-
-                <div className="flex-1 overflow-y-auto space-y-4 pr-1">
-                  {selectedTask.questions.map((question, qIdx) => {
-                    const label = selectedTask.questionLabels?.[qIdx] || question;
-                    const answer = activeTapeResult.answers?.[label] ?? activeTapeResult.answers?.[question];
-                    return (
-                      <div key={qIdx} className="p-4 bg-[var(--bg-subtle)] rounded-xl border border-[var(--border)] space-y-2.5 transition-all hover:border-[var(--border)]/80">
-                        <div className="flex items-start gap-2">
-                          <span className="text-[9px] bg-[var(--bg-subtle)] px-2 py-0.5 rounded font-mono shrink-0 font-bold" style={{ color: 'var(--text-secondary)' }}>Q{qIdx + 1}</span>
-                          <p className="font-medium text-xs leading-snug text-[var(--text-secondary)]">{label}</p>
-                        </div>
-                        <div className="bg-[var(--bg-surface)] border border-[var(--border)]/80 rounded-lg px-3.5 py-3 font-sans text-xs shadow-sm">
-                          {answer ? (
-                            <div className="text-emerald-600 flex items-start gap-2">
-                              <span className="text-emerald-500 font-bold shrink-0 text-sm">✓</span>
-                              <p className="text-[var(--text-primary)] italic leading-relaxed">"{answer}"</p>
-                            </div>
-                          ) : (
-                            <span className="text-[var(--text-muted)] italic">No answer captured.</span>
-                          )}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </>
+        {/* Conversation transcript */}
+        <div className="bg-[var(--bg-surface)] p-4 rounded-2xl border border-[var(--border)] space-y-3">
+          <div className="flex items-center justify-between pb-3 border-b border-[var(--border)]">
+            <span className="text-xs font-mono text-[var(--text-secondary)] uppercase tracking-widest font-bold flex items-center gap-2">
+              <MessageSquare className="h-4 w-4 text-blue-500" />
+              Conversation Transcript
+            </span>
+          </div>
+          <div className="space-y-4">
+            {activeTapeResult.transcript && activeTapeResult.transcript.length > 0 ? (
+              activeTapeResult.transcript.map((line: any, idx: number) => {
+                const isAI = line.speaker === 'AI';
+                const speakerLabel = isAI
+                  ? `🤖 AI ${agentDisplayName}`
+                  : `👤 ${isOutbound && activeTapeLead ? activeTapeLead.name : inboundLog?.leadName}`;
+                return (
+                  <div key={idx} className="flex flex-col" style={{ alignItems: isAI ? 'flex-start' : 'flex-end' }}>
+                    <div className="flex items-center space-x-1.5 mb-1.5 text-[9px] text-[var(--text-muted)] font-mono">
+                      <span className="font-bold" style={{ color: 'var(--text-secondary)' }}>{speakerLabel}</span>
+                      <span>•</span>
+                      <span>{line.timestamp}</span>
+                    </div>
+                    <div
+                      className={`max-w-[90%] rounded-2xl px-4 py-2.5 text-[13px] font-sans leading-relaxed shadow-sm border ${
+                        isAI
+                          ? 'bg-blue-50/70 text-[var(--text-primary)] rounded-tl-none border-blue-100/80'
+                          : 'bg-[var(--bg-subtle)] text-[var(--text-secondary)] rounded-tr-none border-[var(--border)]'
+                      }`}
+                    >
+                      {line.text}
+                    </div>
+                  </div>
+                );
+              })
             ) : (
-              <div className="bg-[var(--bg-subtle)] border border-[var(--border)] rounded-xl p-4 space-y-3 flex-1 overflow-y-auto">
-                <span className="text-xs font-mono text-[var(--text-secondary)] uppercase tracking-widest font-bold block border-b border-[var(--border)] pb-2">Inbound Metadata</span>
-                <div className="space-y-3.5 text-xs">
-                  <div>
-                    <span className="text-[var(--text-muted)] font-medium block">Caller Number</span>
-                    <span className="font-mono font-bold text-[var(--text-secondary)] block mt-0.5">{inboundLog?.leadName}</span>
-                  </div>
-                  <div>
-                    <span className="text-[var(--text-muted)] font-medium block">Status</span>
-                    <span className="font-semibold text-blue-600 block mt-0.5">{activeTapeResult.status}</span>
-                  </div>
-                  <div>
-                    <span className="text-[var(--text-muted)] font-medium block">Call Duration</span>
-                    <span className="font-mono text-[var(--text-secondary)] block mt-0.5">{activeTapeResult.duration} seconds</span>
-                  </div>
-                  <div>
-                    <span className="text-[var(--text-muted)] font-medium block">Recording Date</span>
-                    <span className="font-mono text-[var(--text-secondary)] block mt-0.5">{inboundLog ? new Date(inboundLog.createdAt).toLocaleString() : ''}</span>
-                  </div>
-                </div>
-              </div>
+              <p className="text-xs text-[var(--text-muted)] text-center py-8">No conversation script captured.</p>
             )}
           </div>
         </div>
+
+        {/* Answers / inbound metadata */}
+        {isOutbound && selectedTask ? (
+          <div className="bg-[var(--bg-surface)] p-4 rounded-2xl border border-[var(--border)] space-y-3">
+            <span className="text-xs font-mono text-[var(--text-secondary)] uppercase tracking-widest font-bold pb-3 border-b border-[var(--border)] flex items-center gap-2">
+              <Check className="h-4 w-4 text-emerald-500" />
+              Extracted Campaign Answers
+            </span>
+            <div className="space-y-3">
+              {selectedTask.questions.map((question, qIdx) => {
+                const label = selectedTask.questionLabels?.[qIdx] || question;
+                const answer = activeTapeResult.answers?.[label] ?? activeTapeResult.answers?.[question];
+                return (
+                  <div key={qIdx} className="p-3 bg-[var(--bg-subtle)] rounded-xl border border-[var(--border)] space-y-2">
+                    <div className="flex items-start gap-2">
+                      <span className="text-[9px] bg-[var(--bg-subtle)] px-2 py-0.5 rounded font-mono shrink-0 font-bold" style={{ color: 'var(--text-secondary)' }}>Q{qIdx + 1}</span>
+                      <p className="font-medium text-xs leading-snug text-[var(--text-secondary)]">{label}</p>
+                    </div>
+                    <div className="bg-[var(--bg-surface)] border border-[var(--border)]/80 rounded-lg px-3 py-2.5 font-sans text-xs shadow-sm">
+                      {answer ? (
+                        <div className="text-emerald-600 flex items-start gap-2">
+                          <span className="text-emerald-500 font-bold shrink-0 text-sm">✓</span>
+                          <p className="text-[var(--text-primary)] italic leading-relaxed">"{answer}"</p>
+                        </div>
+                      ) : (
+                        <span className="text-[var(--text-muted)] italic">No answer captured.</span>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        ) : !isOutbound ? (
+          <div className="bg-[var(--bg-subtle)] border border-[var(--border)] rounded-xl p-4 space-y-3">
+            <span className="text-xs font-mono text-[var(--text-secondary)] uppercase tracking-widest font-bold block border-b border-[var(--border)] pb-2">Inbound Metadata</span>
+            <div className="space-y-3 text-xs">
+              <div>
+                <span className="text-[var(--text-muted)] font-medium block">Caller Number</span>
+                <span className="font-mono font-bold text-[var(--text-secondary)] block mt-0.5">{inboundLog?.leadName}</span>
+              </div>
+              <div>
+                <span className="text-[var(--text-muted)] font-medium block">Status</span>
+                <span className="font-semibold text-blue-600 block mt-0.5">{activeTapeResult.status}</span>
+              </div>
+              <div>
+                <span className="text-[var(--text-muted)] font-medium block">Call Duration</span>
+                <span className="font-mono text-[var(--text-secondary)] block mt-0.5">{activeTapeResult.duration} seconds</span>
+              </div>
+              <div>
+                <span className="text-[var(--text-muted)] font-medium block">Recording Date</span>
+                <span className="font-mono text-[var(--text-secondary)] block mt-0.5">{inboundLog ? new Date(inboundLog.createdAt).toLocaleString() : ''}</span>
+              </div>
+            </div>
+          </div>
+        ) : null}
       </div>
     );
   }
@@ -1810,7 +1769,7 @@ Currently on question ${nextIndex} out of ${selectedTask.questions.length}. Next
                           </>
                         ) : result.status === 'Completed' ? (
                           <Button variant="secondary" size="xs" icon={Headphones} onClick={() => handleOpenTapePlayer(row.leadId)}>
-                            Play Recording
+                            View
                           </Button>
                         ) : (
                           <Button variant="ghost" size="xs" onClick={() => { setActiveLead(row.lead); setCallState('idle'); }}>
@@ -2209,7 +2168,7 @@ Currently on question ${nextIndex} out of ${selectedTask.questions.length}. Next
                       </div>
 
                       <Button variant="secondary" size="sm" icon={Play} onClick={() => handleOpenTapePlayer(log.id, 'inbound')} className="shrink-0">
-                        Play Tape
+                        View
                       </Button>
                     </div>
                   ))}
@@ -2703,6 +2662,19 @@ Currently on question ${nextIndex} out of ${selectedTask.questions.length}. Next
           </Modal>
         );
       })()}
+
+      <SlideOver
+        open={tapeSlideOverOpen}
+        onClose={() => {
+          setPlayingTapeId(null);
+          setIsTapePlaying(false);
+        }}
+        title={tapeDisplayTitle}
+        subtitle={tapeDisplaySubtitle}
+        maxWidth="max-w-2xl"
+      >
+        {tapeDetailContent}
+      </SlideOver>
 
     </PageShell>
   );
