@@ -203,4 +203,13 @@ export interface OrganizationSettings {
   riskProfile?: 'Conservative' | 'Moderate' | 'Aggressive';
   companyBio?: string;
   verificationStatus?: 'Unverified' | 'Pending' | 'Verified';
+  // Which outbound number the Voice Simulator's dialer defaults to. Was
+  // previously plain React state in DialerSimulator.tsx with no
+  // persistence at all — reset to the first dialable number on every
+  // reload, even on the same browser, and never carried over to a
+  // different device on the same account. Living here means it rides the
+  // existing org-settings sync (POST /api/settings/org — a free-form
+  // "settings" JSONB column on the backend, no schema change needed) like
+  // every other org-level preference.
+  defaultOutboundNumber?: string;
 }

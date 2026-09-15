@@ -30,7 +30,7 @@ import {
   History,
   PhoneForwarded
 } from 'lucide-react';
-import { Lead, CallLog, VirtualNumber, TeamMember, ContactGroup } from '../types';
+import { Lead, CallLog, VirtualNumber, TeamMember, ContactGroup, OrganizationSettings } from '../types';
 import { QuestionFlow } from '../features/workflows/types';
 import PageShell from './ui/PageShell';
 import Widget from './ui/Widget';
@@ -70,6 +70,12 @@ interface DialerSimulatorProps {
   /** Outbound/Inbound sub-page, driven by the sidebar's Voice Simulator group */
   mode?: 'outbound' | 'inbound';
   setMode?: (mode: 'outbound' | 'inbound') => void;
+  // Backend-persisted org settings (POST /api/settings/org) — used here
+  // only to read/write defaultOutboundNumber, so the "which number am I
+  // dialing from" choice survives a reload and follows the account to a
+  // different device, instead of resetting every time like it used to.
+  orgSettings?: OrganizationSettings;
+  setOrgSettings?: React.Dispatch<React.SetStateAction<OrganizationSettings>>;
 }
 
 // Broad language list for per-task selection — a generic "speak fluently
@@ -238,7 +244,9 @@ export default function DialerSimulator({
   industry,
   flows = [],
   mode,
-  setMode
+  setMode,
+  orgSettings,
+  setOrgSettings
 }: DialerSimulatorProps) {
   const isInsurance = industry === 'insurance';
   // Outbound/Inbound sub-page — driven by the sidebar's Voice Simulator group
@@ -375,12 +383,28 @@ Real Tamil speakers do not say the "correct" written form of a word. They contra
   // that can really place a call — Twilio, Vobiz, and PIOPIY are wired to
   // real dialing; other provider labels are display-only for inbound routing.
   const dialableNumbers = virtualNumbers.filter((n) => /twilio|vobiz|piopiy/i.test(n.provider || ''));
-  const [selectedOutboundNumber, setSelectedOutboundNumber] = useState<string>('');
+  // Backend-persisted (orgSettings.defaultOutboundNumber, via
+  // POST /api/settings/org) instead of plain component state — this used
+  // to reset to the first dialable number on every page reload, even on
+  // the same browser, and never carried over to a different device on the
+  // same account. setSelectedOutboundNumber below writes through to
+  // orgSettings so every change is saved automatically (the existing
+  // debounced org-settings sync already running in App.tsx picks it up).
+  const [selectedOutboundNumber, setSelectedOutboundNumberState] = useState<string>('');
+  const setSelectedOutboundNumber = (number: string) => {
+    setSelectedOutboundNumberState(number);
+    setOrgSettings?.((prev) => ({ ...prev, defaultOutboundNumber: number }));
+  };
   useEffect(() => {
-    if (!selectedOutboundNumber && dialableNumbers.length) {
-      setSelectedOutboundNumber(dialableNumbers[0].number);
-    }
-  }, [dialableNumbers, selectedOutboundNumber]);
+    if (selectedOutboundNumber || dialableNumbers.length === 0) return;
+    // Prefer whatever was saved server-side, as long as it's still a
+    // number this org actually has provisioned; otherwise fall back to
+    // the first dialable number, same as before this was persisted.
+    const saved = orgSettings?.defaultOutboundNumber;
+    const stillValid = saved && dialableNumbers.some((n) => n.number === saved);
+    setSelectedOutboundNumberState(stillValid ? saved! : dialableNumbers[0].number);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dialableNumbers, selectedOutboundNumber, orgSettings?.defaultOutboundNumber]);
 
   // Auto-redial status per phone (see services/dialerRetryEngine.js) — keyed
   // by the last 10 digits so formatting differences (with/without country

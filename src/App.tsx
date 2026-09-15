@@ -812,6 +812,8 @@ export default function App() {
             flows={questionFlows}
             mode={activeSubTab === 'inbound' ? 'inbound' : 'outbound'}
             setMode={(m) => setActiveSubTab(m, 'dialer')}
+            orgSettings={orgSettings}
+            setOrgSettings={setOrgSettings}
           />
         );
       case 'loans':
