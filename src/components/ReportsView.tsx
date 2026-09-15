@@ -23,6 +23,19 @@ const SENTIMENT_COLOR: Record<string, string> = {
 type Granularity = 'day' | 'month' | 'year';
 type DirectionFilter = 'all' | 'inbound' | 'outbound';
 
+// Tasks are named after their workflow only (see DialerSimulator's
+// handleCreateTask) — the date/time a given run was created is metadata
+// (createdAt), not part of the name, so it has to be rendered in wherever
+// a run needs to be told apart from other runs of the same workflow.
+function formatRunDateTime(iso: string): string {
+  return new Date(iso).toLocaleString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true });
+}
+
+// Pseudo task-id for "every run of this workflow, combined" — distinct
+// from any real task id so it can share the same dropdown/state as a
+// single-task selection without a parallel set of variables everywhere.
+const ALL_RUNS_PREFIX = 'ALL::';
+
 interface DialTaskCallResult {
   status: 'Pending' | 'Calling' | 'Completed' | 'No Answer' | 'Skipped' | 'Callback Scheduled';
   duration: number;
@@ -85,7 +98,7 @@ export default function ReportsView({ callLogs, dialerTasks, leads, costPerMinut
   // driver now: everything below reflects whichever task is selected.
   useEffect(() => {
     if (dialerTasks.length === 0) return;
-    if (selectedTaskId && dialerTasks.some((t) => t.id === selectedTaskId)) return;
+    if (selectedTaskId && (selectedTaskId.startsWith(ALL_RUNS_PREFIX) || dialerTasks.some((t) => t.id === selectedTaskId))) return;
     const latest = [...dialerTasks].sort(
       (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
     )[0];
@@ -149,12 +162,12 @@ export default function ReportsView({ callLogs, dialerTasks, leads, costPerMinut
     }
   }
 
-  async function selectLead(leadId: string, phone: string, callId?: string) {
-    if (selectedLeadId === leadId) {
+  async function selectLead(rowKey: string, phone: string, callId?: string) {
+    if (selectedLeadId === rowKey) {
       setSelectedLeadId(null);
       return;
     }
-    setSelectedLeadId(leadId);
+    setSelectedLeadId(rowKey);
     const cacheKey = callId || phone;
     if (!cacheKey || answersCache[cacheKey]) return;
     setLoadingAnswersFor(cacheKey);
@@ -173,24 +186,42 @@ export default function ReportsView({ callLogs, dialerTasks, leads, costPerMinut
     });
   }, [callLogs, fromDate, toDate, direction]);
 
-  const selectedTask = dialerTasks.find((t) => t.id === selectedTaskId) || null;
+  const selectedTask = selectedTaskId.startsWith(ALL_RUNS_PREFIX) ? null : dialerTasks.find((t) => t.id === selectedTaskId) || null;
+  // "All runs" of one workflow, combined — the group whose synthetic id
+  // (ALL_RUNS_PREFIX + workflow label) matches the current selection.
+  const selectedGroup = selectedTaskId.startsWith(ALL_RUNS_PREFIX)
+    ? taskGroups.find((g) => selectedTaskId === ALL_RUNS_PREFIX + g.label) || null
+    : null;
+  // The tasks contributing rows to the report below — one task in single-run
+  // mode, every run of the workflow in combined mode.
+  const reportTasks = selectedGroup ? selectedGroup.tasks : selectedTask ? [selectedTask] : [];
+  const reportDisplayName = selectedGroup ? `${selectedGroup.label} — All Runs` : selectedTask?.name || '';
   const taskReport = useMemo(() => {
-    if (!selectedTask) return null;
-    const rows = selectedTask.leadIds.map((leadId) => {
-      const lead = leads.find((l) => l.id === leadId);
-      const result = selectedTask.callResults[leadId];
-      return {
-        leadId,
-        name: lead?.name || 'Unknown',
-        phone: lead?.phone || '',
-        status: result?.status || 'Pending',
-        duration: result?.duration || 0,
-        sentiment: result?.sentiment || 'Unknown',
-        intent: result?.intent || 'Unknown',
-        recordingUrl: result?.recordingUrl,
-        callId: result?.callId
-      };
-    });
+    if (reportTasks.length === 0) return null;
+    // Each row carries which run (task) it came from and when that run was
+    // created — combined mode can have the same lead appear once per run
+    // (called again on a later date), so rows are keyed by task+lead, not
+    // lead alone, and a "Run" column (added below, combined mode only)
+    // shows the specific date/time to filter by eye.
+    const rows = reportTasks.flatMap((task) =>
+      task.leadIds.map((leadId) => {
+        const lead = leads.find((l) => l.id === leadId);
+        const result = task.callResults[leadId];
+        return {
+          rowKey: `${task.id}::${leadId}`,
+          leadId,
+          name: lead?.name || 'Unknown',
+          phone: lead?.phone || '',
+          status: result?.status || 'Pending',
+          duration: result?.duration || 0,
+          sentiment: result?.sentiment || 'Unknown',
+          intent: result?.intent || 'Unknown',
+          recordingUrl: result?.recordingUrl,
+          callId: result?.callId,
+          runAt: task.createdAt,
+        };
+      })
+    );
     const completed = rows.filter((r) => r.status === 'Completed').length;
     const interested = rows.filter((r) => r.intent === 'Interested').length;
     const conversionRate = completed > 0 ? Math.round((interested / completed) * 100) : 0;
@@ -200,13 +231,13 @@ export default function ReportsView({ callLogs, dialerTasks, leads, costPerMinut
     for (const r of rows) sentimentCounts[r.sentiment] = (sentimentCounts[r.sentiment] || 0) + 1;
     const positivePct = rows.length > 0 ? Math.round((sentimentCounts.Positive / rows.length) * 100) : 0;
     return { rows, completed, interested, conversionRate, total: rows.length, totalDuration, totalCost, sentimentCounts, positivePct };
-  }, [selectedTask, leads, costPerMinuteInr]);
+  }, [selectedTask, selectedGroup, leads, costPerMinuteInr]);
 
   // Fetches every lead's answers (reusing the same cache the expandable
   // rows use) and lays them out wide — one row per lead, one column per
   // question headed by its label — since that's what reads cleanly in
   // Excel/Sheets.
-  async function exportTaskCsv(task: DialTask, report: typeof taskReport) {
+  async function exportTaskCsv(displayName: string, report: typeof taskReport) {
     if (!report) return;
     setExportingCsv(true);
     try {
@@ -229,12 +260,17 @@ export default function ReportsView({ callLogs, dialerTasks, leads, costPerMinut
       // it as an Excel formula that returns text ( ="..." ) forces Excel
       // to keep it as a literal string instead of "helpfully" reformatting it.
       const escapePhoneCsv = (val: string) => `"=""${String(val ?? '').replace(/"/g, '""')}"""`;
-      const header = ['Name', 'Phone', 'Status', 'Duration', 'Sentiment', 'Intent', ...qaHeaders];
+      // "Run" column carries each row's originating task's date/time — only
+      // meaningful (and only added) for a combined "All Runs" export, so a
+      // single-run export's CSV isn't cluttered with a column that's the
+      // same value on every row.
+      const includeRunColumn = !!selectedGroup;
+      const header = ['Name', 'Phone', ...(includeRunColumn ? ['Run'] : []), 'Status', 'Duration', 'Sentiment', 'Intent', ...qaHeaders];
       const lines = [header.map(escapeCsv).join(',')];
       for (const r of perLead) {
         const qaCells: string[] = [];
         for (let i = 0; i < maxAnswers; i++) qaCells.push(r.answers[i]?.answer || '');
-        const row = [escapeCsv(r.name), escapePhoneCsv(r.phone), escapeCsv(r.status), escapeCsv(formatDuration(r.duration)), escapeCsv(r.sentiment), escapeCsv(r.intent), ...qaCells.map(escapeCsv)];
+        const row = [escapeCsv(r.name), escapePhoneCsv(r.phone), ...(includeRunColumn ? [escapeCsv(formatRunDateTime(r.runAt))] : []), escapeCsv(r.status), escapeCsv(formatDuration(r.duration)), escapeCsv(r.sentiment), escapeCsv(r.intent), ...qaCells.map(escapeCsv)];
         lines.push(row.join(','));
       }
 
@@ -242,7 +278,7 @@ export default function ReportsView({ callLogs, dialerTasks, leads, costPerMinut
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `${task.name.replace(/[^a-z0-9]+/gi, '_')}_report.csv`;
+      a.download = `${displayName.replace(/[^a-z0-9]+/gi, '_')}_report.csv`;
       a.click();
       URL.revokeObjectURL(url);
     } finally {
@@ -253,7 +289,7 @@ export default function ReportsView({ callLogs, dialerTasks, leads, costPerMinut
   return (
     <PageShell
       title="Reports"
-      subtitle={selectedTask ? `Report by Task — ${selectedTask.name}` : 'Report by Task — pick a task below, defaults to your most recent.'}
+      subtitle={reportDisplayName ? `Report by Task — ${reportDisplayName}` : 'Report by Task — pick a task below, defaults to your most recent.'}
       action={
         <Button icon={FileText} onClick={() => setShowPreview(true)}>
           Preview Report
@@ -282,7 +318,12 @@ export default function ReportsView({ callLogs, dialerTasks, leads, costPerMinut
                 onChange: setSelectedTaskId,
                 groups: taskGroups.map((g) => ({
                   label: g.label,
-                  options: g.tasks.map((t) => ({ label: t.name, value: t.id })),
+                  options: [
+                    // "All runs" combined — only worth offering once a
+                    // workflow actually HAS more than one run to combine.
+                    ...(g.tasks.length > 1 ? [{ label: `All Runs (${g.tasks.length})`, value: ALL_RUNS_PREFIX + g.label }] : []),
+                    ...g.tasks.map((t) => ({ label: formatRunDateTime(t.createdAt), value: t.id })),
+                  ],
                 })),
                 placeholder: dialerTasks.length === 0 ? 'No tasks yet' : 'Select a task…',
               },
@@ -315,9 +356,9 @@ export default function ReportsView({ callLogs, dialerTasks, leads, costPerMinut
             ]}
             actions={
               <>
-                {selectedTask && (
+                {reportDisplayName && (
                   <button
-                    onClick={() => exportTaskCsv(selectedTask, taskReport)}
+                    onClick={() => exportTaskCsv(reportDisplayName, taskReport)}
                     disabled={exportingCsv}
                     className="flex items-center gap-1.5 px-3 py-2 text-[11px] font-semibold bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white rounded-lg"
                   >
@@ -392,13 +433,16 @@ export default function ReportsView({ callLogs, dialerTasks, leads, costPerMinut
         {/* Table 1 — leads in this task. Click a row to load its captured
             answers into the table below; row count here is fixed (one per
             lead in the task) regardless of which workflow created it. */}
-        <Widget colSpan={12} title={selectedTask ? selectedTask.name : 'Report by Task'} icon={ListChecks} padding="none">
-          {!selectedTask && <p className="text-xs text-slate-400 text-center py-8">{dialerTasks.length === 0 ? 'No dialer tasks yet — create one from the Voice Simulator.' : 'Pick a task above to see its per-lead outcomes and conversion rate.'}</p>}
+        <Widget colSpan={12} title={reportDisplayName || 'Report by Task'} icon={ListChecks} padding="none">
+          {!reportDisplayName && <p className="text-xs text-slate-400 text-center py-8">{dialerTasks.length === 0 ? 'No dialer tasks yet — create one from the Voice Simulator.' : 'Pick a task above to see its per-lead outcomes and conversion rate.'}</p>}
           {taskReport && (() => {
             type TaskReportRow = typeof taskReport.rows[number];
             const columns: Column<TaskReportRow>[] = [
               { key: 'lead', header: 'Lead', cell: (r) => <span className="font-medium text-slate-700">{r.name}</span> },
               { key: 'phone', header: 'Phone', cell: (r) => <span className="text-slate-500">{r.phone}</span> },
+              // Only meaningful (and only shown) in combined "All Runs"
+              // mode — a single-run report's rows all share one date.
+              ...(selectedGroup ? [{ key: 'run', header: 'Run', cell: (r: TaskReportRow) => <span className="text-slate-500 whitespace-nowrap">{formatRunDateTime(r.runAt)}</span> } as Column<TaskReportRow>] : []),
               { key: 'status', header: 'Status', cell: (r) => <>{r.status}</> },
               { key: 'duration', header: 'Duration', cell: (r) => <>{formatDuration(r.duration)}</> },
               {
@@ -419,9 +463,9 @@ export default function ReportsView({ callLogs, dialerTasks, leads, costPerMinut
                 paginated
                 columns={columns}
                 rows={taskReport.rows}
-                rowKey={(r) => r.leadId}
-                onRowClick={(r) => selectLead(r.leadId, r.phone, r.callId)}
-                rowClassName={(r) => (selectedLeadId === r.leadId ? 'bg-[var(--bg-subtle)] shadow-[inset_3px_0_0_#2563eb]' : '')}
+                rowKey={(r) => r.rowKey}
+                onRowClick={(r) => selectLead(r.rowKey, r.phone, r.callId)}
+                rowClassName={(r) => (selectedLeadId === r.rowKey ? 'bg-[var(--bg-subtle)] shadow-[inset_3px_0_0_#2563eb]' : '')}
               />
             );
           })()}
@@ -432,7 +476,7 @@ export default function ReportsView({ callLogs, dialerTasks, leads, costPerMinut
             per workflow variable, so it grows/shrinks depending on which
             task/workflow the selected lead belongs to. */}
         {(() => {
-          const selectedRow = taskReport?.rows.find((r) => r.leadId === selectedLeadId) || null;
+          const selectedRow = taskReport?.rows.find((r) => r.rowKey === selectedLeadId) || null;
           const cacheKey = selectedRow ? (selectedRow.callId || selectedRow.phone) : undefined;
           const answers = cacheKey ? answersCache[cacheKey] : undefined;
           return (
@@ -440,7 +484,7 @@ export default function ReportsView({ callLogs, dialerTasks, leads, costPerMinut
               open={!!selectedRow}
               onClose={() => setSelectedLeadId(null)}
               title={selectedRow?.name}
-              subtitle={selectedTask?.workflowName || selectedTask?.name}
+              subtitle={selectedGroup ? `${selectedGroup.label} — ${formatRunDateTime(selectedRow?.runAt || '')}` : selectedTask?.workflowName || selectedTask?.name}
             >
               {selectedRow && (
                 loadingAnswersFor === cacheKey ? (

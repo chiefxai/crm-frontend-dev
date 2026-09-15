@@ -513,11 +513,13 @@ Real Tamil speakers do not say the "correct" written form of a word. They contra
     if (!workflow) return;
 
     // The workflow runs many times over — auto-name each task run from the
-    // workflow's own name plus the exact date/time it was created, instead
-    // of asking for a title every time. This is also what lets Reports
-    // filter "just this run" vs. "every run of this workflow" later,
-    // since the date/time is now baked into every run's name up front.
-    const taskName = `${workflow.name} — ${new Date().toLocaleString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true })}`;
+    // workflow's own name, instead of asking for a title every time — the
+    // date/time it ran stays as metadata (createdAt) rather than being
+    // baked into the name itself, so the workflow's name stays clean and
+    // Reports (which already groups tasks by workflowName and sorts each
+    // group by createdAt) can filter "every run" vs. "just one day" off
+    // that metadata instead of string-parsing a name.
+    const taskName = workflow.name;
 
     const questionPairs = (workflow.variables ?? [])
       .map(v => ({ label: v.name || v.questionText, question: v.questionText || v.name }))
@@ -2638,9 +2640,11 @@ Currently on question ${nextIndex} out of ${selectedTask.questions.length}. Next
                 <div>
                   <label className="text-[10px] font-bold uppercase tracking-widest text-[var(--text-muted)]">Task Name</label>
                   <div className="mt-1 w-full px-3 py-2 text-sm border border-[var(--border)] rounded-xl bg-[var(--bg-subtle)] text-[var(--text-secondary)] font-mono">
-                    {selectedWorkflow.name} — {new Date().toLocaleString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true })}
+                    {selectedWorkflow.name}
                   </div>
-                  <p className="text-[11px] text-[var(--text-muted)] mt-1">Auto-named from the workflow and the exact date/time this run is created — this workflow can run many times, so the date/time is what lets you filter one run vs. all of them later in Reports &gt; Report by Task.</p>
+                  <p className="text-[11px] text-[var(--text-muted)] mt-1">
+                    Named after the workflow. This run will be created at <span className="font-semibold">{new Date().toLocaleString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true })}</span> — that date/time is tracked separately, so in Reports &gt; Report by Task you can see all of this workflow's runs together or narrow down to a specific day.
+                  </p>
                 </div>
 
                 <div className="space-y-3 bg-[var(--bg-subtle)] rounded-xl p-4 border border-[var(--border)]">
