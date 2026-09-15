@@ -1,12 +1,14 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import {
   PhoneIncoming,
+  PhoneOutgoing,
   UserCheck,
   MessageCircleQuestion,
   Flame,
   Activity,
   PieChart as PieChartIcon,
   BarChart3,
+  Users,
   History,
 } from 'lucide-react';
 import {
@@ -23,24 +25,27 @@ import {
 } from 'recharts';
 import { apiFetch } from '../lib/api';
 import { Lead, Loan, CallLog, OrganizationSettings } from '../types';
-import { COST_PER_MINUTE_INR_FALLBACK } from '../lib/pricing';
+import { COST_PER_MINUTE_INR_FALLBACK, formatInr, callCostInr } from '../lib/pricing';
 import PageShell from './ui/PageShell';
 import Widget from './ui/Widget';
 import EmptyState from './ui/EmptyState';
 import KpiCard from './ui/KpiCard';
 import PieChart from './ui/PieChart';
 import DataTable, { Column } from './ui/DataTable';
+import FilterBar from './ui/FilterBar';
+import SlideOver from './ui/SlideOver';
 
 // Loosely typed like ReportsView's DialTask — this page only needs
 // workflowName + each lead's call outcome, not the full shape.
 interface DashboardDialTask {
   id: string;
   workflowName?: string;
+  createdAt: string;
   // Despite the name, this is the wizard-selected AI calling agent's id
   // (org_agents), not a human team member — same field DialerSimulator.tsx
   // uses to resolve which agent placed a campaign's calls.
   assignedTeamMemberId?: string;
-  callResults: Record<string, { status: string; callAnswered?: boolean }>;
+  callResults: Record<string, { status: string; callAnswered?: boolean; intent?: string; callId?: string }>;
 }
 
 interface DashboardViewProps {
@@ -52,27 +57,36 @@ interface DashboardViewProps {
   costPerMinuteInr?: number;
 }
 
-// One readable label + color for a call's actual outcome — same
-// definition ReportsView uses (status + callAnswered folded together).
-const OUTCOME_COLORS: Record<string, string> = {
-  'Answered': '#059669',
-  'Not Answered': '#e11d48',
-  'No Answer': '#94a3b8',
-  'Answering Machine': '#d97706',
-  'Callback Scheduled': '#2563eb',
-};
-const OUTCOME_ORDER = Object.keys(OUTCOME_COLORS);
-function getCallOutcome(status: string, callAnswered?: boolean): string {
+// ── CALL STATUS (connectivity) vs. CALL OUTCOME (business result) ──────
+// Kept deliberately separate, per spec: a call can be "Completed" (someone
+// picked up, wasn't a machine) while still not being a real conversation
+// (see callFinalizer.js's callAnswered heuristic) — that's Call Status.
+// Call Outcome is the business result of the conversation, which this app
+// already stores as `intent` on every call. There's no per-org
+// configurable-outcomes model in the backend (a real gap, not something
+// to fake with mock data) — the one existing "this call achieved a
+// positive business result" signal is intent === 'Interested', the same
+// convention already used for "Successful Outcomes" / topInterestedClients
+// elsewhere in the app. Call Outcomes (the donut) is still dynamic in the
+// sense that it plots whatever intent values actually appear in the data,
+// not a hard-coded industry-specific label list.
+function getCallStatus(status: string, callAnswered?: boolean): string {
   if (status === 'Completed') return callAnswered === false ? 'Not Answered' : 'Answered';
-  return OUTCOME_COLORS[status] ? status : 'No Answer';
+  return status;
 }
-
-const SENTIMENT_COLOR: Record<string, string> = {
-  Positive: '#059669',
-  Negative: '#e11d48',
-  Neutral: '#64748b',
-  Unknown: '#94a3b8',
+function isSuccessfulOutcome(intent?: string | null): boolean {
+  return intent === 'Interested';
+}
+const INTENT_COLOR: Record<string, string> = {
+  'Interested': '#059669',
+  'Not Interested': '#e11d48',
+  'Callback Scheduled': '#2563eb',
+  'Wrong Number': '#d97706',
+  'Unknown': '#94a3b8',
 };
+function intentColor(intent: string): string {
+  return INTENT_COLOR[intent] || '#7c3aed';
+}
 
 function formatDuration(totalSeconds: number): string {
   const m = Math.floor(totalSeconds / 60);
@@ -80,32 +94,19 @@ function formatDuration(totalSeconds: number): string {
   return `${m}m ${s}s`;
 }
 
-interface ObjectMetrics {
-  objectKey: string;
-  objectLabel: string;
-  totalRecords: number;
-  stageDistribution: { stage: string; count: number }[];
-  recordsTrend: { month: string; count: number }[];
+function daysAgo(n: number): string {
+  const d = new Date();
+  d.setDate(d.getDate() - n);
+  return d.toISOString().slice(0, 10);
 }
 
-interface InterestedClient {
-  leadId: string;
-  name: string;
-  phone: string | null;
-  amountRequested: number | null;
-  score: number | null;
-  intent: string | null;
-  lastCallSummary: string | null;
-  lastCallAt: string;
-}
-
-interface DashboardMetrics {
-  portfolioTrend: { month: string; totalDisbursed: number; loanCount: number }[];
-  channelPerformance: { source: string; count: number }[];
-  callsToday: number;
-  positiveSentimentPct: number | null;
-  objectMetrics: ObjectMetrics[];
-  topInterestedClients: InterestedClient[];
+// ↑/↓ trend chip for a KPI card — compares this period's value against
+// the immediately preceding period of the same length.
+function trendBadge(current: number, previous: number): { label: string; color: 'green' | 'rose' | 'neutral' } {
+  if (previous <= 0) return current > 0 ? { label: 'New', color: 'green' } : { label: '—', color: 'neutral' };
+  const pct = Math.round(((current - previous) / previous) * 100);
+  if (pct === 0) return { label: '0%', color: 'neutral' };
+  return pct > 0 ? { label: `↑ ${pct}%`, color: 'green' } : { label: `↓ ${Math.abs(pct)}%`, color: 'rose' };
 }
 
 const CHART_TOOLTIP = {
@@ -126,266 +127,285 @@ export default function DashboardView({
   orgSettings,
   costPerMinuteInr = COST_PER_MINUTE_INR_FALLBACK,
 }: DashboardViewProps) {
-  const [metrics, setMetrics] = useState<DashboardMetrics | null>(null);
-  const [enquiriesTotal, setEnquiriesTotal] = useState<number | null>(null);
   const [agentNames, setAgentNames] = useState<Record<string, string>>({});
+  const [allEnquiries, setAllEnquiries] = useState<{ id: string; callId: string | null; createdAt: string }[]>([]);
 
-  const loadMetrics = () => {
-    apiFetch('/api/dashboard/metrics')
-      .then(r => { if (!r.ok) throw new Error(); return r.json(); })
-      .then((data: DashboardMetrics) => setMetrics(data))
-      .catch(err => console.error('Failed to load dashboard metrics:', err));
-    // Cheapest way to get a total count without pulling every row — one
-    // page of size 1, just for the `total` the paginated response carries.
-    apiFetch('/api/enquiries?page=1&limit=1')
-      .then(r => { if (!r.ok) throw new Error(); return r.json(); })
-      .then((data: { total?: number }) => setEnquiriesTotal(data.total ?? 0))
-      .catch(err => console.error('Failed to load enquiries total:', err));
-    // Just for id -> name resolution (Agent Performance) — dialerTasks
-    // only carries the agent's id (assignedTeamMemberId).
+  const loadExtras = () => {
+    // Just for id -> name resolution (Agent Performance/Recent Calls) —
+    // dialerTasks only carries the agent's id (assignedTeamMemberId).
     apiFetch('/api/agents')
       .then(r => { if (!r.ok) throw new Error(); return r.json(); })
-      .then((data: { id: string; name: string }[]) => {
-        setAgentNames(Object.fromEntries((Array.isArray(data) ? data : []).map(a => [a.id, a.name])));
-      })
+      .then((data: { id: string; name: string }[]) => setAgentNames(Object.fromEntries((Array.isArray(data) ? data : []).map(a => [a.id, a.name]))))
       .catch(err => console.error('Failed to load agents:', err));
+    // Enquiries with real createdAt (a generous page size, not the whole
+    // table) so the Inquiries KPI can respect the same global date filter
+    // as everything else on this page. The backend doesn't support
+    // filtering this collection by date server-side yet.
+    apiFetch('/api/enquiries?page=1&limit=1000')
+      .then(r => { if (!r.ok) throw new Error(); return r.json(); })
+      .then((data: { rows?: typeof allEnquiries }) => setAllEnquiries(data.rows ?? []))
+      .catch(err => console.error('Failed to load enquiries:', err));
+  };
+  useEffect(loadExtras, []);
+
+  // ── Global date-range filter — supports the requested presets plus a
+  // free custom range via the same From/To date inputs. ──
+  const [fromDate, setFromDate] = useState(daysAgo(29)); // "Last 30 days" default, inclusive of today
+  const [toDate, setToDate] = useState(daysAgo(0));
+  const [activePreset, setActivePreset] = useState<'today' | 'yesterday' | '7d' | '30d' | 'custom'>('30d');
+
+  const applyPreset = (preset: typeof activePreset) => {
+    setActivePreset(preset);
+    const today = daysAgo(0);
+    if (preset === 'today') { setFromDate(today); setToDate(today); }
+    else if (preset === 'yesterday') { setFromDate(daysAgo(1)); setToDate(daysAgo(1)); }
+    else if (preset === '7d') { setFromDate(daysAgo(6)); setToDate(today); }
+    else if (preset === '30d') { setFromDate(daysAgo(29)); setToDate(today); }
   };
 
-  useEffect(loadMetrics, [leads.length, loans.length, callLogs.length]);
+  const inRange = (iso: string, from: string, to: string) => {
+    const d = new Date(iso);
+    return d >= new Date(from + 'T00:00:00') && d <= new Date(to + 'T23:59:59');
+  };
 
-  const isLending = !orgSettings.industry || orgSettings.industry === 'lending';
-  const primaryObject = metrics?.objectMetrics?.[0] || null;
+  const filteredCalls = useMemo(() => callLogs.filter(c => inRange(c.createdAt, fromDate, toDate)), [callLogs, fromDate, toDate]);
+  const filteredEnquiries = useMemo(() => allEnquiries.filter(e => inRange(e.createdAt, fromDate, toDate)), [allEnquiries, fromDate, toDate]);
 
-  // Success = actually answered (see callFinalizer.js's callAnswered) —
-  // "Completed" alone doesn't mean the callee engaged; a call answered
-  // by a machine or cut short with no real talk isn't a success here.
-  const successCallsCount = callLogs.filter(c => c.status === 'Completed' && c.callAnswered !== false).length;
-  // "Successful outcome" = the same bar Reports/topInterestedClients use
-  // for conversion — the caller's own intent came back Interested.
-  const successfulOutcomesCount = callLogs.filter(c => c.intent === 'Interested').length;
+  // Immediately preceding period of the same length — powers the ↑/↓
+  // trend chip on every KPI card.
+  const [prevFromDate, prevToDate] = useMemo(() => {
+    const from = new Date(fromDate + 'T00:00:00');
+    const to = new Date(toDate + 'T23:59:59');
+    const spanMs = to.getTime() - from.getTime();
+    const prevTo = new Date(from.getTime() - 24 * 60 * 60 * 1000);
+    const prevFrom = new Date(prevTo.getTime() - spanMs);
+    return [prevFrom.toISOString().slice(0, 10), prevTo.toISOString().slice(0, 10)];
+  }, [fromDate, toDate]);
+  const prevFilteredCalls = useMemo(() => callLogs.filter(c => inRange(c.createdAt, prevFromDate, prevToDate)), [callLogs, prevFromDate, prevToDate]);
+  const prevFilteredEnquiries = useMemo(() => allEnquiries.filter(e => inRange(e.createdAt, prevFromDate, prevToDate)), [allEnquiries, prevFromDate, prevToDate]);
 
-  // Calls in period + volume-over-time trend — same "Report by Task" view
-  // from ReportsView, ported here so the exec desk gives a quick pulse
-  // without needing to jump to the full Reports page. Fixed to the last 30
-  // days, one bar per day — this is a glance-at-it overview, not a
-  // configurable report, so no date-range/granularity controls here.
-  const callsInPeriod = useMemo(() => {
-    const cutoff = new Date();
-    cutoff.setDate(cutoff.getDate() - 30);
-    return callLogs.filter(c => new Date(c.createdAt) >= cutoff);
-  }, [callLogs]);
+  // Tasks whose run falls inside the selected period — drives Campaign
+  // Performance, Agent Performance, and Recent Calls' Campaign/Agent
+  // columns, so those also respect the global date filter.
+  const tasksInPeriod = useMemo(() => dialerTasks.filter(t => inRange(t.createdAt, fromDate, toDate)), [dialerTasks, fromDate, toDate]);
 
-  // Sentiment counts are nested (not flattened into stackable keys) since
-  // they're shown via the custom tooltip below, not as their own stacked
-  // segments — stacking direction (2 segments) AND sentiment (3-4 more)
-  // in the same bar would be unreadable; the tooltip gives the sentiment
-  // detail without cluttering the chart itself.
-  const callVolumeTrend = useMemo(() => {
-    const buckets: Record<string, { period: string; inbound: number; outbound: number; sentiment: Record<string, number> }> = {};
-    for (const c of callsInPeriod) {
+  // callId -> {campaign, agentId} — lets call_logs-derived widgets (Recent
+  // Calls) join back to the campaign/agent that placed a call, since
+  // call_logs itself doesn't carry either.
+  const callTaskIndex = useMemo(() => {
+    const idx = new Map<string, { campaign: string; agentId: string | null }>();
+    for (const task of tasksInPeriod) {
+      for (const result of Object.values(task.callResults || {})) {
+        if (result.callId) idx.set(result.callId, { campaign: task.workflowName || 'Other', agentId: task.assignedTeamMemberId || null });
+      }
+    }
+    return idx;
+  }, [tasksInPeriod]);
+
+  function summarize(calls: CallLog[]) {
+    const totalCalls = calls.length;
+    const answeredCalls = calls.filter(c => c.status === 'Completed' && c.callAnswered !== false).length;
+    const successfulOutcomes = calls.filter(c => isSuccessfulOutcome(c.intent)).length;
+    return { totalCalls, answeredCalls, successfulOutcomes };
+  }
+  const periodSummary = useMemo(() => summarize(filteredCalls), [filteredCalls]);
+  const prevPeriodSummary = useMemo(() => summarize(prevFilteredCalls), [prevFilteredCalls]);
+  const answerRate = periodSummary.totalCalls > 0 ? Math.round((periodSummary.answeredCalls / periodSummary.totalCalls) * 100) : 0;
+
+  // Widget 1: Call Outcomes — dynamic donut over whatever intent values
+  // actually appear in this period's calls.
+  const callOutcomes = useMemo(() => {
+    const counts: Record<string, number> = {};
+    for (const c of filteredCalls) {
+      const intent = c.intent || 'Unknown';
+      counts[intent] = (counts[intent] || 0) + 1;
+    }
+    return Object.entries(counts)
+      .map(([label, value]) => ({ label, value, color: intentColor(label) }))
+      .sort((a, b) => b.value - a.value);
+  }, [filteredCalls]);
+
+  // Widget 2: Inbound vs Outbound Calls — daily line, by direction.
+  const inboundOutboundOverTime = useMemo(() => {
+    const buckets: Record<string, { period: string; inbound: number; outbound: number }> = {};
+    for (const c of filteredCalls) {
       const key = new Date(c.createdAt).toISOString().slice(0, 10);
-      if (!buckets[key]) buckets[key] = { period: key, inbound: 0, outbound: 0, sentiment: {} };
+      if (!buckets[key]) buckets[key] = { period: key, inbound: 0, outbound: 0 };
       if (c.direction === 'inbound') buckets[key].inbound++;
       else if (c.direction === 'outbound') buckets[key].outbound++;
-      const sentiment = c.sentiment || 'Unknown';
-      buckets[key].sentiment[sentiment] = (buckets[key].sentiment[sentiment] || 0) + 1;
     }
     return Object.values(buckets).sort((a, b) => a.period.localeCompare(b.period));
-  }, [callsInPeriod]);
+  }, [filteredCalls]);
 
-  // Custom tooltip for Call Volume Over Time — direction totals plus a
-  // same-day sentiment breakdown, since the bar itself only stacks
-  // Incoming/Outgoing (stacking sentiment in too would be unreadable).
-  function CallVolumeTooltip({ active, payload, label }: { active?: boolean; payload?: { payload: (typeof callVolumeTrend)[number] }[]; label?: string }) {
-    if (!active || !payload?.length) return null;
-    const row = payload[0].payload;
-    const total = row.inbound + row.outbound;
-    return (
-      <div className="rounded-lg px-3 py-2 text-xs" style={CHART_TOOLTIP.contentStyle}>
-        <p className="font-semibold mb-1.5">{label}</p>
-        <div className="space-y-0.5">
-          <p><span style={{ color: '#2563eb' }}>●</span> Incoming: {row.inbound}</p>
-          <p><span style={{ color: '#f97316' }}>●</span> Outgoing: {row.outbound}</p>
-          <p className="opacity-70">Total: {total}</p>
-        </div>
-        {Object.keys(row.sentiment).length > 0 && (
-          <div className="mt-1.5 pt-1.5 border-t border-white/15 space-y-0.5">
-            {Object.entries(row.sentiment).map(([sentiment, count]) => (
-              <p key={sentiment}><span style={{ color: SENTIMENT_COLOR[sentiment] || '#94a3b8' }}>●</span> {sentiment}: {count}</p>
-            ))}
-          </div>
-        )}
-      </div>
-    );
-  }
-
-  // Custom tooltip for Campaign Performance — the stacked outcome
-  // breakdown plus the same campaign's overall success rate, so "Success
-  // Rate by Campaign" doesn't need to be its own separate widget.
-  function CampaignPerformanceTooltip({ active, payload, label }: { active?: boolean; payload?: { payload: (typeof campaignPerformance)[number] }[]; label?: string }) {
-    if (!active || !payload?.length) return null;
-    const row = payload[0].payload;
-    const rate = row.total > 0 ? Math.round(((row['Answered'] || 0) / row.total) * 100) : 0;
-    return (
-      <div className="rounded-lg px-3 py-2 text-xs" style={CHART_TOOLTIP.contentStyle}>
-        <p className="font-semibold mb-1.5">{label}</p>
-        <div className="space-y-0.5">
-          {OUTCOME_ORDER.filter(o => row[o]).map(outcome => (
-            <p key={outcome}><span style={{ color: OUTCOME_COLORS[outcome] }}>●</span> {outcome}: {row[outcome]}</p>
-          ))}
-          <p className="opacity-70">Total: {row.total}</p>
-        </div>
-        <p className="mt-1.5 pt-1.5 border-t border-white/15 font-semibold">Success Rate: {rate}%</p>
-      </div>
-    );
-  }
-
-  // Call Outcome donut — every call in the period, bucketed into the same
-  // 5 outcomes used everywhere else this concept shows up (Reports' Call
-  // Outcome column, Campaign's "Not Answered" badges).
-  const outcomeBreakdown = useMemo(() => {
-    const counts: Record<string, number> = {};
-    for (const c of callsInPeriod) {
-      const outcome = getCallOutcome(c.status, c.callAnswered);
-      counts[outcome] = (counts[outcome] || 0) + 1;
-    }
-    return OUTCOME_ORDER
-      .map(label => ({ label, value: counts[label] || 0, color: OUTCOME_COLORS[label] }))
-      .filter(s => s.value > 0);
-  }, [callsInPeriod]);
-
-  // Campaign Performance — each outbound workflow's leads, broken down by
-  // outcome. Only dialer tasks (campaigns) have a workflow at all; inbound
-  // calls never go through one, so this is outbound-only by nature. Top 8
-  // campaigns by volume, so the chart stays readable.
-  const campaignPerformance = useMemo(() => {
-    const byWorkflow: Record<string, Record<string, number>> = {};
-    for (const task of dialerTasks) {
-      const name = task.workflowName || 'Other';
-      for (const result of Object.values(task.callResults || {})) {
-        if (!result?.status) continue;
-        const outcome = getCallOutcome(result.status, result.callAnswered);
-        if (!byWorkflow[name]) byWorkflow[name] = {};
-        byWorkflow[name][outcome] = (byWorkflow[name][outcome] || 0) + 1;
-      }
-    }
-    return Object.entries(byWorkflow)
-      .map(([campaign, counts]) => ({ campaign, ...counts, total: Object.values(counts).reduce((s, n) => s + n, 0) }))
-      .sort((a, b) => b.total - a.total)
-      .slice(0, 8);
-  }, [dialerTasks]);
-
-  // Agent Performance — which AI calling agent placed each campaign call
-  // (dialerTasks.assignedTeamMemberId, despite the name — see
-  // DashboardDialTask above), total vs. successfully-answered. A task with
-  // no agent assigned falls into "Unassigned" rather than being dropped,
-  // since that itself is worth surfacing (a campaign nobody configured an
-  // agent for).
-  const agentPerformance = useMemo(() => {
-    const byAgent: Record<string, { total: number; success: number }> = {};
-    for (const task of dialerTasks) {
-      const agentId = task.assignedTeamMemberId || 'unassigned';
-      for (const result of Object.values(task.callResults || {})) {
-        if (!result?.status) continue;
-        if (!byAgent[agentId]) byAgent[agentId] = { total: 0, success: 0 };
-        byAgent[agentId].total++;
-        if (getCallOutcome(result.status, result.callAnswered) === 'Answered') byAgent[agentId].success++;
-      }
-    }
-    return Object.entries(byAgent)
-      .map(([agentId, { total, success }]) => ({
-        agent: agentId === 'unassigned' ? 'Unassigned' : (agentNames[agentId] || 'Unknown Agent'),
-        total,
-        success,
-        notSuccess: total - success,
-      }))
-      .sort((a, b) => b.total - a.total)
-      .slice(0, 8);
-  }, [dialerTasks, agentNames]);
-
-  // Call Outcomes Over Time — same daily buckets as Call Volume, but split
-  // by outcome instead of direction.
-  const outcomesOverTime = useMemo(() => {
-    const buckets: Record<string, { period: string } & Record<string, number>> = {};
-    for (const c of callsInPeriod) {
+  // Widget 3: Calls & Outcomes Over Time — daily line, total calls vs.
+  // successful outcomes, so an exec can see whether more calls are
+  // actually converting to real business results.
+  const callsAndOutcomesOverTime = useMemo(() => {
+    const buckets: Record<string, { period: string; totalCalls: number; successfulOutcomes: number }> = {};
+    for (const c of filteredCalls) {
       const key = new Date(c.createdAt).toISOString().slice(0, 10);
-      if (!buckets[key]) buckets[key] = { period: key } as { period: string } & Record<string, number>;
-      const outcome = getCallOutcome(c.status, c.callAnswered);
-      buckets[key][outcome] = (buckets[key][outcome] || 0) + 1;
+      if (!buckets[key]) buckets[key] = { period: key, totalCalls: 0, successfulOutcomes: 0 };
+      buckets[key].totalCalls++;
+      if (isSuccessfulOutcome(c.intent)) buckets[key].successfulOutcomes++;
     }
     return Object.values(buckets).sort((a, b) => a.period.localeCompare(b.period));
-  }, [callsInPeriod]);
+  }, [filteredCalls]);
 
-  // Recent Calls — most recent, org-wide, not scoped to the 30-day period
-  // (a brand-new org with its first few calls outside a rolling window
-  // shouldn't see an empty table).
+  // Shared per-campaign / per-agent stat shape — Widgets 4 & 5 both
+  // switch between the same 5 metrics, just grouped differently.
+  type MetricKey = 'totalCalls' | 'answeredCalls' | 'inquiries' | 'successfulOutcomes' | 'successRate';
+  const METRIC_LABEL: Record<MetricKey, string> = {
+    totalCalls: 'Total Calls', answeredCalls: 'Answered Calls', inquiries: 'Inquiries',
+    successfulOutcomes: 'Successful Outcomes', successRate: 'Success Rate',
+  };
+
+  // Widget 4: Campaign Performance
+  const [campaignMetric, setCampaignMetric] = useState<MetricKey>('successfulOutcomes');
+  const campaignPerformance = useMemo(() => {
+    const byWorkflow: Record<string, { totalCalls: number; answeredCalls: number; successfulOutcomes: number }> = {};
+    for (const task of tasksInPeriod) {
+      const name = task.workflowName || 'Other';
+      if (!byWorkflow[name]) byWorkflow[name] = { totalCalls: 0, answeredCalls: 0, successfulOutcomes: 0 };
+      for (const result of Object.values(task.callResults || {})) {
+        if (!result?.status || result.status === 'Pending') continue;
+        byWorkflow[name].totalCalls++;
+        if (getCallStatus(result.status, result.callAnswered) === 'Answered') byWorkflow[name].answeredCalls++;
+        if (isSuccessfulOutcome(result.intent)) byWorkflow[name].successfulOutcomes++;
+      }
+    }
+    const inquiriesByCampaign: Record<string, number> = {};
+    for (const e of filteredEnquiries) {
+      const campaign = (e.callId && callTaskIndex.get(e.callId)?.campaign) || 'Other';
+      inquiriesByCampaign[campaign] = (inquiriesByCampaign[campaign] || 0) + 1;
+    }
+    const names = new Set([...Object.keys(byWorkflow), ...Object.keys(inquiriesByCampaign)]);
+    const rows = Array.from(names).map(campaign => {
+      const s = byWorkflow[campaign] || { totalCalls: 0, answeredCalls: 0, successfulOutcomes: 0 };
+      return {
+        campaign,
+        totalCalls: s.totalCalls,
+        answeredCalls: s.answeredCalls,
+        inquiries: inquiriesByCampaign[campaign] || 0,
+        successfulOutcomes: s.successfulOutcomes,
+        successRate: s.totalCalls > 0 ? Math.round((s.successfulOutcomes / s.totalCalls) * 100) : 0,
+      };
+    });
+    rows.sort((a, b) => (b[campaignMetric] as number) - (a[campaignMetric] as number));
+    return rows.slice(0, 8);
+  }, [tasksInPeriod, filteredEnquiries, callTaskIndex, campaignMetric]);
+
+  // Widget 5: Agent Performance
+  const [agentMetric, setAgentMetric] = useState<MetricKey>('successfulOutcomes');
+  const agentPerformance = useMemo(() => {
+    const byAgent: Record<string, { totalCalls: number; answeredCalls: number; successfulOutcomes: number }> = {};
+    for (const task of tasksInPeriod) {
+      const agentId = task.assignedTeamMemberId || 'unassigned';
+      if (!byAgent[agentId]) byAgent[agentId] = { totalCalls: 0, answeredCalls: 0, successfulOutcomes: 0 };
+      for (const result of Object.values(task.callResults || {})) {
+        if (!result?.status || result.status === 'Pending') continue;
+        byAgent[agentId].totalCalls++;
+        if (getCallStatus(result.status, result.callAnswered) === 'Answered') byAgent[agentId].answeredCalls++;
+        if (isSuccessfulOutcome(result.intent)) byAgent[agentId].successfulOutcomes++;
+      }
+    }
+    const inquiriesByAgent: Record<string, number> = {};
+    for (const e of filteredEnquiries) {
+      const agentId = (e.callId && callTaskIndex.get(e.callId)?.agentId) || 'unassigned';
+      inquiriesByAgent[agentId] = (inquiriesByAgent[agentId] || 0) + 1;
+    }
+    const agentIds = new Set([...Object.keys(byAgent), ...Object.keys(inquiriesByAgent)]);
+    const rows = Array.from(agentIds).map(agentId => {
+      const s = byAgent[agentId] || { totalCalls: 0, answeredCalls: 0, successfulOutcomes: 0 };
+      return {
+        agent: agentId === 'unassigned' ? 'Unassigned' : (agentNames[agentId] || 'Unknown Agent'),
+        totalCalls: s.totalCalls,
+        answeredCalls: s.answeredCalls,
+        inquiries: inquiriesByAgent[agentId] || 0,
+        successfulOutcomes: s.successfulOutcomes,
+        successRate: s.totalCalls > 0 ? Math.round((s.successfulOutcomes / s.totalCalls) * 100) : 0,
+      };
+    });
+    rows.sort((a, b) => (b[agentMetric] as number) - (a[agentMetric] as number));
+    return rows.slice(0, 8);
+  }, [tasksInPeriod, filteredEnquiries, callTaskIndex, agentNames, agentMetric]);
+
+  // Widget 6: Recent Calls — most recent within the selected period.
   const recentCalls = useMemo(
-    () => [...callLogs].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()).slice(0, 10),
-    [callLogs]
+    () => [...filteredCalls].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()).slice(0, 15),
+    [filteredCalls]
   );
+  const [selectedCall, setSelectedCall] = useState<CallLog | null>(null);
 
   return (
     <PageShell
-      title="Executive Strategic Desk"
-      subtitle={
-        isLending
-          ? 'Real-time credit health, portfolio metrics, and automated dialing conversion stats.'
-          : `Real-time ${primaryObject?.objectLabel || 'pipeline'} metrics and automated dialing conversion stats.`
-      }
-      onRefresh={loadMetrics}
+      title="Executive Dashboard"
+      subtitle="Call activity, engagement, and business outcomes — for the selected date range."
+      onRefresh={loadExtras}
     >
-      {/* ── Row 1: KPI tiles ── */}
+      {/* ── Global date-range filter ── */}
+      <Widget colSpan={12} showHeader={false} padding="md">
+        <FilterBar
+          dates={[
+            { key: 'from', label: 'From', value: fromDate, onChange: (v) => { setFromDate(v); setActivePreset('custom'); } },
+            { key: 'to', label: 'To', value: toDate, onChange: (v) => { setToDate(v); setActivePreset('custom'); } },
+          ]}
+          actions={
+            <>
+              {([
+                ['today', 'Today'], ['yesterday', 'Yesterday'], ['7d', 'Last 7 days'], ['30d', 'Last 30 days'],
+              ] as [typeof activePreset, string][]).map(([key, label]) => (
+                <button
+                  key={key}
+                  onClick={() => applyPreset(key)}
+                  className="px-3 py-1.5 text-[11px] font-semibold rounded-lg border transition-colors"
+                  style={{
+                    background: activePreset === key ? '#2563eb' : 'var(--bg-subtle)',
+                    borderColor: activePreset === key ? '#2563eb' : 'var(--border)',
+                    color: activePreset === key ? '#fff' : 'var(--text-secondary)',
+                  }}
+                >
+                  {label}
+                </button>
+              ))}
+            </>
+          }
+        />
+      </Widget>
 
+      {/* ── KPI row ── */}
       <KpiCard
-        colSpan={3}
-        icon={PhoneIncoming}
-        iconBg="#eff6ff"
-        iconColor="#2563eb"
-        label="Total Calls"
-        value={callLogs.length}
-        sub="All time"
+        colSpan={3} icon={PhoneIncoming} iconBg="#eff6ff" iconColor="#2563eb" label="Total Calls"
+        value={periodSummary.totalCalls}
+        badge={trendBadge(periodSummary.totalCalls, prevPeriodSummary.totalCalls).label}
+        badgeColor={trendBadge(periodSummary.totalCalls, prevPeriodSummary.totalCalls).color}
+      />
+      <KpiCard
+        colSpan={3} icon={UserCheck} iconBg="#f0fdf4" iconColor="#16a34a" label="Answered Calls"
+        value={periodSummary.answeredCalls}
+        sub={periodSummary.totalCalls > 0 ? `${answerRate}% answer rate` : undefined}
+        badge={trendBadge(periodSummary.answeredCalls, prevPeriodSummary.answeredCalls).label}
+        badgeColor={trendBadge(periodSummary.answeredCalls, prevPeriodSummary.answeredCalls).color}
+      />
+      <KpiCard
+        colSpan={3} icon={MessageCircleQuestion} iconBg="#fffbeb" iconColor="#d97706" label="Inquiries"
+        value={filteredEnquiries.length}
+        badge={trendBadge(filteredEnquiries.length, prevFilteredEnquiries.length).label}
+        badgeColor={trendBadge(filteredEnquiries.length, prevFilteredEnquiries.length).color}
+      />
+      <KpiCard
+        colSpan={3} icon={Flame} iconBg="#fdf4ff" iconColor="#9333ea" label="Successful Outcomes"
+        value={periodSummary.successfulOutcomes}
+        badge={trendBadge(periodSummary.successfulOutcomes, prevPeriodSummary.successfulOutcomes).label}
+        badgeColor={trendBadge(periodSummary.successfulOutcomes, prevPeriodSummary.successfulOutcomes).color}
       />
 
-      <KpiCard
-        colSpan={3}
-        icon={UserCheck}
-        iconBg="#f0fdf4"
-        iconColor="#16a34a"
-        label="Success Calls"
-        value={successCallsCount}
-        sub={callLogs.length > 0 ? `${Math.round((successCallsCount / callLogs.length) * 100)}% of all calls` : undefined}
-      />
-
-      <KpiCard
-        colSpan={3}
-        icon={MessageCircleQuestion}
-        iconBg="#fffbeb"
-        iconColor="#d97706"
-        label="Enquiries"
-        value={enquiriesTotal ?? '—'}
-      />
-
-      <KpiCard
-        colSpan={3}
-        icon={Flame}
-        iconBg="#fdf4ff"
-        iconColor="#9333ea"
-        label="Successful Outcomes"
-        value={successfulOutcomesCount}
-        sub="Interested intent"
-      />
-
-      {/* ── Row 2: Charts, in the requested order: Call Outcome, Call
-          Volume Over Time, Call Outcomes Over Time, Campaign Performance,
-          Agent Performance, Recent Calls ── */}
-
-      {/* Call Outcome donut */}
-      <Widget colSpan={12} title="Call Outcome" subtitle="Last 30 days." icon={PieChartIcon} accent="#059669" padding="md" hover>
-        {outcomeBreakdown.length > 0 ? (
-          <div className="flex flex-col items-center gap-4 mt-1">
-            <PieChart slices={outcomeBreakdown} size={160} />
-            <div className="w-full max-w-xs space-y-1.5">
-              {outcomeBreakdown.map(s => (
+      {/* ── Widget Row 1: Call Outcomes | Inbound vs Outbound ── */}
+      <Widget colSpan={6} title="Call Outcomes" subtitle="Distribution of call outcomes this period." icon={PieChartIcon} accent="#059669" padding="md" hover>
+        {callOutcomes.length > 0 ? (
+          <div className="flex flex-col sm:flex-row items-center gap-6 mt-1">
+            <PieChart slices={callOutcomes} size={150} />
+            <div className="w-full space-y-1.5">
+              {callOutcomes.map(s => (
                 <div key={s.label} className="flex items-center justify-between text-xs">
                   <span className="flex items-center gap-1.5 text-slate-500">
                     <span className="h-2 w-2 rounded-full shrink-0" style={{ backgroundColor: s.color }} />
@@ -396,131 +416,142 @@ export default function DashboardView({
               ))}
             </div>
           </div>
-        ) : (
-          <EmptyState heading="No calls in the last 30 days" />
-        )}
+        ) : <EmptyState heading="No calls in this period" />}
       </Widget>
 
-      {/* Call volume over time — same chart Reports uses, fixed to the last
-          30 days here since this is a glance-at-it overview, not a
-          configurable report (see Reports > Report by Task for filters). */}
-      <Widget colSpan={12} title="Call Volume Over Time" subtitle="Incoming vs. outgoing calls (stacked), with sentiment on hover — last 30 days." icon={PhoneIncoming} accent="#2563eb" padding="md" hover>
+      <Widget colSpan={6} title="Inbound vs Outbound Calls" subtitle="Call volume over time, by direction." icon={PhoneOutgoing} accent="#2563eb" padding="md" hover>
         <div className="h-64 w-full mt-1">
-          {callVolumeTrend.length > 0 ? (
+          {inboundOutboundOverTime.length > 0 ? (
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={callVolumeTrend} barGap={2} margin={{ top: 8, right: 8, left: -20, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                <XAxis dataKey="period" stroke="#94a3b8" fontSize={11} tickLine={false} />
-                <YAxis stroke="#94a3b8" fontSize={11} tickLine={false} axisLine={false} allowDecimals={false} />
-                <Tooltip content={<CallVolumeTooltip />} />
-                <Legend wrapperStyle={{ fontSize: 11 }} />
-                <Bar dataKey="inbound" name="Incoming" stackId="calls" fill="#2563eb" />
-                <Bar dataKey="outbound" name="Outgoing" stackId="calls" fill="#f97316" radius={[3, 3, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
-          ) : (
-            <EmptyState heading="No calls in the last 30 days" />
-          )}
-        </div>
-      </Widget>
-
-      {/* Call Outcomes Over Time — same daily buckets as Call Volume, split by outcome */}
-      <Widget colSpan={12} title="Call Outcomes Over Time" subtitle="Daily outcome breakdown, last 30 days." icon={Activity} accent="#2563eb" padding="md" hover>
-        <div className="h-64 w-full mt-1">
-          {outcomesOverTime.length > 0 ? (
-            <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={outcomesOverTime} margin={{ top: 8, right: 8, left: -20, bottom: 0 }}>
+              <LineChart data={inboundOutboundOverTime} margin={{ top: 8, right: 8, left: -20, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
                 <XAxis dataKey="period" stroke="#94a3b8" fontSize={11} tickLine={false} />
                 <YAxis stroke="#94a3b8" fontSize={11} tickLine={false} axisLine={false} allowDecimals={false} />
                 <Tooltip {...CHART_TOOLTIP} />
                 <Legend wrapperStyle={{ fontSize: 11 }} />
-                {OUTCOME_ORDER.map(outcome => (
-                  <Line key={outcome} type="monotone" dataKey={outcome} name={outcome} stroke={OUTCOME_COLORS[outcome]} strokeWidth={2} dot={false} connectNulls />
-                ))}
+                <Line type="monotone" dataKey="inbound" name="Inbound" stroke="#2563eb" strokeWidth={2} dot={false} />
+                <Line type="monotone" dataKey="outbound" name="Outbound" stroke="#f97316" strokeWidth={2} dot={false} />
               </LineChart>
             </ResponsiveContainer>
-          ) : (
-            <EmptyState heading="No calls in the last 30 days" />
-          )}
+          ) : <EmptyState heading="No calls in this period" />}
         </div>
       </Widget>
 
-      {/* Campaign Performance — horizontal stacked bar, one row per workflow
-          (same-named campaigns/workflow runs are already merged into a
-          single row — see campaignPerformance above). Hover a bar for the
-          outcome breakdown plus that campaign's success rate. */}
-      <Widget colSpan={12} title="Campaign Performance" subtitle="Outbound workflow leads by outcome, last 30 days — hover a bar for its success rate." icon={BarChart3} accent="#7c3aed" padding="md" hover>
-        <div className="w-full mt-1" style={{ height: Math.max(160, campaignPerformance.length * 48) }}>
-          {campaignPerformance.length > 0 ? (
+      {/* ── Widget Row 2: Calls & Outcomes Over Time | Campaign Performance ── */}
+      <Widget colSpan={6} title="Calls & Outcomes Over Time" subtitle="Is more call activity producing more successful outcomes?" icon={Activity} accent="#2563eb" padding="md" hover>
+        <div className="h-64 w-full mt-1">
+          {callsAndOutcomesOverTime.length > 0 ? (
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={campaignPerformance} layout="vertical" margin={{ top: 8, right: 8, left: 8, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#f1f5f9" />
-                <XAxis type="number" stroke="#94a3b8" fontSize={11} tickLine={false} axisLine={false} allowDecimals={false} />
-                <YAxis type="category" dataKey="campaign" stroke="#94a3b8" fontSize={11} tickLine={false} axisLine={false} width={140} />
-                <Tooltip content={<CampaignPerformanceTooltip />} />
-                <Legend wrapperStyle={{ fontSize: 11 }} />
-                {OUTCOME_ORDER.map(outcome => (
-                  <Bar key={outcome} dataKey={outcome} name={outcome} stackId="outcome" fill={OUTCOME_COLORS[outcome]} radius={outcome === OUTCOME_ORDER[OUTCOME_ORDER.length - 1] ? [0, 3, 3, 0] : undefined} />
-                ))}
-              </BarChart>
-            </ResponsiveContainer>
-          ) : (
-            <EmptyState heading="No campaign calls yet" message="Run a dialing task from Campaign to see performance here." />
-          )}
-        </div>
-      </Widget>
-
-      {/* Agent Performance — total vs. successfully-answered calls per AI calling agent */}
-      <Widget colSpan={12} title="Agent Performance" subtitle="Total calls vs. successfully answered, per AI calling agent, last 30 days." icon={UserCheck} accent="#2563eb" padding="md" hover>
-        <div className="w-full mt-1" style={{ height: Math.max(160, agentPerformance.length * 48) }}>
-          {agentPerformance.length > 0 ? (
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={agentPerformance} layout="vertical" margin={{ top: 8, right: 8, left: 8, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#f1f5f9" />
-                <XAxis type="number" stroke="#94a3b8" fontSize={11} tickLine={false} axisLine={false} allowDecimals={false} />
-                <YAxis type="category" dataKey="agent" stroke="#94a3b8" fontSize={11} tickLine={false} axisLine={false} width={140} />
+              <LineChart data={callsAndOutcomesOverTime} margin={{ top: 8, right: 8, left: -20, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                <XAxis dataKey="period" stroke="#94a3b8" fontSize={11} tickLine={false} />
+                <YAxis stroke="#94a3b8" fontSize={11} tickLine={false} axisLine={false} allowDecimals={false} />
                 <Tooltip {...CHART_TOOLTIP} />
                 <Legend wrapperStyle={{ fontSize: 11 }} />
-                <Bar dataKey="success" name="Answered" stackId="agent" fill="#059669" />
-                <Bar dataKey="notSuccess" name="Not Answered / No Answer" stackId="agent" fill="#e11d48" radius={[0, 3, 3, 0]} />
-              </BarChart>
+                <Line type="monotone" dataKey="totalCalls" name="Total Calls" stroke="#2563eb" strokeWidth={2} dot={false} />
+                <Line type="monotone" dataKey="successfulOutcomes" name="Successful Outcomes" stroke="#059669" strokeWidth={2} dot={false} />
+              </LineChart>
             </ResponsiveContainer>
-          ) : (
-            <EmptyState heading="No campaign calls yet" message="Run a dialing task from Campaign to see agent performance here." />
-          )}
+          ) : <EmptyState heading="No calls in this period" />}
         </div>
       </Widget>
 
-      {/* Recent Calls */}
-      <Widget colSpan={12} title="Recent Calls" icon={History} accent="#64748b" padding="none" hover scrollable>
+      <Widget
+        colSpan={6}
+        title="Campaign Performance"
+        subtitle="Compare campaigns by a metric of your choice."
+        icon={BarChart3}
+        accent="#7c3aed"
+        padding="md"
+        hover
+        action={
+          <select
+            value={campaignMetric}
+            onChange={(e) => setCampaignMetric(e.target.value as MetricKey)}
+            className="text-[11px] font-semibold px-2.5 py-1.5 rounded-lg border bg-[var(--bg-surface)] cursor-pointer"
+            style={{ borderColor: 'var(--border)', color: 'var(--text-secondary)' }}
+          >
+            {(Object.keys(METRIC_LABEL) as MetricKey[]).map(k => <option key={k} value={k}>{METRIC_LABEL[k]}</option>)}
+          </select>
+        }
+      >
+        <div className="w-full mt-1" style={{ height: Math.max(160, campaignPerformance.length * 36) }}>
+          {campaignPerformance.length > 0 ? (
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={campaignPerformance} layout="vertical" margin={{ top: 8, right: 24, left: 8, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#f1f5f9" />
+                <XAxis type="number" stroke="#94a3b8" fontSize={11} tickLine={false} axisLine={false} allowDecimals={false} unit={campaignMetric === 'successRate' ? '%' : undefined} />
+                <YAxis type="category" dataKey="campaign" stroke="#94a3b8" fontSize={11} tickLine={false} axisLine={false} width={120} />
+                <Tooltip {...CHART_TOOLTIP} />
+                <Bar dataKey={campaignMetric} name={METRIC_LABEL[campaignMetric]} fill="#7c3aed" radius={[0, 3, 3, 0]} barSize={16} />
+              </BarChart>
+            </ResponsiveContainer>
+          ) : <EmptyState heading="No campaign calls in this period" message="Run a dialing task from Campaign to see performance here." />}
+        </div>
+      </Widget>
+
+      {/* ── Widget Row 3: Agent Performance | Recent Calls ── */}
+      <Widget
+        colSpan={6}
+        title="Agent Performance"
+        subtitle="Compare AI calling agents by a metric of your choice."
+        icon={Users}
+        accent="#2563eb"
+        padding="md"
+        hover
+        action={
+          <select
+            value={agentMetric}
+            onChange={(e) => setAgentMetric(e.target.value as MetricKey)}
+            className="text-[11px] font-semibold px-2.5 py-1.5 rounded-lg border bg-[var(--bg-surface)] cursor-pointer"
+            style={{ borderColor: 'var(--border)', color: 'var(--text-secondary)' }}
+          >
+            {(Object.keys(METRIC_LABEL) as MetricKey[]).map(k => <option key={k} value={k}>{METRIC_LABEL[k]}</option>)}
+          </select>
+        }
+      >
+        <div className="w-full mt-1" style={{ height: Math.max(160, agentPerformance.length * 36) }}>
+          {agentPerformance.length > 0 ? (
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={agentPerformance} layout="vertical" margin={{ top: 8, right: 24, left: 8, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#f1f5f9" />
+                <XAxis type="number" stroke="#94a3b8" fontSize={11} tickLine={false} axisLine={false} allowDecimals={false} unit={agentMetric === 'successRate' ? '%' : undefined} />
+                <YAxis type="category" dataKey="agent" stroke="#94a3b8" fontSize={11} tickLine={false} axisLine={false} width={120} />
+                <Tooltip {...CHART_TOOLTIP} />
+                <Bar dataKey={agentMetric} name={METRIC_LABEL[agentMetric]} fill="#2563eb" radius={[0, 3, 3, 0]} barSize={16} />
+              </BarChart>
+            </ResponsiveContainer>
+          ) : <EmptyState heading="No campaign calls in this period" message="Run a dialing task from Campaign to see agent performance here." />}
+        </div>
+      </Widget>
+
+      <Widget colSpan={6} title="Recent Calls" icon={History} accent="#64748b" padding="none" hover scrollable>
         {(() => {
           const columns: Column<CallLog>[] = [
-            { key: 'caller', header: 'Caller', cell: (c) => <span className="font-semibold text-slate-800">{c.leadName}</span> },
+            { key: 'id', header: 'Call ID', cell: (c) => <span className="font-mono text-[10px] text-slate-400">{c.id.slice(0, 8)}</span> },
+            { key: 'when', header: 'Date/Time', cell: (c) => <span className="text-slate-400 whitespace-nowrap">{new Date(c.createdAt).toLocaleString()}</span> },
+            { key: 'customer', header: 'Customer', cell: (c) => <span className="font-semibold text-slate-800">{c.leadName}</span> },
+            { key: 'campaign', header: 'Campaign', cell: (c) => <span className="text-slate-500">{callTaskIndex.get(c.id)?.campaign || '—'}</span> },
+            {
+              key: 'agent',
+              header: 'Agent',
+              cell: (c) => {
+                const agentId = callTaskIndex.get(c.id)?.agentId;
+                return <span className="text-slate-500">{agentId ? (agentNames[agentId] || 'Unknown Agent') : '—'}</span>;
+              },
+            },
             { key: 'direction', header: 'Direction', cell: (c) => <span className="text-slate-500 capitalize">{c.direction || '—'}</span> },
+            { key: 'duration', header: 'Duration', cell: (c) => <span className="font-mono">{formatDuration(c.duration)}</span> },
+            { key: 'status', header: 'Call Status', cell: (c) => <span className="text-slate-500">{getCallStatus(c.status, c.callAnswered)}</span> },
             {
               key: 'outcome',
               header: 'Outcome',
-              cell: (c) => {
-                const outcome = getCallOutcome(c.status, c.callAnswered);
-                return (
-                  <span className="px-2 py-0.5 rounded-md text-[10px] font-semibold whitespace-nowrap" style={{ color: OUTCOME_COLORS[outcome], backgroundColor: `${OUTCOME_COLORS[outcome]}1a` }}>
-                    {outcome}
-                  </span>
-                );
-              },
-            },
-            { key: 'duration', header: 'Duration', cell: (c) => <span className="font-mono">{formatDuration(c.duration)}</span> },
-            {
-              key: 'sentiment',
-              header: 'Sentiment',
               cell: (c) => (
-                <span className="px-2 py-0.5 rounded-md text-[10px] font-semibold" style={{ color: SENTIMENT_COLOR[c.sentiment], backgroundColor: `${SENTIMENT_COLOR[c.sentiment]}1a` }}>
-                  {c.sentiment}
+                <span className="px-2 py-0.5 rounded-md text-[10px] font-semibold whitespace-nowrap" style={{ color: intentColor(c.intent || 'Unknown'), backgroundColor: `${intentColor(c.intent || 'Unknown')}1a` }}>
+                  {c.intent || 'Unknown'}
                 </span>
               ),
             },
-            { key: 'when', header: 'When', cell: (c) => <span className="text-slate-400 whitespace-nowrap">{new Date(c.createdAt).toLocaleString()}</span> },
           ];
           return (
             <DataTable
@@ -528,12 +559,62 @@ export default function DashboardView({
               columns={columns}
               rows={recentCalls}
               rowKey={(c) => c.id}
-              emptyMessage="No calls logged yet."
+              onRowClick={(c) => setSelectedCall(c)}
+              emptyMessage="No calls in this period."
             />
           );
         })()}
       </Widget>
 
+      {/* Call detail — opens on clicking a Recent Calls row. */}
+      <SlideOver
+        open={!!selectedCall}
+        onClose={() => setSelectedCall(null)}
+        title={selectedCall?.leadName}
+        subtitle={selectedCall ? new Date(selectedCall.createdAt).toLocaleString() : undefined}
+      >
+        {selectedCall && (() => {
+          const link = callTaskIndex.get(selectedCall.id);
+          type FieldRow = { key: string; field: string; value: React.ReactNode };
+          const rows: FieldRow[] = [
+            { key: 'campaign', field: 'Campaign', value: link?.campaign || '—' },
+            { key: 'agent', field: 'Agent', value: link?.agentId ? (agentNames[link.agentId] || 'Unknown Agent') : '—' },
+            { key: 'direction', field: 'Direction', value: <span className="capitalize">{selectedCall.direction || '—'}</span> },
+            { key: 'duration', field: 'Duration', value: formatDuration(selectedCall.duration) },
+            { key: 'status', field: 'Call Status', value: getCallStatus(selectedCall.status, selectedCall.callAnswered) },
+            { key: 'outcome', field: 'Outcome', value: selectedCall.intent || 'Unknown' },
+            { key: 'cost', field: 'Cost', value: formatInr(callCostInr(selectedCall.duration || 0, costPerMinuteInr)) },
+          ];
+          const columns: Column<FieldRow>[] = [
+            { key: 'field', header: 'Field', width: '35%', cell: (r) => <span className="font-semibold text-slate-500 uppercase tracking-wide text-[10px] whitespace-nowrap">{r.field}</span> },
+            { key: 'value', header: 'Value', cell: (r) => <span className="text-slate-700">{r.value}</span> },
+          ];
+          return (
+            <div className="space-y-4">
+              <div className="bg-white border border-slate-200 rounded-xl overflow-hidden">
+                <DataTable bare resizable columns={columns} rows={rows} rowKey={(r) => r.key} />
+              </div>
+              {selectedCall.summary && (
+                <div className="bg-slate-50 border border-slate-100 rounded-xl p-4">
+                  <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-1.5">Summary</p>
+                  <p className="text-xs text-slate-600 italic">"{selectedCall.summary}"</p>
+                </div>
+              )}
+              {selectedCall.transcript && selectedCall.transcript.length > 0 && (
+                <div className="bg-white border border-slate-200 rounded-xl p-4 space-y-3">
+                  <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Transcript</p>
+                  {selectedCall.transcript.map((line, i) => (
+                    <div key={i} className="text-xs">
+                      <span className="font-semibold text-slate-700">{line.speaker}: </span>
+                      <span className="text-slate-600">{line.text}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          );
+        })()}
+      </SlideOver>
     </PageShell>
   );
 }
