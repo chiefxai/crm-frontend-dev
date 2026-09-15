@@ -28,7 +28,8 @@ import {
   ChevronLeft,
   Inbox,
   History,
-  PhoneForwarded
+  PhoneForwarded,
+  MessageCircleQuestion
 } from 'lucide-react';
 import { Lead, CallLog, VirtualNumber, TeamMember, ContactGroup, OrganizationSettings } from '../types';
 import { QuestionFlow } from '../features/workflows/types';
@@ -384,6 +385,12 @@ Real Tamil speakers do not say the "correct" written form of a word. They contra
   const [tapeSpeed, setTapeSpeed] = useState<number>(1);
   const [tapeDuration, setTapeDuration] = useState<number>(0);
   const audioElRef = useRef<HTMLAudioElement | null>(null);
+
+  // Whether the caller in the tape currently open raised an enquiry
+  // mid-call, and its status — fetched per call, not bundled onto the
+  // call/lead objects already in memory (see /api/enquiries?callId=).
+  const [tapeEnquiries, setTapeEnquiries] = useState<{ id: string; queryText: string; status: 'new' | 'contacted' | 'resolved' }[]>([]);
+  const [loadingTapeEnquiries, setLoadingTapeEnquiries] = useState(false);
 
   const timerRef = useRef<NodeJS.Timeout | null>(null);
   const chatBottomRef = useRef<HTMLDivElement | null>(null);
@@ -1112,6 +1119,30 @@ Currently on question ${nextIndex} out of ${selectedTask.questions.length}. Next
     ? null
     : leadsDatabase.find((l) => l.id === playingTapeId);
 
+  // The real call_logs id behind whatever's open in the tape player —
+  // inbound tape entries ARE call_logs rows (their own .id); outbound
+  // dialer-task results carry it separately as .callId (see handleHangupCall).
+  const activeTapeCallId = playingTapeType === 'inbound'
+    ? (activeTapeResult as CallLog | undefined)?.id
+    : (activeTapeResult as { callId?: string } | undefined)?.callId;
+
+  useEffect(() => {
+    if (!activeTapeCallId) {
+      setTapeEnquiries([]);
+      return;
+    }
+    let cancelled = false;
+    setLoadingTapeEnquiries(true);
+    apiFetch(`/api/enquiries?callId=${encodeURIComponent(activeTapeCallId)}`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((result: { rows: { id: string; queryText: string; status: 'new' | 'contacted' | 'resolved' }[] } | null) => {
+        if (!cancelled) setTapeEnquiries(Array.isArray(result?.rows) ? result.rows : []);
+      })
+      .catch(() => { if (!cancelled) setTapeEnquiries([]); })
+      .finally(() => { if (!cancelled) setLoadingTapeEnquiries(false); });
+    return () => { cancelled = true; };
+  }, [activeTapeCallId]);
+
   const dialLead = (lead: Lead) => {
     const num = dialableNumbers.find((n) => n.number === selectedOutboundNumber);
     const provider = num?.provider || '';
@@ -1354,6 +1385,40 @@ Currently on question ${nextIndex} out of ${selectedTask.questions.length}. Next
             <span className="text-xs font-bold text-[var(--text-secondary)]">{formatInr(callCostInr(activeTapeResult.duration))}</span>
           </div>
         </div>
+
+        {/* Enquiry raised during this call, if any */}
+        {loadingTapeEnquiries ? (
+          <div className="bg-[var(--bg-subtle)] border border-[var(--border)]/60 rounded-xl p-4 text-[11px] text-[var(--text-muted)] flex items-center gap-2">
+            <RefreshCw className="h-3.5 w-3.5 animate-spin" /> Checking for enquiries…
+          </div>
+        ) : tapeEnquiries.length > 0 ? (
+          <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 space-y-3">
+            <span className="text-[9px] font-mono text-amber-700 uppercase tracking-widest font-bold flex items-center gap-1.5">
+              <MessageCircleQuestion className="h-3.5 w-3.5" />
+              Enquiry Raised{tapeEnquiries.length > 1 ? `s (${tapeEnquiries.length})` : ''}
+            </span>
+            {tapeEnquiries.map((eq) => (
+              <div key={eq.id} className="flex items-start justify-between gap-3 bg-white/70 border border-amber-100 rounded-lg px-3 py-2">
+                <p className="text-xs text-[var(--text-primary)] leading-relaxed flex-1">"{eq.queryText}"</p>
+                <span
+                  className={`shrink-0 text-[9px] font-mono uppercase tracking-wider font-bold px-2 py-0.5 rounded-full ${
+                    eq.status === 'new'
+                      ? 'bg-amber-200 text-amber-800'
+                      : eq.status === 'contacted'
+                      ? 'bg-blue-200 text-blue-800'
+                      : 'bg-emerald-200 text-emerald-800'
+                  }`}
+                >
+                  {eq.status}
+                </span>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="bg-[var(--bg-subtle)] border border-[var(--border)]/60 rounded-xl p-4 text-[11px] text-[var(--text-muted)] flex items-center gap-2">
+            <MessageCircleQuestion className="h-3.5 w-3.5" /> No enquiry raised on this call.
+          </div>
+        )}
 
         {/* AI Summary */}
         <div className="bg-[var(--bg-subtle)] border border-[var(--border)]/60 rounded-xl p-4 space-y-1.5">

@@ -1,10 +1,10 @@
-import React, { useState } from 'react';
-import { Phone, PlayCircle, Download, X, Check, ChevronDown } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Phone, PlayCircle, Download, X, Check, ChevronDown, MessageCircleQuestion, RefreshCw } from 'lucide-react';
 import SlideOver from './ui/SlideOver';
 import { CallLog, Lead } from '../types';
 import { callCostInr, formatInr } from '../lib/pricing';
 import { normalizePhone, formatPhone } from '../lib/phone';
-import { getPlayableRecordingUrl } from '../lib/api';
+import { apiFetch, getPlayableRecordingUrl } from '../lib/api';
 import PageShell from './ui/PageShell';
 import Widget from './ui/Widget';
 import Button from './ui/Button';
@@ -123,6 +123,25 @@ export default function CallLogsView({ callLogs, costPerMinuteInr, leads = [] }:
   const totalCost = filtered.reduce((sum, c) => sum + callCostInr(c.duration || 0, costPerMinuteInr), 0);
 
   const selectedAnswers = selected ? (selected as any).answers as Record<string, string> | undefined : undefined;
+
+  const [selectedEnquiries, setSelectedEnquiries] = useState<{ id: string; queryText: string; status: 'new' | 'contacted' | 'resolved' }[]>([]);
+  const [loadingSelectedEnquiries, setLoadingSelectedEnquiries] = useState(false);
+  useEffect(() => {
+    if (!selected) {
+      setSelectedEnquiries([]);
+      return;
+    }
+    let cancelled = false;
+    setLoadingSelectedEnquiries(true);
+    apiFetch(`/api/enquiries?callId=${encodeURIComponent(selected.id)}`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((result: { rows: { id: string; queryText: string; status: 'new' | 'contacted' | 'resolved' }[] } | null) => {
+        if (!cancelled) setSelectedEnquiries(Array.isArray(result?.rows) ? result.rows : []);
+      })
+      .catch(() => { if (!cancelled) setSelectedEnquiries([]); })
+      .finally(() => { if (!cancelled) setLoadingSelectedEnquiries(false); });
+    return () => { cancelled = true; };
+  }, [selected]);
 
   function toggleField(key: string) {
     setExportFields(prev => prev.includes(key) ? prev.filter(k => k !== key) : [...prev, key]);
@@ -265,6 +284,39 @@ export default function CallLogsView({ callLogs, costPerMinuteInr, leads = [] }:
                   <p className="text-xs font-semibold" style={{ color: 'var(--text-primary)' }}>{item.value}</p>
                 </div>
               ))}
+            </div>
+
+            {/* Enquiry raised during this call, if any */}
+            <div>
+              <h4 className="text-[10px] font-bold uppercase tracking-widest mb-2" style={{ color: 'var(--text-muted)' }}>Enquiry</h4>
+              {loadingSelectedEnquiries ? (
+                <div className="rounded-xl p-3 border text-[11px] flex items-center gap-2" style={{ background: 'var(--bg-subtle)', borderColor: 'var(--border)', color: 'var(--text-muted)' }}>
+                  <RefreshCw className="h-3.5 w-3.5 animate-spin" /> Checking for enquiries…
+                </div>
+              ) : selectedEnquiries.length > 0 ? (
+                <div className="rounded-xl p-3 border bg-amber-50 border-amber-200 space-y-2">
+                  {selectedEnquiries.map((eq) => (
+                    <div key={eq.id} className="flex items-start justify-between gap-3 bg-white/70 border border-amber-100 rounded-lg px-3 py-2">
+                      <p className="text-xs flex-1 leading-relaxed" style={{ color: 'var(--text-primary)' }}>"{eq.queryText}"</p>
+                      <span
+                        className={`shrink-0 text-[9px] font-mono uppercase tracking-wider font-bold px-2 py-0.5 rounded-full ${
+                          eq.status === 'new'
+                            ? 'bg-amber-200 text-amber-800'
+                            : eq.status === 'contacted'
+                            ? 'bg-blue-200 text-blue-800'
+                            : 'bg-emerald-200 text-emerald-800'
+                        }`}
+                      >
+                        {eq.status}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="rounded-xl p-3 border text-[11px] flex items-center gap-2" style={{ background: 'var(--bg-subtle)', borderColor: 'var(--border)', color: 'var(--text-muted)' }}>
+                  <MessageCircleQuestion className="h-3.5 w-3.5" /> No enquiry raised on this call.
+                </div>
+              )}
             </div>
 
             {/* AI Summary */}
