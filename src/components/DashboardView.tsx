@@ -219,6 +219,27 @@ export default function DashboardView({
     );
   }
 
+  // Custom tooltip for Campaign Performance — the stacked outcome
+  // breakdown plus the same campaign's overall success rate, so "Success
+  // Rate by Campaign" doesn't need to be its own separate widget.
+  function CampaignPerformanceTooltip({ active, payload, label }: { active?: boolean; payload?: { payload: (typeof campaignPerformance)[number] }[]; label?: string }) {
+    if (!active || !payload?.length) return null;
+    const row = payload[0].payload;
+    const rate = row.total > 0 ? Math.round(((row['Answered'] || 0) / row.total) * 100) : 0;
+    return (
+      <div className="rounded-lg px-3 py-2 text-xs" style={CHART_TOOLTIP.contentStyle}>
+        <p className="font-semibold mb-1.5">{label}</p>
+        <div className="space-y-0.5">
+          {OUTCOME_ORDER.filter(o => row[o]).map(outcome => (
+            <p key={outcome}><span style={{ color: OUTCOME_COLORS[outcome] }}>●</span> {outcome}: {row[outcome]}</p>
+          ))}
+          <p className="opacity-70">Total: {row.total}</p>
+        </div>
+        <p className="mt-1.5 pt-1.5 border-t border-white/15 font-semibold">Success Rate: {rate}%</p>
+      </div>
+    );
+  }
+
   // Call Outcome donut — every call in the period, bucketed into the same
   // 5 outcomes used everywhere else this concept shows up (Reports' Call
   // Outcome column, Campaign's "Not Answered" badges).
@@ -253,18 +274,6 @@ export default function DashboardView({
       .sort((a, b) => b.total - a.total)
       .slice(0, 8);
   }, [dialerTasks]);
-
-  // Success Rate by Campaign — same underlying counts as Campaign
-  // Performance above, just expressed as one rate per workflow instead of
-  // a stacked outcome breakdown.
-  const successRateByCampaign = useMemo(() => {
-    return campaignPerformance
-      .map(row => ({
-        campaign: row.campaign,
-        rate: row.total > 0 ? Math.round(((row['Answered'] || 0) / row.total) * 100) : 0,
-      }))
-      .sort((a, b) => b.rate - a.rate);
-  }, [campaignPerformance]);
 
   // Agent Performance — which AI calling agent placed each campaign call
   // (dialerTasks.assignedTeamMemberId, despite the name — see
@@ -366,7 +375,31 @@ export default function DashboardView({
         sub="Interested intent"
       />
 
-      {/* ── Row 2: Charts ── */}
+      {/* ── Row 2: Charts, in the requested order: Call Outcome, Call
+          Volume Over Time, Call Outcomes Over Time, Campaign Performance,
+          Agent Performance, Recent Calls ── */}
+
+      {/* Call Outcome donut */}
+      <Widget colSpan={12} title="Call Outcome" subtitle="Last 30 days." icon={PieChartIcon} accent="#059669" padding="md" hover>
+        {outcomeBreakdown.length > 0 ? (
+          <div className="flex flex-col items-center gap-4 mt-1">
+            <PieChart slices={outcomeBreakdown} size={160} />
+            <div className="w-full max-w-xs space-y-1.5">
+              {outcomeBreakdown.map(s => (
+                <div key={s.label} className="flex items-center justify-between text-xs">
+                  <span className="flex items-center gap-1.5 text-slate-500">
+                    <span className="h-2 w-2 rounded-full shrink-0" style={{ backgroundColor: s.color }} />
+                    {s.label}
+                  </span>
+                  <span className="font-semibold text-slate-700">{s.value}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        ) : (
+          <EmptyState heading="No calls in the last 30 days" />
+        )}
+      </Widget>
 
       {/* Call volume over time — same chart Reports uses, fixed to the last
           30 days here since this is a glance-at-it overview, not a
@@ -391,30 +424,33 @@ export default function DashboardView({
         </div>
       </Widget>
 
-      {/* Call Outcome donut */}
-      <Widget colSpan={4} title="Call Outcome" subtitle="Last 30 days." icon={PieChartIcon} accent="#059669" padding="md" hover>
-        {outcomeBreakdown.length > 0 ? (
-          <div className="flex flex-col items-center gap-4 mt-1">
-            <PieChart slices={outcomeBreakdown} size={160} />
-            <div className="w-full space-y-1.5">
-              {outcomeBreakdown.map(s => (
-                <div key={s.label} className="flex items-center justify-between text-xs">
-                  <span className="flex items-center gap-1.5 text-slate-500">
-                    <span className="h-2 w-2 rounded-full shrink-0" style={{ backgroundColor: s.color }} />
-                    {s.label}
-                  </span>
-                  <span className="font-semibold text-slate-700">{s.value}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-        ) : (
-          <EmptyState heading="No calls in the last 30 days" />
-        )}
+      {/* Call Outcomes Over Time — same daily buckets as Call Volume, split by outcome */}
+      <Widget colSpan={12} title="Call Outcomes Over Time" subtitle="Daily outcome breakdown, last 30 days." icon={Activity} accent="#2563eb" padding="md" hover>
+        <div className="h-64 w-full mt-1">
+          {outcomesOverTime.length > 0 ? (
+            <ResponsiveContainer width="100%" height="100%">
+              <LineChart data={outcomesOverTime} margin={{ top: 8, right: 8, left: -20, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                <XAxis dataKey="period" stroke="#94a3b8" fontSize={11} tickLine={false} />
+                <YAxis stroke="#94a3b8" fontSize={11} tickLine={false} axisLine={false} allowDecimals={false} />
+                <Tooltip {...CHART_TOOLTIP} />
+                <Legend wrapperStyle={{ fontSize: 11 }} />
+                {OUTCOME_ORDER.map(outcome => (
+                  <Line key={outcome} type="monotone" dataKey={outcome} name={outcome} stroke={OUTCOME_COLORS[outcome]} strokeWidth={2} dot={false} connectNulls />
+                ))}
+              </LineChart>
+            </ResponsiveContainer>
+          ) : (
+            <EmptyState heading="No calls in the last 30 days" />
+          )}
+        </div>
       </Widget>
 
-      {/* Campaign Performance — horizontal stacked bar, one row per workflow */}
-      <Widget colSpan={8} title="Campaign Performance" subtitle="Outbound workflow leads by outcome, last 30 days." icon={BarChart3} accent="#7c3aed" padding="md" hover>
+      {/* Campaign Performance — horizontal stacked bar, one row per workflow
+          (same-named campaigns/workflow runs are already merged into a
+          single row — see campaignPerformance above). Hover a bar for the
+          outcome breakdown plus that campaign's success rate. */}
+      <Widget colSpan={12} title="Campaign Performance" subtitle="Outbound workflow leads by outcome, last 30 days — hover a bar for its success rate." icon={BarChart3} accent="#7c3aed" padding="md" hover>
         <div className="w-full mt-1" style={{ height: Math.max(160, campaignPerformance.length * 48) }}>
           {campaignPerformance.length > 0 ? (
             <ResponsiveContainer width="100%" height="100%">
@@ -422,7 +458,7 @@ export default function DashboardView({
                 <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#f1f5f9" />
                 <XAxis type="number" stroke="#94a3b8" fontSize={11} tickLine={false} axisLine={false} allowDecimals={false} />
                 <YAxis type="category" dataKey="campaign" stroke="#94a3b8" fontSize={11} tickLine={false} axisLine={false} width={140} />
-                <Tooltip {...CHART_TOOLTIP} />
+                <Tooltip content={<CampaignPerformanceTooltip />} />
                 <Legend wrapperStyle={{ fontSize: 11 }} />
                 {OUTCOME_ORDER.map(outcome => (
                   <Bar key={outcome} dataKey={outcome} name={outcome} stackId="outcome" fill={OUTCOME_COLORS[outcome]} radius={outcome === OUTCOME_ORDER[OUTCOME_ORDER.length - 1] ? [0, 3, 3, 0] : undefined} />
@@ -431,25 +467,6 @@ export default function DashboardView({
             </ResponsiveContainer>
           ) : (
             <EmptyState heading="No campaign calls yet" message="Run a dialing task from Campaign to see performance here." />
-          )}
-        </div>
-      </Widget>
-
-      {/* Success Rate by Campaign — same counts as Campaign Performance, expressed as one rate per workflow */}
-      <Widget colSpan={4} title="Success Rate by Campaign" subtitle="% answered, last 30 days." icon={Flame} accent="#059669" padding="md" hover>
-        <div className="w-full mt-1" style={{ height: Math.max(160, successRateByCampaign.length * 32) }}>
-          {successRateByCampaign.length > 0 ? (
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={successRateByCampaign} layout="vertical" margin={{ top: 8, right: 24, left: 8, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#f1f5f9" />
-                <XAxis type="number" domain={[0, 100]} unit="%" stroke="#94a3b8" fontSize={11} tickLine={false} axisLine={false} />
-                <YAxis type="category" dataKey="campaign" stroke="#94a3b8" fontSize={11} tickLine={false} axisLine={false} width={110} />
-                <Tooltip {...CHART_TOOLTIP} formatter={(v: number) => [`${v}%`, 'Success Rate']} />
-                <Bar dataKey="rate" name="Success Rate" fill="#059669" radius={[0, 3, 3, 0]} barSize={16} />
-              </BarChart>
-            </ResponsiveContainer>
-          ) : (
-            <EmptyState heading="No campaign calls yet" />
           )}
         </div>
       </Widget>
@@ -471,28 +488,6 @@ export default function DashboardView({
             </ResponsiveContainer>
           ) : (
             <EmptyState heading="No campaign calls yet" message="Run a dialing task from Campaign to see agent performance here." />
-          )}
-        </div>
-      </Widget>
-
-      {/* Call Outcomes Over Time — same daily buckets as Call Volume, split by outcome */}
-      <Widget colSpan={12} title="Call Outcomes Over Time" subtitle="Daily outcome breakdown, last 30 days." icon={Activity} accent="#2563eb" padding="md" hover>
-        <div className="h-64 w-full mt-1">
-          {outcomesOverTime.length > 0 ? (
-            <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={outcomesOverTime} margin={{ top: 8, right: 8, left: -20, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                <XAxis dataKey="period" stroke="#94a3b8" fontSize={11} tickLine={false} />
-                <YAxis stroke="#94a3b8" fontSize={11} tickLine={false} axisLine={false} allowDecimals={false} />
-                <Tooltip {...CHART_TOOLTIP} />
-                <Legend wrapperStyle={{ fontSize: 11 }} />
-                {OUTCOME_ORDER.map(outcome => (
-                  <Line key={outcome} type="monotone" dataKey={outcome} name={outcome} stroke={OUTCOME_COLORS[outcome]} strokeWidth={2} dot={false} connectNulls />
-                ))}
-              </LineChart>
-            </ResponsiveContainer>
-          ) : (
-            <EmptyState heading="No calls in the last 30 days" />
           )}
         </div>
       </Widget>
