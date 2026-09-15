@@ -162,16 +162,49 @@ export default function DashboardView({
     return callLogs.filter(c => new Date(c.createdAt) >= cutoff);
   }, [callLogs]);
 
+  // Sentiment counts are nested (not flattened into stackable keys) since
+  // they're shown via the custom tooltip below, not as their own stacked
+  // segments — stacking direction (2 segments) AND sentiment (3-4 more)
+  // in the same bar would be unreadable; the tooltip gives the sentiment
+  // detail without cluttering the chart itself.
   const callVolumeTrend = useMemo(() => {
-    const buckets: Record<string, { period: string; inbound: number; outbound: number }> = {};
+    const buckets: Record<string, { period: string; inbound: number; outbound: number; sentiment: Record<string, number> }> = {};
     for (const c of callsInPeriod) {
       const key = new Date(c.createdAt).toISOString().slice(0, 10);
-      if (!buckets[key]) buckets[key] = { period: key, inbound: 0, outbound: 0 };
+      if (!buckets[key]) buckets[key] = { period: key, inbound: 0, outbound: 0, sentiment: {} };
       if (c.direction === 'inbound') buckets[key].inbound++;
       else if (c.direction === 'outbound') buckets[key].outbound++;
+      const sentiment = c.sentiment || 'Unknown';
+      buckets[key].sentiment[sentiment] = (buckets[key].sentiment[sentiment] || 0) + 1;
     }
     return Object.values(buckets).sort((a, b) => a.period.localeCompare(b.period));
   }, [callsInPeriod]);
+
+  // Custom tooltip for Call Volume Over Time — direction totals plus a
+  // same-day sentiment breakdown, since the bar itself only stacks
+  // Incoming/Outgoing (stacking sentiment in too would be unreadable).
+  function CallVolumeTooltip({ active, payload, label }: { active?: boolean; payload?: { payload: (typeof callVolumeTrend)[number] }[]; label?: string }) {
+    if (!active || !payload?.length) return null;
+    const row = payload[0].payload;
+    const total = row.inbound + row.outbound;
+    return (
+      <div className="rounded-lg px-3 py-2 text-xs" style={CHART_TOOLTIP.contentStyle}>
+        <p className="font-semibold mb-1.5">{label}</p>
+        <div className="space-y-0.5">
+          <p><span style={{ color: '#2563eb' }}>●</span> Incoming: {row.inbound}</p>
+          <p><span style={{ color: '#f97316' }}>●</span> Outgoing: {row.outbound}</p>
+          <p className="opacity-70">Total: {total}</p>
+        </div>
+        {Object.keys(row.sentiment).length > 0 && (
+          <div className="mt-1.5 pt-1.5 border-t border-white/15 space-y-0.5">
+            {Object.entries(row.sentiment).map(([sentiment, count]) => (
+              <p key={sentiment}><span style={{ color: SENTIMENT_COLOR[sentiment] || '#94a3b8' }}>●</span> {sentiment}: {count}</p>
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  }
 
   // Call Outcome donut — every call in the period, bucketed into the same
   // 5 outcomes used everywhere else this concept shows up (Reports' Call
@@ -327,7 +360,7 @@ export default function DashboardView({
       {/* Call volume over time — same chart Reports uses, fixed to the last
           30 days here since this is a glance-at-it overview, not a
           configurable report (see Reports > Report by Task for filters). */}
-      <Widget colSpan={12} title="Call Volume Over Time" subtitle="Incoming vs. outgoing calls, last 30 days." icon={PhoneIncoming} accent="#2563eb" padding="md" hover>
+      <Widget colSpan={12} title="Call Volume Over Time" subtitle="Incoming vs. outgoing calls (stacked), with sentiment on hover — last 30 days." icon={PhoneIncoming} accent="#2563eb" padding="md" hover>
         <div className="h-64 w-full mt-1">
           {callVolumeTrend.length > 0 ? (
             <ResponsiveContainer width="100%" height="100%">
@@ -335,10 +368,10 @@ export default function DashboardView({
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
                 <XAxis dataKey="period" stroke="#94a3b8" fontSize={11} tickLine={false} />
                 <YAxis stroke="#94a3b8" fontSize={11} tickLine={false} axisLine={false} allowDecimals={false} />
-                <Tooltip {...CHART_TOOLTIP} />
+                <Tooltip content={<CallVolumeTooltip />} />
                 <Legend wrapperStyle={{ fontSize: 11 }} />
-                <Bar dataKey="inbound" name="Incoming" fill="#2563eb" radius={[3, 3, 0, 0]} />
-                <Bar dataKey="outbound" name="Outgoing" fill="#f97316" radius={[3, 3, 0, 0]} />
+                <Bar dataKey="inbound" name="Incoming" stackId="calls" fill="#2563eb" />
+                <Bar dataKey="outbound" name="Outgoing" stackId="calls" fill="#f97316" radius={[3, 3, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           ) : (
