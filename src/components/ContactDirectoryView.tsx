@@ -11,12 +11,10 @@ import {
   Check,
   X,
   AlertCircle,
-  DollarSign,
   Phone,
   Mail,
   Building,
   CheckCircle2,
-  Sparkles,
   FolderOpen,
   Settings2
 } from 'lucide-react';
@@ -26,7 +24,6 @@ import { formatPhone } from '../lib/phone';
 import { useRefresh } from '../lib/RefreshContext';
 import PageShell from './ui/PageShell';
 import Widget from './ui/Widget';
-import KpiCard from './ui/KpiCard';
 import Modal from './ui/Modal';
 import FilterBar from './ui/FilterBar';
 import ActionMenu from './ui/ActionMenu';
@@ -170,13 +167,7 @@ export default function ContactDirectoryView({
   // Unique sources for filter dropdown
   const uniqueSources = ['All', ...Array.from(new Set(leads.map((l) => l.source)))];
 
-  // Stats calculation
   const totalContacts = leads.length;
-  const bulkUploadedCount = leads.filter((l) => l.source.includes('CSV') || l.source.includes('Bulk')).length;
-  const avgAmountRequested = leads.length > 0
-    ? Math.round(leads.reduce((acc, l) => acc + l.amountRequested, 0) / leads.length)
-    : 0;
-  const highCreditCount = leads.filter((l) => (l.financialInfo?.creditScore || 0) >= 700).length;
 
   // Handle open individual add modal
   const openAddModal = () => {
@@ -424,23 +415,18 @@ export default function ContactDirectoryView({
       layout="fill"
     >
       <div className="flex-1 flex flex-col overflow-hidden px-8 pb-8 pt-6 gap-6">
-      {/* KPI Stats Cards + Filters — natural height, table below fills the rest */}
+      {/* Filters — total contact count lives here instead of its own KPI
+          card row, to save vertical space. */}
       <div className="grid grid-cols-12 gap-6 shrink-0">
-      <KpiCard colSpan={3} icon={Users} iconBg="#eff6ff" iconColor="#2563eb" label="Total Contacts" value={totalContacts} />
-      <KpiCard colSpan={3} icon={FileSpreadsheet} iconBg="#f0fdf4" iconColor="#16a34a" label="Bulk Imported" value={bulkUploadedCount} />
-      {isLending ? (
-        <>
-          <KpiCard colSpan={3} icon={DollarSign} iconBg="#eef2ff" iconColor="#4f46e5" label="Avg Loan Req." value={`$${avgAmountRequested.toLocaleString()}`} />
-          <KpiCard colSpan={3} icon={Sparkles} iconBg="#faf5ff" iconColor="#9333ea" label="Prime Credit (700+)" value={highCreditCount} />
-        </>
-      ) : (
-        <KpiCard colSpan={6} icon={FileSpreadsheet} iconBg="#f0fdf4" iconColor="#16a34a" label="Manual Entries" value={totalContacts - bulkUploadedCount} />
-      )}
-
-      {/* Searching & Filters Grid */}
       <Widget showHeader={false} padding="md" colSpan={12}>
         <FilterBar
           search={{ value: searchTerm, onChange: setSearchTerm, placeholder: 'Search contacts by name, email, phone number, employer…' }}
+          actions={
+            <div className="flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-slate-500 whitespace-nowrap">
+              <Users className="h-3.5 w-3.5 text-blue-600" />
+              {totalContacts} Total Contact{totalContacts === 1 ? '' : 's'}
+            </div>
+          }
           selects={[
             {
               key: 'source',
