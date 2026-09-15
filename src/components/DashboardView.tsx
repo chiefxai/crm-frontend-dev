@@ -36,6 +36,10 @@ import DataTable, { Column } from './ui/DataTable';
 interface DashboardDialTask {
   id: string;
   workflowName?: string;
+  // Despite the name, this is the wizard-selected AI calling agent's id
+  // (org_agents), not a human team member — same field DialerSimulator.tsx
+  // uses to resolve which agent placed a campaign's calls.
+  assignedTeamMemberId?: string;
   callResults: Record<string, { status: string; callAnswered?: boolean }>;
 }
 
@@ -124,6 +128,7 @@ export default function DashboardView({
 }: DashboardViewProps) {
   const [metrics, setMetrics] = useState<DashboardMetrics | null>(null);
   const [enquiriesTotal, setEnquiriesTotal] = useState<number | null>(null);
+  const [agentNames, setAgentNames] = useState<Record<string, string>>({});
 
   const loadMetrics = () => {
     apiFetch('/api/dashboard/metrics')
@@ -136,6 +141,14 @@ export default function DashboardView({
       .then(r => { if (!r.ok) throw new Error(); return r.json(); })
       .then((data: { total?: number }) => setEnquiriesTotal(data.total ?? 0))
       .catch(err => console.error('Failed to load enquiries total:', err));
+    // Just for id -> name resolution (Agent Performance) — dialerTasks
+    // only carries the agent's id (assignedTeamMemberId).
+    apiFetch('/api/agents')
+      .then(r => { if (!r.ok) throw new Error(); return r.json(); })
+      .then((data: { id: string; name: string }[]) => {
+        setAgentNames(Object.fromEntries((Array.isArray(data) ? data : []).map(a => [a.id, a.name])));
+      })
+      .catch(err => console.error('Failed to load agents:', err));
   };
 
   useEffect(loadMetrics, [leads.length, loans.length, callLogs.length]);
@@ -241,6 +254,46 @@ export default function DashboardView({
       .slice(0, 8);
   }, [dialerTasks]);
 
+  // Success Rate by Campaign — same underlying counts as Campaign
+  // Performance above, just expressed as one rate per workflow instead of
+  // a stacked outcome breakdown.
+  const successRateByCampaign = useMemo(() => {
+    return campaignPerformance
+      .map(row => ({
+        campaign: row.campaign,
+        rate: row.total > 0 ? Math.round(((row['Answered'] || 0) / row.total) * 100) : 0,
+      }))
+      .sort((a, b) => b.rate - a.rate);
+  }, [campaignPerformance]);
+
+  // Agent Performance — which AI calling agent placed each campaign call
+  // (dialerTasks.assignedTeamMemberId, despite the name — see
+  // DashboardDialTask above), total vs. successfully-answered. A task with
+  // no agent assigned falls into "Unassigned" rather than being dropped,
+  // since that itself is worth surfacing (a campaign nobody configured an
+  // agent for).
+  const agentPerformance = useMemo(() => {
+    const byAgent: Record<string, { total: number; success: number }> = {};
+    for (const task of dialerTasks) {
+      const agentId = task.assignedTeamMemberId || 'unassigned';
+      for (const result of Object.values(task.callResults || {})) {
+        if (!result?.status) continue;
+        if (!byAgent[agentId]) byAgent[agentId] = { total: 0, success: 0 };
+        byAgent[agentId].total++;
+        if (getCallOutcome(result.status, result.callAnswered) === 'Answered') byAgent[agentId].success++;
+      }
+    }
+    return Object.entries(byAgent)
+      .map(([agentId, { total, success }]) => ({
+        agent: agentId === 'unassigned' ? 'Unassigned' : (agentNames[agentId] || 'Unknown Agent'),
+        total,
+        success,
+        notSuccess: total - success,
+      }))
+      .sort((a, b) => b.total - a.total)
+      .slice(0, 8);
+  }, [dialerTasks, agentNames]);
+
   // Call Outcomes Over Time — same daily buckets as Call Volume, but split
   // by outcome instead of direction.
   const outcomesOverTime = useMemo(() => {
@@ -315,48 +368,6 @@ export default function DashboardView({
 
       {/* ── Row 2: Charts ── */}
 
-      {/* Bar chart — leads by source / pipeline stage */}
-      <Widget
-        colSpan={12}
-        title={isLending ? 'Leads by Source' : `${primaryObject?.objectLabel || 'Pipeline'} by Stage`}
-        subtitle={isLending ? 'How your leads are actually arriving.' : 'Where records currently sit in the pipeline.'}
-        icon={Activity}
-        accent="#7c3aed"
-        padding="md"
-        hover
-      >
-        <div className="h-64 w-full mt-1">
-          {isLending
-            ? metrics?.channelPerformance && metrics.channelPerformance.length > 0
-              ? (
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={metrics.channelPerformance} margin={{ top: 8, right: 8, left: -20, bottom: 0 }}>
-                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                    <XAxis dataKey="source" stroke="#94a3b8" fontSize={11} tickLine={false} />
-                    <YAxis stroke="#94a3b8" fontSize={11} tickLine={false} axisLine={false} />
-                    <Tooltip {...CHART_TOOLTIP} />
-                    <Bar dataKey="count" name="Leads" fill="#7c3aed" radius={[4, 4, 0, 0]} barSize={22} />
-                  </BarChart>
-                </ResponsiveContainer>
-              )
-              : <EmptyState heading="No leads yet" />
-            : primaryObject?.stageDistribution && primaryObject.stageDistribution.length > 0
-              ? (
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={primaryObject.stageDistribution} margin={{ top: 8, right: 8, left: -20, bottom: 0 }}>
-                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                    <XAxis dataKey="stage" stroke="#94a3b8" fontSize={11} tickLine={false} />
-                    <YAxis stroke="#94a3b8" fontSize={11} tickLine={false} axisLine={false} />
-                    <Tooltip {...CHART_TOOLTIP} />
-                    <Bar dataKey="count" name="Records" fill="#7c3aed" radius={[4, 4, 0, 0]} barSize={22} />
-                  </BarChart>
-                </ResponsiveContainer>
-              )
-              : <EmptyState heading="No pipeline stages configured yet" />
-          }
-        </div>
-      </Widget>
-
       {/* Call volume over time — same chart Reports uses, fixed to the last
           30 days here since this is a glance-at-it overview, not a
           configurable report (see Reports > Report by Task for filters). */}
@@ -420,6 +431,46 @@ export default function DashboardView({
             </ResponsiveContainer>
           ) : (
             <EmptyState heading="No campaign calls yet" message="Run a dialing task from Campaign to see performance here." />
+          )}
+        </div>
+      </Widget>
+
+      {/* Success Rate by Campaign — same counts as Campaign Performance, expressed as one rate per workflow */}
+      <Widget colSpan={4} title="Success Rate by Campaign" subtitle="% answered, last 30 days." icon={Flame} accent="#059669" padding="md" hover>
+        <div className="w-full mt-1" style={{ height: Math.max(160, successRateByCampaign.length * 32) }}>
+          {successRateByCampaign.length > 0 ? (
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={successRateByCampaign} layout="vertical" margin={{ top: 8, right: 24, left: 8, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#f1f5f9" />
+                <XAxis type="number" domain={[0, 100]} unit="%" stroke="#94a3b8" fontSize={11} tickLine={false} axisLine={false} />
+                <YAxis type="category" dataKey="campaign" stroke="#94a3b8" fontSize={11} tickLine={false} axisLine={false} width={110} />
+                <Tooltip {...CHART_TOOLTIP} formatter={(v: number) => [`${v}%`, 'Success Rate']} />
+                <Bar dataKey="rate" name="Success Rate" fill="#059669" radius={[0, 3, 3, 0]} barSize={16} />
+              </BarChart>
+            </ResponsiveContainer>
+          ) : (
+            <EmptyState heading="No campaign calls yet" />
+          )}
+        </div>
+      </Widget>
+
+      {/* Agent Performance — total vs. successfully-answered calls per AI calling agent */}
+      <Widget colSpan={12} title="Agent Performance" subtitle="Total calls vs. successfully answered, per AI calling agent, last 30 days." icon={UserCheck} accent="#2563eb" padding="md" hover>
+        <div className="w-full mt-1" style={{ height: Math.max(160, agentPerformance.length * 48) }}>
+          {agentPerformance.length > 0 ? (
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={agentPerformance} layout="vertical" margin={{ top: 8, right: 8, left: 8, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#f1f5f9" />
+                <XAxis type="number" stroke="#94a3b8" fontSize={11} tickLine={false} axisLine={false} allowDecimals={false} />
+                <YAxis type="category" dataKey="agent" stroke="#94a3b8" fontSize={11} tickLine={false} axisLine={false} width={140} />
+                <Tooltip {...CHART_TOOLTIP} />
+                <Legend wrapperStyle={{ fontSize: 11 }} />
+                <Bar dataKey="success" name="Answered" stackId="agent" fill="#059669" />
+                <Bar dataKey="notSuccess" name="Not Answered / No Answer" stackId="agent" fill="#e11d48" radius={[0, 3, 3, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          ) : (
+            <EmptyState heading="No campaign calls yet" message="Run a dialing task from Campaign to see agent performance here." />
           )}
         </div>
       </Widget>

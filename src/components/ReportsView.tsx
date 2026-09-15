@@ -1,18 +1,30 @@
 import { useEffect, useMemo, useState, ReactNode } from 'react';
 import { apiFetch } from '../lib/api';
-import { PhoneOutgoing, Clock, DollarSign, Smile, CheckCircle2, ListChecks, FileDown, Download, FileText, Phone, Flame } from 'lucide-react';
+import { PhoneOutgoing, Clock, DollarSign, Smile, CheckCircle2, ListChecks, FileDown, Download, FileText, Phone, Flame, Activity } from 'lucide-react';
+import { XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, BarChart, Bar } from 'recharts';
 import PageShell from './ui/PageShell';
 import Button from './ui/Button';
 import Widget from './ui/Widget';
 import PieChart from './ui/PieChart';
 import KpiCard from './ui/KpiCard';
 import Badge from './ui/Badge';
+import EmptyState from './ui/EmptyState';
 import SlideOver from './ui/SlideOver';
 import { CallLog } from '../types';
 import { callCostInr, formatInr, COST_PER_MINUTE_INR_FALLBACK } from '../lib/pricing';
 import PrintableReport from './PrintableReport';
 import FilterBar from './ui/FilterBar';
 import DataTable, { Column } from './ui/DataTable';
+
+const CHART_TOOLTIP = {
+  contentStyle: {
+    background: 'var(--tooltip-bg, #1e293b)',
+    border: 'none',
+    borderRadius: 10,
+    color: 'var(--tooltip-text, #f8fafc)',
+    fontSize: 12,
+  },
+};
 
 const SENTIMENT_COLOR: Record<string, string> = {
   Positive: '#059669',
@@ -71,10 +83,21 @@ interface ReportsViewProps {
   leads: { id: string; name: string; phone: string }[];
   costPerMinuteInr?: number;
   orgName?: string;
+  // Drives Leads by Source vs. "<object> by Stage" below — same isLending
+  // switch Executive Desk used before this widget moved here.
+  industry?: string;
 }
 
 // Moved here from the Executive Desk — same /api/dashboard/metrics
 // response, just this one field.
+interface ObjectMetrics {
+  objectKey: string;
+  objectLabel: string;
+  totalRecords: number;
+  stageDistribution: { stage: string; count: number }[];
+  recordsTrend: { month: string; count: number }[];
+}
+
 interface InterestedClient {
   leadId: string;
   name: string;
@@ -117,22 +140,28 @@ function daysAgo(n: number): string {
   return d.toISOString().slice(0, 10);
 }
 
-export default function ReportsView({ callLogs, dialerTasks, leads, costPerMinuteInr = COST_PER_MINUTE_INR_FALLBACK, orgName = 'ChiefXAI' }: ReportsViewProps) {
+export default function ReportsView({ callLogs, dialerTasks, leads, costPerMinuteInr = COST_PER_MINUTE_INR_FALLBACK, orgName = 'ChiefXAI', industry }: ReportsViewProps) {
+  const isLending = !industry || industry === 'lending';
   const [direction, setDirection] = useState<DirectionFilter>('all');
   const [granularity, setGranularity] = useState<Granularity>('day');
   const [fromDate, setFromDate] = useState(daysAgo(30));
   const [toDate, setToDate] = useState(daysAgo(0));
   const [selectedTaskId, setSelectedTaskId] = useState<string>('');
 
-  // Interested Clients — moved here from Executive Desk; same
-  // /api/dashboard/metrics call that page used to make, just for this one
-  // field, fetched independently of everything else on this page.
+  // Interested Clients + Leads by Source — both moved here from Executive
+  // Desk; same /api/dashboard/metrics call that page used to make.
   const [topInterestedClients, setTopInterestedClients] = useState<InterestedClient[]>([]);
+  const [channelPerformance, setChannelPerformance] = useState<{ source: string; count: number }[]>([]);
+  const [primaryObject, setPrimaryObject] = useState<ObjectMetrics | null>(null);
   useEffect(() => {
     apiFetch('/api/dashboard/metrics')
       .then(r => { if (!r.ok) throw new Error(); return r.json(); })
-      .then((data: { topInterestedClients?: InterestedClient[] }) => setTopInterestedClients(data.topInterestedClients ?? []))
-      .catch(err => console.error('Failed to load interested clients:', err));
+      .then((data: { topInterestedClients?: InterestedClient[]; channelPerformance?: { source: string; count: number }[]; objectMetrics?: ObjectMetrics[] }) => {
+        setTopInterestedClients(data.topInterestedClients ?? []);
+        setChannelPerformance(data.channelPerformance ?? []);
+        setPrimaryObject(data.objectMetrics?.[0] ?? null);
+      })
+      .catch(err => console.error('Failed to load dashboard metrics:', err));
   }, []);
 
   // Default to the most recently created task instead of an empty/org-wide
@@ -423,6 +452,49 @@ export default function ReportsView({ callLogs, dialerTasks, leads, costPerMinut
               </>
             }
           />
+        </Widget>
+
+        {/* Leads by Source / Pipeline by Stage — moved here from Executive
+            Desk, same /api/dashboard/metrics data. */}
+        <Widget
+          colSpan={12}
+          title={isLending ? 'Leads by Source' : `${primaryObject?.objectLabel || 'Pipeline'} by Stage`}
+          subtitle={isLending ? 'How your leads are actually arriving.' : 'Where records currently sit in the pipeline.'}
+          icon={Activity}
+          accent="#7c3aed"
+          padding="md"
+          hover
+        >
+          <div className="h-64 w-full mt-1">
+            {isLending
+              ? channelPerformance.length > 0
+                ? (
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={channelPerformance} margin={{ top: 8, right: 8, left: -20, bottom: 0 }}>
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                      <XAxis dataKey="source" stroke="#94a3b8" fontSize={11} tickLine={false} />
+                      <YAxis stroke="#94a3b8" fontSize={11} tickLine={false} axisLine={false} />
+                      <RechartsTooltip {...CHART_TOOLTIP} />
+                      <Bar dataKey="count" name="Leads" fill="#7c3aed" radius={[4, 4, 0, 0]} barSize={22} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                )
+                : <EmptyState heading="No leads yet" />
+              : primaryObject?.stageDistribution && primaryObject.stageDistribution.length > 0
+                ? (
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={primaryObject.stageDistribution} margin={{ top: 8, right: 8, left: -20, bottom: 0 }}>
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                      <XAxis dataKey="stage" stroke="#94a3b8" fontSize={11} tickLine={false} />
+                      <YAxis stroke="#94a3b8" fontSize={11} tickLine={false} axisLine={false} />
+                      <RechartsTooltip {...CHART_TOOLTIP} />
+                      <Bar dataKey="count" name="Records" fill="#7c3aed" radius={[4, 4, 0, 0]} barSize={22} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                )
+                : <EmptyState heading="No pipeline stages configured yet" />
+            }
+          </div>
         </Widget>
 
         {/* Sentiment breakdown — for the selected task's calls */}

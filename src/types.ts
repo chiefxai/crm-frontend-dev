@@ -222,6 +222,10 @@ export interface OrganizationSettings {
   riskProfile?: 'Conservative' | 'Moderate' | 'Aggressive';
   companyBio?: string;
   verificationStatus?: 'Unverified' | 'Pending' | 'Verified';
+  // Drives the isLending branch throughout the app (Dashboard, Reports,
+  // Contact Directory's Underwriting fields, etc.) — was missing from this
+  // type despite being read live in several places (App.tsx, DashboardView).
+  industry?: string;
   // Which outbound number the Voice Simulator's dialer defaults to. Was
   // previously plain React state in DialerSimulator.tsx with no
   // persistence at all — reset to the first dialable number on every
