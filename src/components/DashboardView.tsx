@@ -4,12 +4,10 @@ import {
   PhoneIncoming,
   DollarSign,
   UserCheck,
-  RefreshCw,
   Clock,
   Flame,
   Phone,
   Activity,
-  Sparkles,
 } from 'lucide-react';
 import {
   AreaChart,
@@ -28,11 +26,9 @@ import { Lead, Loan, CallLog, OrganizationSettings } from '../types';
 import { COST_PER_MINUTE_INR_FALLBACK, formatInr, callCostInr } from '../lib/pricing';
 import PageShell from './ui/PageShell';
 import Widget from './ui/Widget';
-import Button from './ui/Button';
 import DataTable, { Column } from './ui/DataTable';
 import EmptyState from './ui/EmptyState';
 import KpiCard from './ui/KpiCard';
-import Markdown from './ui/Markdown';
 
 interface DashboardViewProps {
   leads: Lead[];
@@ -103,9 +99,6 @@ export default function DashboardView({
   orgSettings,
   costPerMinuteInr = COST_PER_MINUTE_INR_FALLBACK,
 }: DashboardViewProps) {
-  const [insights, setInsights] = useState('');
-  const [insightsDegraded, setInsightsDegraded] = useState(false);
-  const [loadingInsights, setLoadingInsights] = useState(false);
   const [metrics, setMetrics] = useState<DashboardMetrics | null>(null);
 
   const loadMetrics = () => {
@@ -116,32 +109,6 @@ export default function DashboardView({
   };
 
   useEffect(loadMetrics, [leads.length, loans.length, callLogs.length]);
-
-  const fetchAIInsights = async () => {
-    setLoadingInsights(true);
-    setInsights('');
-    try {
-      const res = await fetch('/api/gemini/insights', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ leads, loans, platformMode: orgSettings.industry || 'lending' }),
-      });
-      const data = await res.json();
-      if (data.success) {
-        setInsights(data.insights);
-        setInsightsDegraded(!!data.degraded);
-      } else {
-        setInsights('Could not generate insights at this moment.');
-        setInsightsDegraded(false);
-      }
-    } catch {
-      setInsights('Simulation Server Offline: Defaulting to standard credit metrics.');
-    } finally {
-      setLoadingInsights(false);
-    }
-  };
-
-  useEffect(() => { fetchAIInsights(); }, [leads.length, loans.length]);
 
   const isLending = !orgSettings.industry || orgSettings.industry === 'lending';
   const primaryObject = metrics?.objectMetrics?.[0] || null;
@@ -456,79 +423,6 @@ export default function DashboardView({
         />
       </Widget>
 
-      {/* ── Row 4: Gemini Strategic Advisory ── */}
-      <Widget
-        colSpan={12}
-        title="Gemini Strategic Advisory Engine"
-        subtitle="Real-time AI portfolio analysis generated dynamically based on active CRM pipeline leads"
-        icon={Sparkles}
-        accent="#2563eb"
-        action={
-          <div className="flex items-center gap-3">
-            <span className="flex items-center gap-1.5 text-xs font-medium text-emerald-500">
-              <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
-              Advisor Online
-            </span>
-            <Button
-              icon={RefreshCw}
-              variant="secondary"
-              size="sm"
-              loading={loadingInsights}
-              onClick={fetchAIInsights}
-            >
-              Refresh AI Model
-            </Button>
-          </div>
-        }
-        padding="md"
-        className="theme-panel border relative overflow-hidden"
-      >
-        {/* Glow */}
-        <div className="absolute -bottom-12 -right-12 w-64 h-64 bg-blue-600/10 rounded-full blur-3xl pointer-events-none" />
-
-        <div className="relative z-10 space-y-5">
-          {/* AI insights body */}
-          {loadingInsights ? (
-            <div className="space-y-2.5 py-2">
-              <div className="h-3.5 rounded-md animate-pulse w-3/4" style={{ background: 'var(--panel-surface)' }} />
-              <div className="h-3.5 rounded-md animate-pulse w-5/6" style={{ background: 'var(--panel-surface)' }} />
-              <div className="h-3.5 rounded-md animate-pulse w-1/2" style={{ background: 'var(--panel-surface)' }} />
-            </div>
-          ) : (
-            <div
-              className="leading-relaxed text-xs p-5 rounded-xl"
-              style={{ color: 'var(--panel-muted)', background: 'var(--panel-surface)', border: '1px solid var(--panel-border)' }}
-            >
-              {insights && insightsDegraded && (
-                <div className="mb-3 flex items-center gap-1.5 text-amber-500 bg-amber-50 border border-amber-200 rounded px-2 py-1 font-sans font-semibold not-italic text-xs">
-                  ⚠ Estimated — AI analysis temporarily unavailable, showing a generic brief
-                </div>
-              )}
-              {insights ? (
-                <Markdown variant="panel">{insights}</Markdown>
-              ) : (
-                <span style={{ color: 'var(--panel-text)' }}>
-                  Strategic advice database is empty. Click "Refresh AI Model" to prompt the advisor.
-                </span>
-              )}
-            </div>
-          )}
-
-          {/* Live metrics row */}
-          <div className="grid grid-cols-3 gap-4 pt-4" style={{ borderTop: '1px solid var(--panel-border)' }}>
-            <div className="rounded-xl p-3" style={{ background: 'var(--panel-surface)' }}>
-              <p className="text-[10px] uppercase tracking-wider font-mono" style={{ color: 'var(--panel-muted)' }}>Calls Today</p>
-              <p className="text-lg font-bold mt-1" style={{ color: 'var(--panel-text)' }}>{metrics?.callsToday ?? 0}</p>
-            </div>
-            <div className="rounded-xl p-3" style={{ background: 'var(--panel-surface)' }}>
-              <p className="text-[10px] uppercase tracking-wider font-mono" style={{ color: 'var(--panel-muted)' }}>Average Sentiment</p>
-              <p className="text-lg font-bold text-emerald-500 mt-1">
-                {metrics?.positiveSentimentPct != null ? `Positive (${metrics.positiveSentimentPct}%)` : 'No data yet'}
-              </p>
-            </div>
-          </div>
-        </div>
-      </Widget>
     </PageShell>
   );
 }

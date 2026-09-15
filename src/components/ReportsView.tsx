@@ -24,7 +24,7 @@ type Granularity = 'day' | 'month' | 'year';
 type DirectionFilter = 'all' | 'inbound' | 'outbound';
 
 interface DialTaskCallResult {
-  status: 'Pending' | 'Calling' | 'Completed' | 'No Answer' | 'Skipped';
+  status: 'Pending' | 'Calling' | 'Completed' | 'No Answer' | 'Skipped' | 'Callback Scheduled';
   duration: number;
   sentiment: 'Positive' | 'Neutral' | 'Negative' | 'Unknown';
   intent: 'Interested' | 'Not Interested' | 'Callback Scheduled' | 'Wrong Number' | 'Unknown';
@@ -35,6 +35,7 @@ interface DialTaskCallResult {
   // phone (which returns every answer that number ever gave, across every
   // call/task). Absent on data captured before this field existed.
   callId?: string;
+  callbackTime?: string;
 }
 
 interface DialTask {

@@ -211,14 +211,33 @@ interface DialTask {
   starhealthEnabled?: boolean;
   callResults: {
     [leadId: string]: {
-      status: 'Pending' | 'Calling' | 'Completed' | 'No Answer' | 'Skipped';
+      // "Callback Scheduled" — the caller said they're busy and asked to
+      // be called back; set by the backend (callFinalizer.js) instead of
+      // "Completed" so this lead doesn't read as done. The backend's
+      // dialerRetryEngine.js automatically redials at callbackTime (or a
+      // default delay if the caller was too vague for a specific time),
+      // and flips this same row to "Completed" once that redial actually
+      // reaches them — see callId, which lets the row track which
+      // specific call_logs entry it's currently reflecting.
+      status: 'Pending' | 'Calling' | 'Completed' | 'No Answer' | 'Skipped' | 'Callback Scheduled';
       duration: number;
-      transcript: { speaker: 'AI' | 'Customer'; text: string; timestamp: string }[];
+      // Backend-constructed results (autoDialEngine.js, callFinalizer.js's
+      // task-patch) never populate these two — only ever set when this
+      // component builds the object itself from a live/foreground call.
+      transcript?: { speaker: 'AI' | 'Customer'; text: string; timestamp: string }[];
       sentiment: 'Positive' | 'Neutral' | 'Negative' | 'Unknown';
       intent: 'Interested' | 'Not Interested' | 'Callback Scheduled' | 'Wrong Number' | 'Unknown';
       summary: string;
-      answers: { [question: string]: string };
+      answers?: { [question: string]: string };
       recordingUrl?: string;
+      // Real call_logs id this result reflects — lets a later poll/SSE
+      // update recognize "this is a newer outcome for the same lead" and
+      // which call to look up. Present on backend-constructed results.
+      callId?: string;
+      // Best-effort ISO datetime for when the automatic redial will
+      // happen — present only when status is "Callback Scheduled" and the
+      // caller gave a specific enough time to resolve one.
+      callbackTime?: string;
     }
   };
   // Server-side auto-dial runtime state — set by src/crm/autoDialEngine.js
@@ -619,6 +638,14 @@ Real Tamil speakers do not say the "correct" written form of a word. They contra
           assignedContact: assignedMember ? { name: assignedMember.name, phone: assignedMember.phone } : undefined,
           starhealthEnabled: !!selectedTask?.starhealthEnabled,
           agentId: selectedTask?.assignedTeamMemberId || undefined,
+          // Lets the backend (callFinalizer.js) patch this task's
+          // callResults for this lead directly when the call finishes —
+          // what makes a "call me back later" callback correctly flip
+          // this row from "Callback Scheduled" to "Completed" once the
+          // automatic redial actually reaches them, even though that
+          // happens well after this tab may have moved on or closed.
+          taskId: selectedTask?.id || undefined,
+          leadId: lead.id,
         })
       });
       const data = await res.json();
@@ -695,6 +722,14 @@ Real Tamil speakers do not say the "correct" written form of a word. They contra
           assignedContact: assignedMember ? { name: assignedMember.name, phone: assignedMember.phone } : undefined,
           starhealthEnabled: !!selectedTask?.starhealthEnabled,
           agentId: selectedTask?.assignedTeamMemberId || undefined,
+          // Lets the backend (callFinalizer.js) patch this task's
+          // callResults for this lead directly when the call finishes —
+          // what makes a "call me back later" callback correctly flip
+          // this row from "Callback Scheduled" to "Completed" once the
+          // automatic redial actually reaches them, even though that
+          // happens well after this tab may have moved on or closed.
+          taskId: selectedTask?.id || undefined,
+          leadId: lead.id,
         })
       });
       const data = await res.json();
@@ -807,7 +842,7 @@ Real Tamil speakers do not say the "correct" written form of a word. They contra
   // player always showed "No recording available" even though the call
   // really was recorded: this function only ever wrote the local
   // simulated timer/transcript, never the real Supabase-hosted recording URL.
-  const handleHangupCall = (realCallLog?: { recordingUrl?: string; duration?: number; sentiment?: string; summary?: string; callId?: string; transcript?: { speaker: 'AI' | 'Customer'; text: string; timestamp: string }[]; answers?: { label?: string; question: string; answer: string }[] }) => {
+  const handleHangupCall = (realCallLog?: { recordingUrl?: string; duration?: number; sentiment?: string; summary?: string; callId?: string; transcript?: { speaker: 'AI' | 'Customer'; text: string; timestamp: string }[]; answers?: { label?: string; question: string; answer: string }[]; status?: string; callbackTime?: string }) => {
     if (!activeLead) return;
     setCallState('completed');
 
@@ -819,11 +854,24 @@ Real Tamil speakers do not say the "correct" written form of a word. They contra
 
     const summaryText = `Daily Task Call [${selectedTask.name}]. Customer responded with ${currentSentiment} sentiment and ${currentIntent} intent.\n\nAssigned Questionnaire Responses:\n${answersText || 'No answers collected.'}`;
 
+    // Real calls carry their actual outcome from the backend — "Callback
+    // Scheduled" must survive here instead of being forced to "Completed"
+    // the way this used to unconditionally do, or a lead the caller asked
+    // to be called back later would show as done. Simulation-mode calls
+    // (no realCallLog at all) have no such backend status, so those still
+    // default to "Completed" exactly as before.
+    const realCallLogStatus = realCallLog?.status === 'Callback Scheduled' ? 'Callback Scheduled' as const : 'Completed' as const;
+
     // Update results inside selected task
     const updatedTasks = tasks.map((task) => {
       if (task.id === selectedTask.id) {
+        // A "Callback Scheduled" outcome (see realCallLogStatus below)
+        // deliberately does NOT count as dialed here — the lead isn't
+        // done, it's holding for an automatic redial the backend will
+        // place later (services/dialerRetryEngine.js), which is exactly
+        // what should keep the task itself out of "Completed" too.
         const isAllLeadsDialed = task.leadIds.every((lId) => {
-          if (lId === activeLead.id) return true;
+          if (lId === activeLead.id) return realCallLogStatus !== 'Callback Scheduled';
           return task.callResults[lId]?.status === 'Completed';
         });
 
@@ -833,7 +881,7 @@ Real Tamil speakers do not say the "correct" written form of a word. They contra
           callResults: {
             ...task.callResults,
             [activeLead.id]: {
-              status: 'Completed' as const,
+              status: realCallLogStatus,
               duration: realCallLog?.duration ?? duration,
               // Real AI-driven outbound calls never go through the manual
               // simulation input flow that fills the local `transcript`
@@ -860,7 +908,8 @@ Real Tamil speakers do not say the "correct" written form of a word. They contra
               // this is the one precise way to fetch THIS call's actual
               // answers instead of guessing by phone (which returns every
               // answer that phone number ever gave, across every call).
-              callId: realCallLog?.callId
+              callId: realCallLog?.callId,
+              callbackTime: realCallLog?.callbackTime,
             }
           }
         };
@@ -1189,23 +1238,31 @@ Currently on question ${nextIndex} out of ${selectedTask.questions.length}. Next
       // shared CallLog type declares `answers` as a plain string map for
       // other (non-workflow) callers of that type, so it's re-asserted here.
       answers: match.answers as unknown as { label?: string; question: string; answer: string }[] | undefined,
+      status: match.status,
+      callbackTime: match.callbackTime,
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [callLogs, callState, activeLead, vobizCallSid, twilioCallSid, piopiyCallSid]);
 
   if (playingTapeId && activeTapeResult) {
     const isOutbound = playingTapeType === 'outbound';
+    // activeTapeResult is a CallLog when inbound (from realInboundCallLogs)
+    // or a dialer-task callResults entry when outbound — the two don't
+    // share leadName/createdAt, so every access below is guarded by
+    // isOutbound at runtime; this cast just tells TS what that guard
+    // already guarantees instead of it widening to the union.
+    const inboundLog = !isOutbound ? (activeTapeResult as CallLog) : null;
     const displayTitle = isOutbound && activeTapeLead
       ? `${activeTapeLead.name} Call Analysis`
-      : `${activeTapeResult.leadName} Inbound Call Analysis`;
+      : `${inboundLog?.leadName} Inbound Call Analysis`;
 
     const displaySubtitle = isOutbound
       ? `Campaign: ${selectedTask.name}`
-      : `Caller: ${activeTapeResult.leadName} • Recorded ${new Date(activeTapeResult.createdAt).toLocaleString()}`;
+      : `Caller: ${inboundLog?.leadName} • Recorded ${inboundLog ? new Date(inboundLog.createdAt).toLocaleString() : ''}`;
 
     const filename = isOutbound && activeTapeLead
       ? `📼 ${activeTapeLead.name.toUpperCase()}_recording.wav`
-      : `📼 ${String(activeTapeResult.leadName).toUpperCase()}_inbound_recording.wav`;
+      : `📼 ${String(inboundLog?.leadName).toUpperCase()}_inbound_recording.wav`;
 
     return (
       <div id="voice-agent-dialer" className="p-6 md:p-8 space-y-6 overflow-y-auto h-screen w-full font-sans bg-[var(--bg-subtle)]/50 text-[var(--text-primary)] animate-fadeIn flex flex-col">
@@ -1349,7 +1406,7 @@ Currently on question ${nextIndex} out of ${selectedTask.questions.length}. Next
                   const isAI = line.speaker === 'AI';
                   const speakerLabel = isAI
                     ? `🤖 AI ${agentDisplayName}`
-                    : `👤 ${isOutbound && activeTapeLead ? activeTapeLead.name : activeTapeResult.leadName}`;
+                    : `👤 ${isOutbound && activeTapeLead ? activeTapeLead.name : inboundLog?.leadName}`;
                   return (
                     <div key={idx} className="flex flex-col" style={{ alignItems: isAI ? 'flex-start' : 'flex-end' }}>
                       <div className="flex items-center space-x-1.5 mb-1.5 text-[9px] text-[var(--text-muted)] font-mono">
@@ -1423,7 +1480,7 @@ Currently on question ${nextIndex} out of ${selectedTask.questions.length}. Next
                 <div className="space-y-3.5 text-xs">
                   <div>
                     <span className="text-[var(--text-muted)] font-medium block">Caller Number</span>
-                    <span className="font-mono font-bold text-[var(--text-secondary)] block mt-0.5">{activeTapeResult.leadName}</span>
+                    <span className="font-mono font-bold text-[var(--text-secondary)] block mt-0.5">{inboundLog?.leadName}</span>
                   </div>
                   <div>
                     <span className="text-[var(--text-muted)] font-medium block">Status</span>
@@ -1435,7 +1492,7 @@ Currently on question ${nextIndex} out of ${selectedTask.questions.length}. Next
                   </div>
                   <div>
                     <span className="text-[var(--text-muted)] font-medium block">Recording Date</span>
-                    <span className="font-mono text-[var(--text-secondary)] block mt-0.5">{new Date(activeTapeResult.createdAt).toLocaleString()}</span>
+                    <span className="font-mono text-[var(--text-secondary)] block mt-0.5">{inboundLog ? new Date(inboundLog.createdAt).toLocaleString() : ''}</span>
                   </div>
                 </div>
               </div>
@@ -1654,15 +1711,26 @@ Currently on question ${nextIndex} out of ${selectedTask.questions.length}. Next
                             Call Active
                           </span>
                         ) : result ? (
-                          <span className={`inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-md ${
-                            result.status === 'Completed'
-                              ? 'bg-emerald-50 text-emerald-700 border border-emerald-100'
-                              : result.status === 'Skipped'
-                              ? 'bg-[var(--bg-subtle)] text-[var(--text-muted)]'
-                              : 'bg-[var(--bg-subtle)] text-[var(--text-secondary)]'
-                          }`}>
-                            {result.status}
-                          </span>
+                          <>
+                            <span className={`inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-md ${
+                              result.status === 'Completed'
+                                ? 'bg-emerald-50 text-emerald-700 border border-emerald-100'
+                                : result.status === 'Skipped'
+                                ? 'bg-[var(--bg-subtle)] text-[var(--text-muted)]'
+                                : result.status === 'Callback Scheduled'
+                                ? 'bg-amber-50 text-amber-700 border border-amber-200'
+                                : 'bg-[var(--bg-subtle)] text-[var(--text-secondary)]'
+                            }`}>
+                              {result.status === 'Callback Scheduled' ? 'Upcoming' : result.status}
+                            </span>
+                            {result.status === 'Callback Scheduled' && (
+                              <p className="text-[9px] text-amber-600 mt-1">
+                                {result.callbackTime
+                                  ? `Callback: ${new Date(result.callbackTime).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}`
+                                  : 'Callback time not specified — will retry soon'}
+                              </p>
+                            )}
+                          </>
                         ) : (
                           <span className="inline-flex items-center gap-1 text-[10px] font-medium text-[var(--text-muted)] bg-[var(--bg-subtle)] px-2 py-0.5 rounded-md">
                             Pending Dial

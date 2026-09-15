@@ -86,7 +86,11 @@ export interface CallLog {
   callerNumber?: string;
   campaignId?: string;
   duration: number; // in seconds
-  status: 'Completed' | 'Failed' | 'Busy' | 'In Progress';
+  // "Callback Scheduled" — the caller said they were busy and asked for a
+  // callback; the backend (callFinalizer.js) sets this instead of
+  // "Completed" and schedules an automatic redial (see callbackTime
+  // below and services/dialerRetryEngine.js).
+  status: 'Completed' | 'Failed' | 'Busy' | 'In Progress' | 'No Answer' | 'Answering Machine' | 'Callback Scheduled';
   sentiment: 'Positive' | 'Neutral' | 'Negative' | 'Unknown';
   intent: 'Interested' | 'Not Interested' | 'Callback Scheduled' | 'Wrong Number' | 'Unknown';
   transcript: { speaker: 'AI' | 'Customer'; text: string; timestamp: string }[];
@@ -102,6 +106,11 @@ export interface CallLog {
   // "this is MY active call" by exact id instead of comparing phone
   // number strings.
   providerCallSid?: string;
+  // Best-effort ISO datetime for the automatic redial, set only when
+  // status is "Callback Scheduled" and the caller gave a specific enough
+  // time for the backend to resolve one — see
+  // src/ai/postCallAgents.js:extractFollowUp.
+  callbackTime?: string;
 }
 
 export interface LoanDocument {
