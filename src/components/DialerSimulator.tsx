@@ -337,10 +337,6 @@ Real Tamil speakers do not say the "correct" written form of a word. They contra
   const [vobizCallSid, setVobizCallSid] = useState<string | null>(null);
   const [piopiyCallSid, setPiopiyCallSid] = useState<string | null>(null);
   const [callState, setCallState] = useState<'idle' | 'dialing' | 'connected' | 'completed'>('idle');
-  // When on, finishing a call automatically dials the next pending lead in
-  // the task instead of requiring "Auto-Dial Next List Target" + "Dial"
-  // clicked separately for every single lead.
-  const [autoDialOn, setAutoDialOn] = useState(false);
   const [duration, setDuration] = useState(0);
   const [transcript, setTranscript] = useState<{ speaker: 'AI' | 'Customer'; text: string; timestamp: string }[]>([]);
   const [customerUtterance, setCustomerUtterance] = useState('');
@@ -1173,54 +1169,6 @@ Currently on question ${nextIndex} out of ${selectedTask.questions.length}. Next
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [callLogs, callState, activeLead, vobizCallSid, twilioCallSid, piopiyCallSid]);
 
-  // Continuous auto-dial: once a call finishes, if autoDialOn is set, move
-  // to the next pending lead and place the call immediately — no manual
-  // "Auto-Dial Next" + "Dial" click pair needed per lead in the list. A
-  // short pause between calls keeps this from looking like a rapid-fire
-  // robo-dialer and gives the UI time to show the "completed" state.
-  useEffect(() => {
-    if (!autoDialOn || callState !== 'completed' || !selectedTask || dialableNumbers.length === 0) return;
-    const nextPendingId = selectedTask.leadIds.find((lId) => {
-      const res = selectedTask.callResults[lId];
-      return !res || res.status === 'Pending';
-    });
-    if (!nextPendingId) {
-      setAutoDialOn(false);
-      return;
-    }
-    const lead = leadsDatabase.find((l) => l.id === nextPendingId);
-    if (!lead) {
-      setAutoDialOn(false);
-      return;
-    }
-    const timer = setTimeout(() => dialLead(lead), 3000);
-    return () => clearTimeout(timer);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [autoDialOn, callState, selectedTask, leadsDatabase, selectedOutboundNumber, dialableNumbers.length]);
-
-  // Kicks off the very first call the moment auto-dial is switched on
-  // (the effect above only reacts to a call *finishing*) — otherwise
-  // turning it on would just sit idle until you manually dialed once.
-  // Picks a pending lead itself if none was already selected.
-  useEffect(() => {
-    if (!autoDialOn || callState !== 'idle' || !selectedTask) return;
-    let lead = activeLead;
-    if (!lead) {
-      const nextPendingId = selectedTask.leadIds.find((lId) => {
-        const res = selectedTask.callResults[lId];
-        return !res || res.status === 'Pending';
-      });
-      lead = nextPendingId ? leadsDatabase.find((l) => l.id === nextPendingId) || null : null;
-    }
-    if (!lead) {
-      setAutoDialOn(false);
-      return;
-    }
-    const timer = setTimeout(() => dialLead(lead as Lead), 500);
-    return () => clearTimeout(timer);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [autoDialOn]);
-
   if (playingTapeId && activeTapeResult) {
     const isOutbound = playingTapeType === 'outbound';
     const displayTitle = isOutbound && activeTapeLead
@@ -1587,14 +1535,14 @@ Currently on question ${nextIndex} out of ${selectedTask.questions.length}. Next
             <div className="bg-slate-50 dark:bg-[var(--bg-subtle)] border border-slate-100 dark:border-[var(--border)] rounded-xl p-4 space-y-2 relative overflow-hidden">
               <div className="absolute -right-8 -bottom-8 w-24 h-24 bg-blue-500/10 rounded-full blur-xl"></div>
               <div className="relative z-10 space-y-1">
-                <span className={`text-[9px] font-mono uppercase tracking-wider font-bold ${autoDialOn ? 'text-emerald-500' : 'text-[var(--text-muted)]'}`}>
-                  Calling Telemetry {autoDialOn && '· LIVE'}
+                <span className={`text-[9px] font-mono uppercase tracking-wider font-bold ${selectedTask?.autoDialEnabled ? 'text-emerald-500' : 'text-[var(--text-muted)]'}`}>
+                  Calling Telemetry {selectedTask?.autoDialEnabled && '· LIVE'}
                 </span>
-                <p className="text-lg font-bold text-[var(--text-primary)]">Continuous Dialer Mode: {autoDialOn ? 'ON' : 'OFF'}</p>
+                <p className="text-lg font-bold text-[var(--text-primary)]">Continuous Dialer Mode: {selectedTask?.autoDialEnabled ? 'ON' : 'OFF'}</p>
                 <p className="text-[10px] leading-normal text-[var(--text-muted)]">
-                  {autoDialOn
-                    ? 'Auto-dialing every pending lead in the active list, one after another — hit "Stop Auto-Dial" to pause after the current call.'
-                    : 'AI parses voice audio stream, converts caller speech to text in real-time, matching questionnaire patterns instantly. Click "Auto-Dial Next List Target" to work through the whole list without clicking Dial per lead.'}
+                  {selectedTask?.autoDialEnabled
+                    ? 'Auto-dialing every pending lead in the active list, one after another, on the server — keeps going even if you close this tab. Hit "Stop Auto-Dial" to pause immediately.'
+                    : 'AI parses voice audio stream, converts caller speech to text in real-time, matching questionnaire patterns instantly. Click "Auto-Dial Next List Target" to work through the whole list on the server without clicking Dial per lead.'}
                 </p>
               </div>
             </div>
@@ -1621,30 +1569,18 @@ Currently on question ${nextIndex} out of ${selectedTask.questions.length}. Next
                 <h3 className="text-lg font-bold text-[var(--text-primary)] uppercase tracking-widest">Active Working List</h3>
               </div>
 
-              <div className="flex flex-wrap items-center gap-2">
-                <Button
-                  variant={autoDialOn ? 'danger' : 'secondary'}
-                  size="sm"
-                  icon={PhoneCall}
-                  onClick={() => setAutoDialOn((v) => !v)}
-                  disabled={dialableNumbers.length === 0}
-                  title={autoDialOn ? 'Stops after the current call finishes (only while this tab stays open)' : 'Dials the next pending lead now, then keeps going through the rest of the list automatically — stops if this tab is closed'}
-                >
-                  {autoDialOn ? 'Stop Auto-Dial' : 'Auto-Dial Next List Target'}
-                </Button>
-                <Button
-                  variant={selectedTask.autoDialEnabled ? 'danger' : 'primary'}
-                  size="sm"
-                  icon={PhoneCall}
-                  disabled={serverAutoDialBusy}
-                  onClick={selectedTask.autoDialEnabled ? handleStopServerAutoDial : handleStartServerAutoDial}
-                  title={selectedTask.autoDialEnabled
-                    ? 'Stops the server from placing any further calls for this task (a call already in progress is left to finish)'
-                    : 'Runs this task on the server — keeps dialing through every pending lead even if you close this tab or the app'}
-                >
-                  {selectedTask.autoDialEnabled ? 'Stop Background Run' : 'Run in Background (Server)'}
-                </Button>
-              </div>
+              <Button
+                variant={selectedTask.autoDialEnabled ? 'danger' : 'primary'}
+                size="sm"
+                icon={PhoneCall}
+                disabled={serverAutoDialBusy || dialableNumbers.length === 0}
+                onClick={selectedTask.autoDialEnabled ? handleStopServerAutoDial : handleStartServerAutoDial}
+                title={selectedTask.autoDialEnabled
+                  ? 'Stops auto-dialing this task — hangs up the current call immediately'
+                  : 'Dials every pending lead in this list automatically, on the server — keeps going even if you close this tab or the app'}
+              >
+                {selectedTask.autoDialEnabled ? 'Stop Auto-Dial' : 'Auto-Dial Next List Target'}
+              </Button>
             </div>
             {selectedTask.autoDialEnabled && (
               <p className="text-[11px] text-emerald-600 dark:text-emerald-400 -mt-2">
