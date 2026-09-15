@@ -1157,8 +1157,8 @@ Currently on question ${nextIndex} out of ${selectedTask.questions.length}. Next
 
   // Server-side auto-dial: the backend (src/crm/autoDialEngine.js) walks
   // the task's lead list on its own polling loop and keeps going even if
-  // this tab is closed, unlike the local "Auto-Dial Next List Target"
-  // toggle above, which stops the instant the browser does. This just
+  // this tab is closed, unlike the local "Start Campaign" toggle above,
+  // which stops the instant the browser does. This just
   // flips the task's auto_dial_enabled flag server-side — the engine does
   // the actual dialing; this component only reflects its progress via the
   // task object refreshing (App.tsx already re-fetches /api/dialer-tasks
@@ -1655,7 +1655,7 @@ Currently on question ${nextIndex} out of ${selectedTask.questions.length}. Next
                 <p className="text-[10px] leading-normal text-[var(--text-muted)]">
                   {selectedTask?.autoDialEnabled
                     ? 'Auto-dialing every pending lead in the active list, one after another, on the server — keeps going even if you close this tab. Hit "Stop Auto-Dial" to pause immediately.'
-                    : 'AI parses voice audio stream, converts caller speech to text in real-time, matching questionnaire patterns instantly. Click "Auto-Dial Next List Target" to work through the whole list on the server without clicking Dial per lead.'}
+                    : 'AI parses voice audio stream, converts caller speech to text in real-time, matching questionnaire patterns instantly. Click "Start Campaign" to work through the whole list on the server without clicking Dial per lead.'}
                 </p>
               </div>
             </div>
@@ -1679,7 +1679,7 @@ Currently on question ${nextIndex} out of ${selectedTask.questions.length}. Next
           <div className="flex flex-col h-full gap-4">
             <div className="shrink-0 flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-[var(--border)] pb-4">
               <div>
-                <h3 className="text-lg font-bold text-[var(--text-primary)] uppercase tracking-widest">Active Working List</h3>
+                <h3 className="text-lg font-bold text-[var(--text-primary)] uppercase tracking-widest">Active Campaign List</h3>
               </div>
 
               <Button
@@ -1692,7 +1692,7 @@ Currently on question ${nextIndex} out of ${selectedTask.questions.length}. Next
                   ? 'Stops auto-dialing this task — hangs up the current call immediately'
                   : 'Dials every pending lead in this list automatically, on the server — keeps going even if you close this tab or the app'}
               >
-                {selectedTask.autoDialEnabled ? 'Stop Auto-Dial' : 'Auto-Dial Next List Target'}
+                {selectedTask.autoDialEnabled ? 'Stop Auto-Dial' : 'Start Campaign'}
               </Button>
             </div>
             {selectedTask.autoDialEnabled && (
