@@ -608,6 +608,18 @@ Real Tamil speakers do not say the "correct" written form of a word. They contra
   };
 
   const handleHangupVobizCall = async () => {
+    // This never actually hung up the real call — it only cleared local
+    // state and ran the local-only synthetic hangup (handleHangupCall with
+    // no args), so clicking "Disconnect Call" on a real Vobiz call left it
+    // running live on Vobiz's side (and Gemini still talking) with no
+    // reflection of that in the UI. Piopiy/Twilio's equivalents both
+    // actually call their provider's /hangup endpoint; this was the one
+    // missing it.
+    if (vobizCallSid) {
+      try {
+        await apiFetch('/api/vobiz/hangup', { method: 'POST', body: JSON.stringify({ callSid: vobizCallSid }) });
+      } catch (err) { console.error('Vobiz hangup failed:', err); }
+    }
     setVobizCallSid(null);
     handleHangupCall();
   };
@@ -1813,7 +1825,7 @@ Currently on question ${nextIndex} out of ${selectedTask.questions.length}. Next
                     size="md"
                     icon={PhoneOff}
                     className="w-full justify-center"
-                    onClick={vobizCallSid ? handleHangupVobizCall : (twilioCallSid ? handleHangupTwilioCall : handleHangupCall)}
+                    onClick={vobizCallSid ? handleHangupVobizCall : twilioCallSid ? handleHangupTwilioCall : piopiyCallSid ? handleHangupPiopiyCall : handleHangupCall}
                   >
                     Disconnect Call (Finish & Save Recording)
                   </Button>
