@@ -1053,15 +1053,22 @@ Currently on question ${nextIndex} out of ${selectedTask.questions.length}. Next
   const processedCallLogIdRef = useRef<string | null>(null);
   useEffect(() => {
     if (callState !== 'connected' || !activeLead) return;
-    // Compare only the last 10 digits (the actual subscriber number),
-    // not the full sanitized string — activeLead.phone and the
-    // callerNumber Vobiz reports back can differ in country-code/leading
-    // formatting (e.g. lead stored as "6384670687" but Vobiz reports
-    // "+916384670687"), which made the previous exact-string comparison
-    // never match: the dialer UI stayed stuck on "connected" forever even
+    // Match by the exact provider call id (Vobiz CallUUID / Twilio CallSid /
+    // Piopiy call id) rather than by phone number — the backend now
+    // broadcasts this on every call_completed event (see callFinalizer.js),
+    // and it's the SAME id already sitting in vobizCallSid/twilioCallSid/
+    // piopiyCallSid the moment this call was placed, so there's no string
+    // formatting to get wrong. Phone-number matching was fundamentally
+    // fragile: activeLead.phone and the callerNumber the provider reports
+    // back can differ in country-code/leading formatting (e.g. lead stored
+    // as "6384670687" but Vobiz reports "+916384670687"), so an exact
+    // string compare — or even a last-10-digits compare, for any lead
+    // stored with a non-Indian or oddly-formatted number — could silently
+    // never match, leaving the dialer UI stuck on "connected" forever even
     // though the backend had already logged the call and broadcast
-    // call_completed. Confirmed via production logs — call_logs row and
-    // broadcast both fired, but this effect's match stayed undefined.
+    // call_completed. Falls back to the old phone-based match only for log
+    // rows that predate this field (no providerCallSid present).
+    const activeCallSid = vobizCallSid || twilioCallSid || piopiyCallSid || null;
     const sanitize = (n: string) => (n || '').replace(/[\s\-\(\)\+]+/g, '').slice(-10);
     const targetPhone = sanitize(activeLead.phone);
     // Scan the most recent entries, not just callLogs[0] — a broadcast for
@@ -1072,12 +1079,15 @@ Currently on question ${nextIndex} out of ${selectedTask.questions.length}. Next
     // this call's real completion broadcast, leaving the dialer UI stuck
     // showing it as active. 10 is comfortably more than could arrive
     // between two polls of this effect in practice.
-    const match = callLogs.slice(0, 10).find((log) =>
-      log.direction === 'outbound' &&
-      processedCallLogIdRef.current !== log.id &&
-      targetPhone.length === 10 &&
-      sanitize(log.callerNumber || log.leadName || '') === targetPhone
-    );
+    const match = callLogs.slice(0, 10).find((log) => {
+      if (processedCallLogIdRef.current === log.id) return false;
+      if (activeCallSid && log.providerCallSid) return log.providerCallSid === activeCallSid;
+      return (
+        log.direction === 'outbound' &&
+        targetPhone.length === 10 &&
+        sanitize(log.callerNumber || log.leadName || '') === targetPhone
+      );
+    });
     if (!match) return;
     processedCallLogIdRef.current = match.id;
     handleHangupCall({
@@ -1093,7 +1103,7 @@ Currently on question ${nextIndex} out of ${selectedTask.questions.length}. Next
       answers: match.answers as unknown as { label?: string; question: string; answer: string }[] | undefined,
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [callLogs, callState, activeLead]);
+  }, [callLogs, callState, activeLead, vobizCallSid, twilioCallSid, piopiyCallSid]);
 
   // Continuous auto-dial: once a call finishes, if autoDialOn is set, move
   // to the next pending lead and place the call immediately — no manual

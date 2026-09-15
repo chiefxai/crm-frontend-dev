@@ -517,7 +517,12 @@ export default function App() {
           } else if (data.type === 'call_completed') {
             setLiveCallBanner(null);
             if (data.callLog) {
-              setCallLogs((prev) => [data.callLog, ...prev]);
+              // providerCallSid rides alongside callLog in the SSE payload
+              // (not inside it) — fold it onto the stored object so
+              // DialerSimulator.tsx can match "this is MY active call" by
+              // the exact provider call id instead of comparing phone
+              // number strings.
+              setCallLogs((prev) => [{ ...data.callLog, providerCallSid: data.providerCallSid }, ...prev]);
             }
             pushNotification('call_completed', `Call completed${data.callLog?.leadName ? ` with ${data.callLog.leadName}` : ''}`);
           } else if (data.message) {
