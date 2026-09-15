@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, ReactNode } from 'react';
 import { apiFetch } from '../lib/api';
-import { PhoneOutgoing, Clock, DollarSign, Smile, CheckCircle2, ListChecks, FileDown, Download, FileText, Phone, Flame, Activity } from 'lucide-react';
+import { PhoneOutgoing, Clock, DollarSign, Smile, CheckCircle2, ListChecks, FileDown, Download, FileText, Phone, Flame, Activity, UserCheck, MessageCircleQuestion } from 'lucide-react';
 import { XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, BarChart, Bar } from 'recharts';
 import PageShell from './ui/PageShell';
 import Button from './ui/Button';
@@ -258,6 +258,30 @@ export default function ReportsView({ callLogs, dialerTasks, leads, costPerMinut
     });
   }, [callLogs, fromDate, toDate, direction]);
 
+  // Page-wide summary KPIs — scoped to the same From/To/Direction filters
+  // as filteredCalls above, NOT to whichever task is selected below (that
+  // row further down stays task-scoped, for "how did this one run do").
+  const periodSummary = useMemo(() => {
+    const totalCalls = filteredCalls.length;
+    const totalTalkTime = filteredCalls.reduce((sum, c) => sum + (c.duration || 0), 0);
+    const avgCallDuration = totalCalls > 0 ? Math.round(totalTalkTime / totalCalls) : 0;
+    const successCalls = filteredCalls.filter(c => c.status === 'Completed' && c.callAnswered !== false).length;
+    const successRate = totalCalls > 0 ? Math.round((successCalls / totalCalls) * 100) : 0;
+    const totalCost = filteredCalls.reduce((sum, c) => sum + callCostInr(c.duration || 0, costPerMinuteInr), 0);
+    return { totalCalls, totalTalkTime, avgCallDuration, successRate, totalCost };
+  }, [filteredCalls, costPerMinuteInr]);
+
+  // Total Enquiries — not date-filterable server-side yet, so this is an
+  // org-wide total rather than scoped to the From/To filters above (same
+  // approach Executive Desk uses for its Enquiries KPI).
+  const [enquiriesTotal, setEnquiriesTotal] = useState<number | null>(null);
+  useEffect(() => {
+    apiFetch('/api/enquiries?page=1&limit=1')
+      .then(r => { if (!r.ok) throw new Error(); return r.json(); })
+      .then((data: { total?: number }) => setEnquiriesTotal(data.total ?? 0))
+      .catch(err => console.error('Failed to load enquiries total:', err));
+  }, []);
+
   const selectedTask = selectedTaskId.startsWith(ALL_RUNS_PREFIX) ? null : dialerTasks.find((t) => t.id === selectedTaskId) || null;
   // "All runs" of one workflow, combined — the group whose synthetic id
   // (ALL_RUNS_PREFIX + workflow label) matches the current selection.
@@ -368,6 +392,16 @@ export default function ReportsView({ callLogs, dialerTasks, leads, costPerMinut
         </Button>
       }
     >
+        {/* Page-wide KPI tiles — scoped to the From/To/Direction filters
+            below (same period as Calls in Period / filteredCalls), not to
+            whichever task is selected — that's what the row below is for. */}
+        <KpiCard colSpan={2} icon={PhoneOutgoing} iconBg="#eff6ff" iconColor="#2563eb" label="Total Calls" value={periodSummary.totalCalls} />
+        <KpiCard colSpan={2} icon={Clock} iconBg="#f0fdf4" iconColor="#16a34a" label="Avg Call Duration" value={formatDuration(periodSummary.avgCallDuration)} />
+        <KpiCard colSpan={2} icon={UserCheck} iconBg="#f0fdf4" iconColor="#16a34a" label="Success Rate" value={`${periodSummary.successRate}%`} />
+        <KpiCard colSpan={2} icon={Clock} iconBg="#eff6ff" iconColor="#2563eb" label="Total Talk Time" value={formatDuration(periodSummary.totalTalkTime)} />
+        <KpiCard colSpan={2} icon={MessageCircleQuestion} iconBg="#fffbeb" iconColor="#d97706" label="Total Enquiries" value={enquiriesTotal ?? '—'} />
+        <KpiCard colSpan={2} icon={DollarSign} iconBg="#fffbeb" iconColor="#d97706" label="Total Cost" value={formatInr(periodSummary.totalCost)} sub={`at ₹${costPerMinuteInr}/min`} />
+
         {/* Task-scoped KPI tiles — reflect whichever task is selected below */}
         <KpiCard colSpan={2} icon={PhoneOutgoing} iconBg="#eff6ff" iconColor="#2563eb" label="Leads in Task" value={taskReport?.total ?? 0} />
         <KpiCard colSpan={2} icon={CheckCircle2} iconBg="#f0fdf4" iconColor="#16a34a" label="Completed" value={taskReport?.completed ?? 0} />
