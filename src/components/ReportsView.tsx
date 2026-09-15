@@ -434,7 +434,7 @@ export default function ReportsView({ callLogs, dialerTasks, leads, costPerMinut
             answers into the table below; row count here is fixed (one per
             lead in the task) regardless of which workflow created it. */}
         <Widget colSpan={12} title={reportDisplayName || 'Report by Task'} icon={ListChecks} padding="none">
-          {!reportDisplayName && <p className="text-xs text-slate-400 text-center py-8">{dialerTasks.length === 0 ? 'No dialer tasks yet — create one from the Voice Simulator.' : 'Pick a task above to see its per-lead outcomes and conversion rate.'}</p>}
+          {!reportDisplayName && <p className="text-xs text-slate-400 text-center py-8">{dialerTasks.length === 0 ? 'No dialer tasks yet — create one from Campaign.' : 'Pick a task above to see its per-lead outcomes and conversion rate.'}</p>}
           {taskReport && (() => {
             type TaskReportRow = typeof taskReport.rows[number];
             const columns: Column<TaskReportRow>[] = [

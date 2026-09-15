@@ -19,7 +19,6 @@ import {
   Headphones,
   CheckCircle2,
   XCircle,
-  Disc,
   HelpCircle,
   FileSpreadsheet,
   Check,
@@ -1551,7 +1550,7 @@ Currently on question ${nextIndex} out of ${selectedTask.questions.length}. Next
 
   return (
     <PageShell
-      title="Voice Simulator"
+      title="Campaign"
       subtitle="Configure automated workflows, initiate sequential campaigns, or trigger dynamic incoming calls to your virtual phone lines."
       layout="fill"
       action={
@@ -1864,161 +1863,14 @@ Currently on question ${nextIndex} out of ${selectedTask.questions.length}. Next
         </Widget>
       </div>
 
-      {/* Two columns workspace: Live Active Telephone Screen AND Call Cassette Tape Transcript History Player */}
+      {/* AI Call Simulator Screen removed — that manual/local fake-call UI
+          (dial timer, REC indicator, call-state card) is gone; real calls
+          go through the actual telephony providers now. The Active
+          Dialogue Feed that used to sit next to it is kept below, unwired
+          (gated behind `false`, not deleted) since it is slated for reuse
+          in a future standalone simulator environment. */}
+      {false && (
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-stretch">
-        {/* Active Telephone Simulator Frame */}
-        <Widget
-          colSpan={6}
-          className="h-full"
-          icon={Disc}
-          title="AI Call Simulator Screen"
-          action={callState === 'connected' ? (
-            <span className="text-[10px] font-mono text-rose-500 font-bold flex items-center gap-1 bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900/40 px-2 py-0.5 rounded-full">
-              <span className="h-1.5 w-1.5 rounded-full bg-rose-500 animate-pulse"></span>
-              🔴 REC AUDIO ACTIVE
-            </span>
-          ) : (
-            <span className="text-[10px] font-mono text-[var(--text-muted)] uppercase tracking-widest font-bold">Line Standing By</span>
-          )}
-        >
-          {activeLead ? (
-            <div className="space-y-4">
-              {/* Active Call details */}
-              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center bg-slate-50 dark:bg-[var(--bg-subtle)] p-4 rounded-xl border border-slate-100 dark:border-[var(--border)] gap-2">
-                <div>
-                  <h5 className="text-xs text-[var(--text-muted)] font-mono">CALLEE TARGET</h5>
-                  <p className="text-sm font-bold text-[var(--text-primary)] mt-0.5">{activeLead.name}</p>
-                  <p className="text-[10px] text-blue-600 dark:text-blue-400 font-mono mt-0.5">{activeLead.phone}{activeLead.amountRequested ? ` • value $${activeLead.amountRequested.toLocaleString()}` : ''}</p>
-                </div>
-                <div className="text-right shrink-0">
-                  <h5 className="text-xs text-[var(--text-muted)] font-mono">DIAL TIMER</h5>
-                  <p className="text-md font-mono font-bold text-[var(--text-primary)] mt-0.5">
-                    {callState === 'connected' ? formatTime(duration) : '00:00'}
-                  </p>
-                </div>
-              </div>
-
-              {/* Questionnaire Progress checklist inside phone hud */}
-              <div className="bg-slate-50 dark:bg-[var(--bg-subtle)] border border-slate-100 dark:border-[var(--border)] rounded-xl p-4 space-y-2.5">
-                <span className="text-[9px] font-mono text-[var(--text-muted)] uppercase font-bold tracking-wider block">Questionnaire Steps asked by AI:</span>
-                <div className="space-y-1.5 text-[11px]">
-                  {selectedTask.questions.map((q, idx) => {
-                    const isAsked = idx < activeQuestionIndex;
-                    const isCurrent = idx === activeQuestionIndex && callState === 'connected';
-
-                    return (
-                      <div key={idx} className={`flex items-start gap-2 p-1.5 rounded ${
-                        isCurrent ? 'bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-800/40' : 'opacity-60'
-                      }`}>
-                        {isAsked ? (
-                          <CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0 mt-0.5" />
-                        ) : isCurrent ? (
-                          <span className="h-4 w-4 rounded-full border border-blue-400 flex items-center justify-center text-[10px] text-blue-600 dark:text-blue-300 font-bold animate-pulse shrink-0 mt-0.5">
-                            {idx + 1}
-                          </span>
-                        ) : (
-                          <span className="h-4 w-4 rounded-full border border-slate-300 dark:border-[var(--border)] flex items-center justify-center text-[10px] text-[var(--text-muted)] shrink-0 mt-0.5">
-                            {idx + 1}
-                          </span>
-                        )}
-                        <p className={`leading-relaxed ${isCurrent ? 'font-bold text-[var(--text-primary)]' : 'text-[var(--text-secondary)]'}`}>{q}</p>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-
-              {/* Call Control Action buttons */}
-              <div className="flex items-center justify-center pt-2">
-                {callState === 'idle' && (
-                  <div className="text-center py-4 space-y-3">
-                    <div className="h-12 w-12 bg-blue-50 dark:bg-blue-600/10 border border-blue-200 dark:border-blue-500/20 rounded-full flex items-center justify-center text-blue-500 mx-auto">
-                      <PhoneCall className="h-6 w-6" />
-                    </div>
-                    <p className="text-xs text-[var(--text-muted)]">Selected target ready for outbound dial. Initiate line now.</p>
-                    {dialableNumbers.length > 0 ? (
-                      <div className="flex flex-col items-center gap-2">
-                        <select
-                          value={selectedOutboundNumber}
-                          onChange={(e) => setSelectedOutboundNumber(e.target.value)}
-                          className="rounded-lg px-3 py-1.5 text-xs focus:outline-none bg-white dark:bg-[var(--bg-surface)] border border-slate-200 dark:border-[var(--border)] text-[var(--text-primary)]"
-                        >
-                          {dialableNumbers.map((n) => (
-                            <option key={n.number} value={n.number}>
-                              {n.friendlyName ? `${n.friendlyName} — ` : ''}{n.number} ({n.provider})
-                            </option>
-                          ))}
-                        </select>
-                        <Button variant="success" size="sm" onClick={() => dialLead(activeLead)}>
-                          Dial
-                        </Button>
-                      </div>
-                    ) : (
-                      <p className="text-xs text-rose-500">No Twilio or Vobiz.ai number provisioned yet — add one in Settings &gt; Numbers before dialing.</p>
-                    )}
-                  </div>
-                )}
-
-                {callState === 'dialing' && (
-                  <div className="text-center py-4 space-y-3">
-                    <div className="h-12 w-12 bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/20 rounded-full flex items-center justify-center text-amber-500 animate-ping mx-auto">
-                      <Volume2 className="h-6 w-6" />
-                    </div>
-                    <p className="text-xs text-amber-600 dark:text-amber-400 font-mono">Securing carrier trunk line...</p>
-                    <Button
-                      variant="danger"
-                      size="xs"
-                      onClick={() => {
-                        // The call may already be live by the time this is
-                        // clicked (callState flips to 'connected' the moment
-                        // the provider returns a callSid, often before the
-                        // phone has actually started ringing) — flag it so
-                        // whichever handleInitiate*Call is in flight hangs
-                        // the real call up the instant its callSid arrives,
-                        // instead of just resetting this local state and
-                        // leaving an accidental call running unattended.
-                        cancelDialRequestedRef.current = true;
-                        setCallState('idle');
-                      }}
-                    >
-                      Cancel Outbound Connection
-                    </Button>
-                  </div>
-                )}
-
-                {callState === 'connected' && (
-                  <Button
-                    variant="danger"
-                    size="md"
-                    icon={PhoneOff}
-                    className="w-full justify-center"
-                    onClick={vobizCallSid ? handleHangupVobizCall : twilioCallSid ? handleHangupTwilioCall : piopiyCallSid ? handleHangupPiopiyCall : handleHangupCall}
-                  >
-                    Disconnect Call (Finish & Save Recording)
-                  </Button>
-                )}
-
-                {callState === 'completed' && (
-                  <div className="text-center py-4 space-y-3">
-                    <div className="h-12 w-12 bg-emerald-50 dark:bg-emerald-600/10 border border-emerald-200 dark:border-emerald-500/20 rounded-full flex items-center justify-center text-emerald-500 mx-auto">
-                      <ThumbsUp className="h-6 w-6" />
-                    </div>
-                    <p className="text-xs text-[var(--text-primary)] font-semibold">Call successfully finished & saved to tape recorder!</p>
-                    <p className="text-[10px] text-[var(--text-muted)]">Speech transcript has been parsed and answers extracted.</p>
-                    <Button variant="secondary" size="xs" onClick={() => setCallState('idle')}>
-                      Ready Next Dial
-                    </Button>
-                  </div>
-                )}
-              </div>
-            </div>
-          ) : (
-            <div className="flex flex-col items-center justify-center h-48 text-[var(--text-muted)] space-y-2">
-              <PhoneCall className="h-8 w-8 animate-pulse" style={{ color: 'var(--text-secondary)' }} />
-              <p className="text-xs text-[var(--text-muted)]">No active connection. Choose a target from the list above and click "Dial" to start.</p>
-            </div>
-          )}
-        </Widget>
 
         {/* Live Active Transcript / Simulation Speech Feed */}
         <Widget
@@ -2116,6 +1968,7 @@ Currently on question ${nextIndex} out of ${selectedTask.questions.length}. Next
           )}
         </Widget>
       </div>
+      )}
         </>
       ) : (
         /* REAL INBOUND CALL HISTORY */

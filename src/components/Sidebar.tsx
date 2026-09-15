@@ -57,7 +57,7 @@ interface SidebarGroup { tabId: string; label: string; icon: React.ElementType; 
 const SIDEBAR_GROUPS: SidebarGroup[] = [
   {
     tabId: 'dialer',
-    label: 'Voice Simulator',
+    label: 'Campaign',
     icon: PhoneCall,
     subItems: [
       { id: 'outbound', label: 'Outbound Campaigns',       icon: PhoneCall },

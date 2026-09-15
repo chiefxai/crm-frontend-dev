@@ -656,7 +656,7 @@ export default function LeadManagementView({
                     )}
                   </div>
                 ) : (
-                  <p className="text-xs text-slate-400 italic">No automated call history available. Navigate to 'Voice Simulator' to launch a dynamic test call.</p>
+                  <p className="text-xs text-slate-400 italic">No automated call history available. Navigate to 'Campaign' to launch a dynamic test call.</p>
                 )}
               </div>
             </div>
