@@ -343,11 +343,6 @@ Real Tamil speakers do not say the "correct" written form of a word. They contra
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [wizardStep, setWizardStep] = useState<1 | 2 | 3 | 4>(1);
   const [wizardWorkflowId, setWizardWorkflowId] = useState('');
-  // Required name for the task, set on the Review step — multiple tasks
-  // often share the same workflow, so a name distinct from the workflow's
-  // own is what makes "Report by Task" actually useful for finding a
-  // specific run later.
-  const [wizardTaskTitle, setWizardTaskTitle] = useState('');
   const [wizardAgentId, setWizardAgentId] = useState('');
   const [wizardAgents, setWizardAgents] = useState<WizardAgent[]>([]);
   const [wizardAgentsLoading, setWizardAgentsLoading] = useState(false);
@@ -517,10 +512,12 @@ Real Tamil speakers do not say the "correct" written form of a word. They contra
     const workflow = flows.find(f => f.id === wizardWorkflowId);
     if (!workflow) return;
 
-    if (!wizardTaskTitle.trim()) {
-      alert('Give this task a name before creating it — it\'s how you\'ll find it later in Reports > Report by Task.');
-      return;
-    }
+    // The workflow runs many times over — auto-name each task run from the
+    // workflow's own name plus the exact date/time it was created, instead
+    // of asking for a title every time. This is also what lets Reports
+    // filter "just this run" vs. "every run of this workflow" later,
+    // since the date/time is now baked into every run's name up front.
+    const taskName = `${workflow.name} — ${new Date().toLocaleString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true })}`;
 
     const questionPairs = (workflow.variables ?? [])
       .map(v => ({ label: v.name || v.questionText, question: v.questionText || v.name }))
@@ -549,7 +546,7 @@ Real Tamil speakers do not say the "correct" written form of a word. They contra
 
     const newTask: DialTask = {
       id: `TASK-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`,
-      name: wizardTaskTitle.trim(),
+      name: taskName,
       workflowId: workflow.id,
       workflowName: workflow.name,
       questions,
@@ -588,7 +585,6 @@ Real Tamil speakers do not say the "correct" written form of a word. They contra
   const openCreateTaskModal = () => {
     setWizardStep(1);
     setWizardWorkflowId('');
-    setWizardTaskTitle('');
     setWizardAgentId('');
     setWizardAgents([]);
     setWizardSelectedLeadIds([]);
@@ -2640,15 +2636,11 @@ Currently on question ${nextIndex} out of ${selectedTask.questions.length}. Next
                 </div>
 
                 <div>
-                  <label className="text-[10px] font-bold uppercase tracking-widest text-[var(--text-muted)]">Task Name <span className="text-red-500">*</span></label>
-                  <input
-                    type="text"
-                    value={wizardTaskTitle}
-                    onChange={(e) => setWizardTaskTitle(e.target.value)}
-                    placeholder={`e.g. "${selectedWorkflow.name} — Sep Week 2"`}
-                    className="mt-1 w-full px-3 py-2 text-sm border border-[var(--border)] rounded-xl bg-[var(--bg-surface)] focus:outline-none focus:border-blue-500"
-                  />
-                  <p className="text-[11px] text-[var(--text-muted)] mt-1">Required — this is how you'll find this run later in Reports &gt; Report by Task. Give each task its own name (e.g. by date or batch) since several tasks can share the same workflow.</p>
+                  <label className="text-[10px] font-bold uppercase tracking-widest text-[var(--text-muted)]">Task Name</label>
+                  <div className="mt-1 w-full px-3 py-2 text-sm border border-[var(--border)] rounded-xl bg-[var(--bg-subtle)] text-[var(--text-secondary)] font-mono">
+                    {selectedWorkflow.name} — {new Date().toLocaleString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true })}
+                  </div>
+                  <p className="text-[11px] text-[var(--text-muted)] mt-1">Auto-named from the workflow and the exact date/time this run is created — this workflow can run many times, so the date/time is what lets you filter one run vs. all of them later in Reports &gt; Report by Task.</p>
                 </div>
 
                 <div className="space-y-3 bg-[var(--bg-subtle)] rounded-xl p-4 border border-[var(--border)]">
@@ -2715,7 +2707,6 @@ Currently on question ${nextIndex} out of ${selectedTask.questions.length}. Next
                     variant="primary"
                     size="md"
                     onClick={handleCreateTask}
-                    disabled={!wizardTaskTitle.trim()}
                     icon={PhoneCall}
                     className="shadow-md"
                   >
