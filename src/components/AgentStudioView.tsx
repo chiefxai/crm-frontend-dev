@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import {
   Sparkles, Send, Loader2, Mic, Check, Plus, Trash2, Edit2,
   Phone, PhoneOff, Bot, Zap, ToggleRight, ToggleLeft, BookOpen, FileText, MoreVertical,
+  Cpu, Wrench, X,
 } from 'lucide-react';
 import { apiFetch } from '../lib/api';
 import PageShell from './ui/PageShell';
@@ -48,6 +49,23 @@ interface Agent {
   knowledgeBaseDocumentIds?: string[];
 }
 
+// A built-in post-call AI agent (sentiment, summary, workflow-answer
+// extraction, follow-up safety net — see crm-backend-demo's
+// src/ai/systemAgents.js) — fixed pipeline behavior, not something a user
+// created. Unlike a user-created Agent, it has no phone number or voice:
+// it never places or answers a call, it runs against a finished
+// transcript. Shown read-only here so it's visible what's actually
+// analyzing every call, not hidden in backend source.
+interface SystemAgent {
+  id: string;
+  name: string;
+  description: string;
+  model: string;
+  systemPrompt: string;
+  tools: string[];
+  runsOn: string;
+}
+
 type SaveStatus = 'idle' | 'saving' | 'saved' | 'error';
 
 const VOICES = ['Arjun', 'Priya', 'Dev', 'Kavya'];
@@ -92,6 +110,8 @@ function emptyForm(): Omit<Agent, 'id'> {
 
 export default function AgentStudioView() {
   const [agents, setAgents] = useState<Agent[]>([]);
+  const [systemAgents, setSystemAgents] = useState<SystemAgent[]>([]);
+  const [viewingSystemAgent, setViewingSystemAgent] = useState<SystemAgent | null>(null);
   const [numbers, setNumbers] = useState<VirtualNumber[]>([]);
   const [knowledgeDocs, setKnowledgeDocs] = useState<KnowledgeDocument[]>([]);
   const [loading, setLoading] = useState(true);
@@ -112,12 +132,14 @@ export default function AgentStudioView() {
   const loadData = async (showSpinner = false) => {
     if (showSpinner) setLoading(true);
     try {
-      const [agentsRes, numsRes, docsRes] = await Promise.all([
+      const [agentsRes, systemAgentsRes, numsRes, docsRes] = await Promise.all([
         apiFetch('/api/agents').then(r => r.json()),
+        apiFetch('/api/agents/system').then(r => r.json()).catch(() => []),
         apiFetch('/api/settings/numbers').then(r => r.json()),
         apiFetch('/api/knowledge/documents').then(r => r.json()).catch(() => []),
       ]);
       setAgents(Array.isArray(agentsRes) ? agentsRes : []);
+      setSystemAgents(Array.isArray(systemAgentsRes) ? systemAgentsRes : []);
       setNumbers(Array.isArray(numsRes) ? numsRes : []);
       setKnowledgeDocs(Array.isArray(docsRes) ? docsRes : []);
     } catch { /* silent */ }
@@ -286,7 +308,12 @@ export default function AgentStudioView() {
       onRefresh={() => loadData()}
       action={<IconButton icon={Plus} label="New Agent" onClick={openCreate} />}
     >
-      {/* ── Agent list ── */}
+      {/* ── User Agents ── */}
+      <div className="col-span-12 flex items-center gap-2 px-1 pt-2">
+        <Bot className="h-4 w-4 text-indigo-500" />
+        <p className="text-xs font-bold text-slate-700 uppercase tracking-widest">User Agents</p>
+        <span className="text-[10px] text-slate-400">— created by you, each with its own voice and phone number</span>
+      </div>
       <div className="col-span-12">
           {loading ? (
             <div className="flex items-center justify-center py-20 text-slate-400">
@@ -413,6 +440,107 @@ export default function AgentStudioView() {
             </div>
           )}
       </div>
+
+      {/* ── System Agents ── */}
+      {systemAgents.length > 0 && (
+        <>
+          <div className="col-span-12 flex items-center gap-2 px-1 pt-6">
+            <Cpu className="h-4 w-4 text-slate-500" />
+            <p className="text-xs font-bold text-slate-700 uppercase tracking-widest">System Agents</p>
+            <span className="text-[10px] text-slate-400">— built-in, run automatically after every call, no phone number</span>
+          </div>
+          <div className="col-span-12">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 p-4">
+              {systemAgents.map(sa => (
+                <button
+                  key={sa.id}
+                  type="button"
+                  onClick={() => setViewingSystemAgent(sa)}
+                  className="relative flex flex-col text-left rounded-2xl border border-slate-200 bg-slate-50/60 hover:border-slate-300 hover:bg-slate-50 transition-all overflow-hidden cursor-pointer"
+                >
+                  <div className="h-1 w-full bg-gradient-to-r from-slate-400 to-slate-500" />
+                  <div className="p-5 flex flex-col gap-3 flex-1">
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className="h-11 w-11 rounded-xl bg-slate-600 flex items-center justify-center shrink-0 shadow-sm">
+                        <Cpu className="h-5 w-5 text-white" />
+                      </div>
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-1.5">
+                          <p className="text-sm font-bold text-slate-800 truncate leading-tight">{sa.name}</p>
+                          <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full shrink-0 bg-slate-200 text-slate-600">SYSTEM</span>
+                        </div>
+                        <p className="text-[11px] text-slate-400 mt-0.5">{sa.model}</p>
+                      </div>
+                    </div>
+                    <p className="text-[11px] text-slate-500 leading-snug">{sa.description}</p>
+                    <div className="mt-auto flex items-center gap-1.5 flex-wrap">
+                      <div className="flex items-center gap-1 px-2 py-1 bg-slate-100 border border-slate-200 rounded-lg">
+                        <PhoneOff className="h-3 w-3 text-slate-400" />
+                        <span className="text-[9px] text-slate-500 font-semibold">No phone number</span>
+                      </div>
+                      <div className="flex items-center gap-1 px-2 py-1 bg-slate-100 border border-slate-200 rounded-lg">
+                        <Wrench className="h-3 w-3 text-slate-400" />
+                        <span className="text-[9px] text-slate-500 font-semibold">{sa.tools.length > 0 ? `${sa.tools.length} tool${sa.tools.length === 1 ? '' : 's'}` : 'No tools'}</span>
+                      </div>
+                    </div>
+                  </div>
+                </button>
+              ))}
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* ── System agent detail (read-only) ── */}
+      {viewingSystemAgent && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => setViewingSystemAgent(null)}>
+          <div
+            className="w-full max-w-xl max-h-[85vh] flex flex-col bg-white rounded-2xl shadow-xl overflow-hidden"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-start justify-between gap-3 p-5 border-b border-slate-100">
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="h-10 w-10 rounded-xl bg-slate-600 flex items-center justify-center shrink-0">
+                  <Cpu className="h-5 w-5 text-white" />
+                </div>
+                <div className="min-w-0">
+                  <div className="flex items-center gap-1.5">
+                    <p className="text-sm font-bold text-slate-800 truncate">{viewingSystemAgent.name}</p>
+                    <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full shrink-0 bg-slate-200 text-slate-600">SYSTEM · READ-ONLY</span>
+                  </div>
+                  <p className="text-[11px] text-slate-400 mt-0.5">{viewingSystemAgent.model}</p>
+                </div>
+              </div>
+              <button onClick={() => setViewingSystemAgent(null)} className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-600 shrink-0 cursor-pointer">
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+            <div className="p-5 space-y-4 overflow-y-auto">
+              <p className="text-xs text-slate-600 leading-relaxed">{viewingSystemAgent.description}</p>
+              <div>
+                <p className="text-[10px] font-semibold text-slate-500 uppercase tracking-wide mb-1">Runs</p>
+                <p className="text-[11px] text-slate-500">{viewingSystemAgent.runsOn}</p>
+              </div>
+              <div>
+                <p className="text-[10px] font-semibold text-slate-500 uppercase tracking-wide mb-1">Tools</p>
+                {viewingSystemAgent.tools.length > 0 ? (
+                  <div className="flex flex-wrap gap-1.5">
+                    {viewingSystemAgent.tools.map(t => (
+                      <span key={t} className="text-[10px] font-mono px-2 py-1 bg-slate-100 border border-slate-200 rounded-lg text-slate-600">{t}</span>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-[11px] text-slate-400 italic">This agent doesn't call any tools — it only reads the transcript and replies with text.</p>
+                )}
+              </div>
+              <div>
+                <p className="text-[10px] font-semibold text-slate-500 uppercase tracking-wide mb-1">System Prompt</p>
+                <pre className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-[11px] font-mono text-slate-700 whitespace-pre-wrap break-words">{viewingSystemAgent.systemPrompt}</pre>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ── Agent create / edit modal ── */}
       <Modal
