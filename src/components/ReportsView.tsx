@@ -598,7 +598,7 @@ export default function ReportsView({ callLogs, dialerTasks, leads, costPerMinut
             </button>
           }
         >
-          <div className="w-full mt-1" style={{ height: Math.max(160, campaignSuccessRate.length * 36) }}>
+          <div className="w-full mt-1" style={{ height: 300 }}>
             {campaignSuccessRate.length > 0 ? (
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={campaignSuccessRate} layout="vertical" margin={{ top: 8, right: 24, left: 8, bottom: 0 }}>
@@ -613,12 +613,14 @@ export default function ReportsView({ callLogs, dialerTasks, leads, costPerMinut
           </div>
         </Widget>
 
-        {/* Row 2b: Outcome Analysis */}
+        {/* Row 2b: Outcome Analysis — same fixed height as Success Rate by
+            Campaign next to it, donut centered, so the two widgets in
+            this row line up instead of one looking squashed. */}
         <Widget colSpan={6} title="Outcome Analysis" subtitle="Distribution of call outcomes (intent) this period." icon={PieChartIcon} accent="#d97706" padding="md" hover>
           {outcomeAnalysis.length > 0 ? (
-            <div className="flex flex-col sm:flex-row items-center gap-6 mt-1">
-              <PieChart slices={outcomeAnalysis} size={150} />
-              <div className="w-full space-y-1.5">
+            <div className="flex flex-col items-center justify-center gap-5 overflow-y-auto" style={{ height: 300 }}>
+              <PieChart slices={outcomeAnalysis} size={180} />
+              <div className="w-full max-w-xs space-y-1.5">
                 {outcomeAnalysis.map(s => (
                   <div key={s.label} className="flex items-center justify-between text-xs">
                     <span className="flex items-center gap-1.5 text-slate-500">

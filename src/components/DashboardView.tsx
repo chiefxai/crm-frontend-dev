@@ -402,9 +402,9 @@ export default function DashboardView({
       {/* ── Widget Row 1: Call Outcomes | Inbound vs Outbound ── */}
       <Widget colSpan={6} title="Call Outcomes" subtitle="Distribution of call outcomes this period." icon={PieChartIcon} accent="#059669" padding="md" hover>
         {callOutcomes.length > 0 ? (
-          <div className="flex flex-col sm:flex-row items-center gap-6 mt-1">
+          <div className="flex flex-col items-center gap-4 mt-1">
             <PieChart slices={callOutcomes} size={150} />
-            <div className="w-full space-y-1.5">
+            <div className="w-full max-w-xs space-y-1.5">
               {callOutcomes.map(s => (
                 <div key={s.label} className="flex items-center justify-between text-xs">
                   <span className="flex items-center gap-1.5 text-slate-500">
@@ -510,7 +510,7 @@ export default function DashboardView({
           </select>
         }
       >
-        <div className="w-full mt-1" style={{ height: Math.max(160, agentPerformance.length * 36) }}>
+        <div className="w-full mt-1" style={{ height: Math.min(280, Math.max(140, agentPerformance.length * 28)) }}>
           {agentPerformance.length > 0 ? (
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={agentPerformance} layout="vertical" margin={{ top: 8, right: 24, left: 8, bottom: 0 }}>
@@ -525,7 +525,7 @@ export default function DashboardView({
         </div>
       </Widget>
 
-      <Widget colSpan={6} title="Recent Calls" icon={History} accent="#64748b" padding="none" hover scrollable>
+      <Widget colSpan={6} title="Recent Calls" icon={History} accent="#64748b" padding="none" hover scrollable maxBodyHeight="280px">
         {(() => {
           const columns: Column<CallLog>[] = [
             { key: 'id', header: 'Call ID', cell: (c) => <span className="font-mono text-[10px] text-slate-400">{c.id.slice(0, 8)}</span> },
