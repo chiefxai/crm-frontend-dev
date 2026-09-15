@@ -86,6 +86,22 @@ interface InterestedClient {
   lastCallAt: string;
 }
 
+// One readable label + color for a call's actual outcome — folds status
+// and callAnswered together, since "Completed" alone doesn't say whether
+// the callee actually engaged (see callFinalizer.js's callAnswered
+// heuristic) vs. picked up, said nothing/one word, and hung up.
+const OUTCOME_COLOR: Record<string, string> = {
+  'Answered': '#059669',
+  'Not Answered': '#e11d48',
+  'No Answer': '#94a3b8',
+  'Answering Machine': '#d97706',
+  'Callback Scheduled': '#2563eb',
+};
+function getCallOutcome(status: string, callAnswered?: boolean): string {
+  if (status === 'Completed') return callAnswered === false ? 'Not Answered' : 'Answered';
+  return status;
+}
+
 function formatDuration(totalSeconds: number): string {
   const h = Math.floor(totalSeconds / 3600);
   const m = Math.floor((totalSeconds % 3600) / 60);
@@ -509,6 +525,18 @@ export default function ReportsView({ callLogs, dialerTasks, leads, costPerMinut
             const columns: Column<CallRow>[] = [
               { key: 'caller', header: 'Caller', cell: (c) => <span className="font-semibold text-slate-800">{c.leadName}</span> },
               { key: 'direction', header: 'Direction', cell: (c) => <span className="text-slate-500 capitalize">{c.direction || '—'}</span> },
+              {
+                key: 'outcome',
+                header: 'Call Outcome',
+                cell: (c) => {
+                  const outcome = getCallOutcome(c.status, c.callAnswered);
+                  return (
+                    <span className="px-2 py-0.5 rounded-md text-[10px] font-semibold whitespace-nowrap" style={{ color: OUTCOME_COLOR[outcome] || '#64748b', backgroundColor: `${OUTCOME_COLOR[outcome] || '#64748b'}1a` }}>
+                      {outcome}
+                    </span>
+                  );
+                },
+              },
               { key: 'duration', header: 'Duration', cell: (c) => <span className="font-mono">{formatDuration(c.duration)}</span> },
               { key: 'cost', header: 'Cost', cell: (c) => <span className="font-mono">{formatInr(callCostInr(c.duration, costPerMinuteInr))}</span> },
               {

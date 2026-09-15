@@ -1,0 +1,9 @@
+name,phone,email,amount,employer,income,credit,dti
+Rahul Sharma,+919876543210,rahul.sharma@example.com,25000,Infosys,65000,720,0.28
+Priya Nair,+919845123456,priya.nair@example.com,18000,TCS,52000,690,0.32
+Arjun Mehta,+919900112233,arjun.mehta@example.com,30000,Wipro,78000,745,0.22
+Sneha Iyer,+919812345678,sneha.iyer@example.com,15000,Freelancer,40000,660,0.38
+Vikram Reddy,+919788001122,vikram.reddy@example.com,22000,HDFC Bank,58000,705,0.30
+Ananya Das,+919871234567,ananya.das@example.com,20000,Cognizant,55000,680,0.34
+Karthik Subramanian,+919944556677,karthik.s@example.com,28000,Accenture,70000,735,0.25
+Divya Menon,+919833221100,divya.menon@example.com,17000,Self Employed,45000,650,0.40

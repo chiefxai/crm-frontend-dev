@@ -22,6 +22,7 @@ import {
   ChevronDown,
   ChevronRight,
   Phone,
+  Clock,
   Key,
   Scale,
   Globe,
@@ -60,8 +61,9 @@ const SIDEBAR_GROUPS: SidebarGroup[] = [
     label: 'Campaign',
     icon: PhoneCall,
     subItems: [
-      { id: 'outbound', label: 'Outbound Campaigns',       icon: PhoneCall },
-      { id: 'inbound',  label: 'Inbound Virtual Center',   icon: PhoneIncoming },
+      { id: 'outbound',  label: 'Outbound Campaigns',       icon: PhoneCall },
+      { id: 'inbound',   label: 'Inbound Virtual Center',   icon: PhoneIncoming },
+      { id: 'scheduled', label: 'Scheduled Callbacks',      icon: Clock },
     ],
   },
   {

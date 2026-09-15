@@ -117,6 +117,10 @@ export interface CallLog {
   // See callFinalizer.js's callerWordCount heuristic. Undefined on data
   // captured before this field existed.
   callAnswered?: boolean;
+  // One-line reason the caller asked for a callback — only set alongside
+  // status "Callback Scheduled". See callFinalizer.js's
+  // followUp.querySummary.
+  callbackReason?: string;
 }
 
 export interface LoanDocument {

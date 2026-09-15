@@ -45,6 +45,7 @@ import WorkflowsView from './features/workflows/WorkflowsView';
 import { QuestionFlow } from './features/workflows/types';
 import { useFeatureFlags } from './features/feature-flags/FeatureFlagContext';
 import DialerSimulator from './components/DialerSimulator';
+import ScheduledCallbacksView from './components/ScheduledCallbacksView';
 import LoanLifecycleView from './components/LoanLifecycleView';
 import SettingsView from './components/SettingsView';
 import ContactDirectoryView from './components/ContactDirectoryView';
@@ -795,6 +796,9 @@ export default function App() {
           />
         );
       case 'dialer':
+        if (activeSubTab === 'scheduled') {
+          return <ScheduledCallbacksView />;
+        }
         return (
           <DialerSimulator
             leads={leads}
