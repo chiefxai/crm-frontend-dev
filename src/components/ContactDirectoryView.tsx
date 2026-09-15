@@ -659,107 +659,16 @@ export default function ContactDirectoryView({
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Email Address *</label>
-                  <input
-                    type="email"
-                    required
-                    value={formEmail}
-                    onChange={(e) => setFormEmail(e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-blue-500"
-                    placeholder="gavin@hooli.com"
-                  />
-                </div>
-                <div>
-                  <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">{isLending ? 'Amount Requested ($)' : 'Value ($)'}</label>
-                  <input
-                    type="number"
-                    value={formAmount}
-                    onChange={(e) => setFormAmount(e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-blue-500"
-                  />
-                </div>
-              </div>
-
-              {isLending && (
-              <div className="border-t border-slate-100 pt-3">
-                <h4 className="text-[11px] font-bold text-slate-400 uppercase tracking-widest mb-3">Underwriting Information</h4>
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Current Employer</label>
-                    <input
-                      type="text"
-                      value={formEmployer}
-                      onChange={(e) => setFormEmployer(e.target.value)}
-                      className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-blue-500"
-                      placeholder="Hooli Inc"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Monthly Wages ($)</label>
-                    <input
-                      type="number"
-                      value={formIncome}
-                      onChange={(e) => setFormIncome(e.target.value)}
-                      className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-blue-500"
-                    />
-                  </div>
-                </div>
-              </div>
-              )}
-
-              {isLending && (
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Credit Score (300-850)</label>
-                  <input
-                    type="number"
-                    min="300"
-                    max="850"
-                    value={formCredit}
-                    onChange={(e) => setFormCredit(e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-blue-500"
-                  />
-                </div>
-                <div>
-                  <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Debt-To-Income (DTI)</label>
-                  <input
-                    type="text"
-                    value={formDti}
-                    onChange={(e) => setFormDti(e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-blue-500"
-                    placeholder="0.30"
-                  />
-                </div>
-              </div>
-              )}
-
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Lead Source</label>
-                  <select
-                    value={formSource}
-                    onChange={(e) => setFormSource(e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs focus:outline-none"
-                  >
-                    <option value="Manual Entry">Manual Entry</option>
-                    <option value="Website Form">Website Form</option>
-                    <option value="Facebook Ads">Facebook Ads</option>
-                    <option value="Google Search">Google Search</option>
-                    <option value="Partner Referral">Partner Referral</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Notes / Disclosures</label>
-                  <input
-                    type="text"
-                    value={formNotes}
-                    onChange={(e) => setFormNotes(e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs focus:outline-none"
-                    placeholder="E.g. urgent loan request"
-                  />
-                </div>
+              <div>
+                <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Email Address *</label>
+                <input
+                  type="email"
+                  required
+                  value={formEmail}
+                  onChange={(e) => setFormEmail(e.target.value)}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-blue-500"
+                  placeholder="gavin@hooli.com"
+                />
               </div>
 
               <div className="border-t border-slate-100 pt-3">
