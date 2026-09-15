@@ -38,13 +38,23 @@ export default function EnquiriesView() {
   const load = (showSpinner = false) => {
     if (showSpinner) setLoading(true);
     apiFetch(`/api/enquiries?page=${page}&limit=${pageSize}`)
-      .then(r => r.ok ? r.json() : null)
+      .then(async (r) => {
+        if (!r.ok) {
+          // Was silently treated the same as "no enquiries yet" — a
+          // backend failure (e.g. the paginated-query bug that used to
+          // make this whole page look empty) never surfaced anywhere.
+          const body = await r.json().catch(() => null);
+          console.error('Failed to load enquiries:', body?.error || r.status);
+          return null;
+        }
+        return r.json();
+      })
       .then((result: { rows: Enquiry[]; total: number; openCount: number } | null) => {
         setEnquiries(Array.isArray(result?.rows) ? result.rows : []);
         setTotal(result?.total ?? 0);
         setOpenCount(result?.openCount ?? 0);
       })
-      .catch(() => {})
+      .catch((err) => console.error('Failed to load enquiries:', err))
       .finally(() => { if (showSpinner) setLoading(false); });
   };
 

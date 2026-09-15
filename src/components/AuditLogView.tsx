@@ -64,11 +64,21 @@ export default function AuditLogView() {
   const loadEntries = (showSpinner = false) => {
     if (showSpinner) setLoading(true);
     apiFetch(`/api/audit-log?page=${page}&limit=${pageSize}`)
-      .then(r => r.json())
-      .then((result: { rows: AuditEntry[]; total: number }) => {
+      .then(async (r) => {
+        // Was parsed unconditionally regardless of status — a 500 (e.g.
+        // the backend's paginated-query bug that used to make this whole
+        // page look empty) got JSON.parse'd as if it were {rows, total},
+        // silently rendering "No admin actions recorded yet" instead of
+        // surfacing the actual failure.
+        const body = await r.json().catch(() => null);
+        if (!r.ok) throw new Error(body?.error || `Failed to load audit log (${r.status})`);
+        return body as { rows: AuditEntry[]; total: number };
+      })
+      .then((result) => {
         setEntries(Array.isArray(result?.rows) ? result.rows : []);
         setTotal(result?.total ?? 0);
       })
+      .catch((err) => console.error('Failed to load audit log:', err))
       .finally(() => { if (showSpinner) setLoading(false); });
   };
 
