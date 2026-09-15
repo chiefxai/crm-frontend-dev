@@ -62,6 +62,8 @@ interface SystemAgent {
   description: string;
   model: string;
   systemPrompt: string;
+  defaultSystemPrompt: string;
+  isCustomized: boolean;
   tools: string[];
   runsOn: string;
 }
@@ -109,9 +111,12 @@ function emptyForm(): Omit<Agent, 'id'> {
 // ─── Main component ───────────────────────────────────────────────────────────
 
 export default function AgentStudioView() {
+  const [agentView, setAgentView] = useState<'user' | 'system'>('user');
   const [agents, setAgents] = useState<Agent[]>([]);
   const [systemAgents, setSystemAgents] = useState<SystemAgent[]>([]);
   const [viewingSystemAgent, setViewingSystemAgent] = useState<SystemAgent | null>(null);
+  const [editedSystemPrompt, setEditedSystemPrompt] = useState('');
+  const [savingSystemPrompt, setSavingSystemPrompt] = useState(false);
   const [numbers, setNumbers] = useState<VirtualNumber[]>([]);
   const [knowledgeDocs, setKnowledgeDocs] = useState<KnowledgeDocument[]>([]);
   const [loading, setLoading] = useState(true);
@@ -286,6 +291,50 @@ export default function AgentStudioView() {
     } finally { setApplyingPreset(null); }
   };
 
+  const handleSaveSystemPrompt = async () => {
+    if (!viewingSystemAgent) return;
+    setSavingSystemPrompt(true);
+    try {
+      const res = await apiFetch(`/api/agents/system/${viewingSystemAgent.id}`, {
+        method: 'PUT',
+        body: JSON.stringify({ systemPrompt: editedSystemPrompt }),
+      });
+      const updated = await res.json();
+      if (!res.ok) throw new Error(updated.error || 'Failed to save system prompt');
+      setSystemAgents(prev => prev.map(a => (a.id === updated.id ? updated : a)));
+      setViewingSystemAgent(updated);
+      setEditedSystemPrompt(updated.systemPrompt);
+    } catch (err: any) {
+      alert(err.message || 'Failed to save system prompt');
+    } finally {
+      setSavingSystemPrompt(false);
+    }
+  };
+
+  const handleResetSystemPrompt = async () => {
+    if (!viewingSystemAgent) return;
+    if (!confirm(`Reset "${viewingSystemAgent.name}" back to its default system prompt? Your customization will be lost.`)) return;
+    setSavingSystemPrompt(true);
+    try {
+      // A blank systemPrompt is how the backend recognizes "clear this
+      // org's override, fall back to the shared default" — see
+      // setPromptOverride in crm-backend-demo's src/ai/systemAgents.js.
+      const res = await apiFetch(`/api/agents/system/${viewingSystemAgent.id}`, {
+        method: 'PUT',
+        body: JSON.stringify({ systemPrompt: '' }),
+      });
+      const updated = await res.json();
+      if (!res.ok) throw new Error(updated.error || 'Failed to reset system prompt');
+      setSystemAgents(prev => prev.map(a => (a.id === updated.id ? updated : a)));
+      setViewingSystemAgent(updated);
+      setEditedSystemPrompt(updated.systemPrompt);
+    } catch (err: any) {
+      alert(err.message || 'Failed to reset system prompt');
+    } finally {
+      setSavingSystemPrompt(false);
+    }
+  };
+
   const handlePreview = async () => {
     if (!previewMessage.trim()) return;
     setPreviewing(true);
@@ -304,16 +353,33 @@ export default function AgentStudioView() {
   return (
     <PageShell
       title="Agent Studio"
-      subtitle="Create AI calling agents — each with its own voice, persona, and phone number."
+      subtitle={agentView === 'user'
+        ? 'Create AI calling agents — each with its own voice, persona, and phone number.'
+        : 'Built-in AI agents that run automatically after every call — no phone number, no voice, just a system prompt.'}
       onRefresh={() => loadData()}
-      action={<IconButton icon={Plus} label="New Agent" onClick={openCreate} />}
+      action={
+        <div className="flex items-center gap-2">
+          <div className="flex items-center bg-slate-100 rounded-xl p-1">
+            <button
+              type="button"
+              onClick={() => setAgentView('user')}
+              className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors cursor-pointer ${agentView === 'user' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+            >
+              User Agents
+            </button>
+            <button
+              type="button"
+              onClick={() => setAgentView('system')}
+              className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors cursor-pointer ${agentView === 'system' ? 'bg-white text-slate-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+            >
+              System Agents
+            </button>
+          </div>
+          {agentView === 'user' && <IconButton icon={Plus} label="New Agent" onClick={openCreate} />}
+        </div>
+      }
     >
-      {/* ── User Agents ── */}
-      <div className="col-span-12 flex items-center gap-2 px-1 pt-2">
-        <Bot className="h-4 w-4 text-indigo-500" />
-        <p className="text-xs font-bold text-slate-700 uppercase tracking-widest">User Agents</p>
-        <span className="text-[10px] text-slate-400">— created by you, each with its own voice and phone number</span>
-      </div>
+      {agentView === 'user' && (
       <div className="col-span-12">
           {loading ? (
             <div className="flex items-center justify-center py-20 text-slate-400">
@@ -440,22 +506,22 @@ export default function AgentStudioView() {
             </div>
           )}
       </div>
+      )}
 
       {/* ── System Agents ── */}
-      {systemAgents.length > 0 && (
-        <>
-          <div className="col-span-12 flex items-center gap-2 px-1 pt-6">
-            <Cpu className="h-4 w-4 text-slate-500" />
-            <p className="text-xs font-bold text-slate-700 uppercase tracking-widest">System Agents</p>
-            <span className="text-[10px] text-slate-400">— built-in, run automatically after every call, no phone number</span>
-          </div>
-          <div className="col-span-12">
+      {agentView === 'system' && (
+        <div className="col-span-12">
+          {systemAgents.length === 0 ? (
+            <div className="flex items-center justify-center py-20 text-slate-400">
+              <Loader2 className="h-5 w-5 animate-spin mr-2" /> Loading…
+            </div>
+          ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 p-4">
               {systemAgents.map(sa => (
                 <button
                   key={sa.id}
                   type="button"
-                  onClick={() => setViewingSystemAgent(sa)}
+                  onClick={() => { setViewingSystemAgent(sa); setEditedSystemPrompt(sa.systemPrompt); }}
                   className="relative flex flex-col text-left rounded-2xl border border-slate-200 bg-slate-50/60 hover:border-slate-300 hover:bg-slate-50 transition-all overflow-hidden cursor-pointer"
                 >
                   <div className="h-1 w-full bg-gradient-to-r from-slate-400 to-slate-500" />
@@ -468,6 +534,9 @@ export default function AgentStudioView() {
                         <div className="flex items-center gap-1.5">
                           <p className="text-sm font-bold text-slate-800 truncate leading-tight">{sa.name}</p>
                           <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full shrink-0 bg-slate-200 text-slate-600">SYSTEM</span>
+                          {sa.isCustomized && (
+                            <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full shrink-0 bg-amber-100 text-amber-700">CUSTOMIZED</span>
+                          )}
                         </div>
                         <p className="text-[11px] text-slate-400 mt-0.5">{sa.model}</p>
                       </div>
@@ -487,11 +556,11 @@ export default function AgentStudioView() {
                 </button>
               ))}
             </div>
-          </div>
-        </>
+          )}
+        </div>
       )}
 
-      {/* ── System agent detail (read-only) ── */}
+      {/* ── System agent detail / edit ── */}
       {viewingSystemAgent && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => setViewingSystemAgent(null)}>
           <div
@@ -506,9 +575,12 @@ export default function AgentStudioView() {
                 <div className="min-w-0">
                   <div className="flex items-center gap-1.5">
                     <p className="text-sm font-bold text-slate-800 truncate">{viewingSystemAgent.name}</p>
-                    <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full shrink-0 bg-slate-200 text-slate-600">SYSTEM · READ-ONLY</span>
+                    <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full shrink-0 bg-slate-200 text-slate-600">SYSTEM</span>
+                    {viewingSystemAgent.isCustomized && (
+                      <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full shrink-0 bg-amber-100 text-amber-700">CUSTOMIZED</span>
+                    )}
                   </div>
-                  <p className="text-[11px] text-slate-400 mt-0.5">{viewingSystemAgent.model}</p>
+                  <p className="text-[11px] text-slate-400 mt-0.5">{viewingSystemAgent.model} · no phone number, no voice — text-only</p>
                 </div>
               </div>
               <button onClick={() => setViewingSystemAgent(null)} className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-600 shrink-0 cursor-pointer">
@@ -534,9 +606,50 @@ export default function AgentStudioView() {
                 )}
               </div>
               <div>
-                <p className="text-[10px] font-semibold text-slate-500 uppercase tracking-wide mb-1">System Prompt</p>
-                <pre className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-[11px] font-mono text-slate-700 whitespace-pre-wrap break-words">{viewingSystemAgent.systemPrompt}</pre>
+                <div className="flex items-center justify-between mb-1">
+                  <p className="text-[10px] font-semibold text-slate-500 uppercase tracking-wide">System Prompt</p>
+                  {viewingSystemAgent.isCustomized && (
+                    <button
+                      type="button"
+                      onClick={handleResetSystemPrompt}
+                      disabled={savingSystemPrompt}
+                      className="text-[10px] font-semibold text-slate-400 hover:text-slate-600 disabled:opacity-50 cursor-pointer"
+                    >
+                      Reset to default
+                    </button>
+                  )}
+                </div>
+                <textarea
+                  value={editedSystemPrompt}
+                  onChange={(e) => setEditedSystemPrompt(e.target.value)}
+                  rows={10}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-[11px] font-mono text-slate-700 focus:outline-none focus:ring-2 focus:ring-slate-400 focus:border-transparent transition-all resize-none"
+                />
+                <p className="text-[10px] text-slate-400 mt-1.5">
+                  Must keep <code className="font-mono bg-slate-100 px-1 rounded">{'{transcript}'}</code>
+                  {viewingSystemAgent.id === 'workflow-answer-extractor' && (
+                    <> and <code className="font-mono bg-slate-100 px-1 rounded">{'{questions}'}</code></>
+                  )} — that's where the real call data gets substituted in.
+                </p>
               </div>
+            </div>
+            <div className="flex items-center justify-end gap-3 p-5 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={() => setViewingSystemAgent(null)}
+                className="text-sm text-slate-500 hover:text-slate-700 font-medium px-4 py-2.5 rounded-xl hover:bg-slate-100 transition-colors cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleSaveSystemPrompt}
+                disabled={savingSystemPrompt || editedSystemPrompt.trim() === viewingSystemAgent.systemPrompt.trim()}
+                className="flex items-center gap-2 px-6 py-2.5 text-sm font-semibold rounded-xl shadow-sm transition-all disabled:opacity-60 bg-slate-700 text-white hover:bg-slate-800 cursor-pointer"
+              >
+                {savingSystemPrompt && <Loader2 className="h-4 w-4 animate-spin" />}
+                {savingSystemPrompt ? 'Saving…' : 'Save Changes'}
+              </button>
             </div>
           </div>
         </div>
