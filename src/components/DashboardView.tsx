@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import {
   PhoneIncoming,
-  DollarSign,
   UserCheck,
-  Clock,
+  MessageCircleQuestion,
+  Flame,
   Activity,
 } from 'lucide-react';
 import {
@@ -18,7 +18,7 @@ import {
 } from 'recharts';
 import { apiFetch } from '../lib/api';
 import { Lead, Loan, CallLog, OrganizationSettings } from '../types';
-import { COST_PER_MINUTE_INR_FALLBACK, formatInr } from '../lib/pricing';
+import { COST_PER_MINUTE_INR_FALLBACK } from '../lib/pricing';
 import PageShell from './ui/PageShell';
 import Widget from './ui/Widget';
 import EmptyState from './ui/EmptyState';
@@ -78,23 +78,33 @@ export default function DashboardView({
   costPerMinuteInr = COST_PER_MINUTE_INR_FALLBACK,
 }: DashboardViewProps) {
   const [metrics, setMetrics] = useState<DashboardMetrics | null>(null);
+  const [enquiriesTotal, setEnquiriesTotal] = useState<number | null>(null);
 
   const loadMetrics = () => {
     apiFetch('/api/dashboard/metrics')
       .then(r => { if (!r.ok) throw new Error(); return r.json(); })
       .then((data: DashboardMetrics) => setMetrics(data))
       .catch(err => console.error('Failed to load dashboard metrics:', err));
+    // Cheapest way to get a total count without pulling every row — one
+    // page of size 1, just for the `total` the paginated response carries.
+    apiFetch('/api/enquiries?page=1&limit=1')
+      .then(r => { if (!r.ok) throw new Error(); return r.json(); })
+      .then((data: { total?: number }) => setEnquiriesTotal(data.total ?? 0))
+      .catch(err => console.error('Failed to load enquiries total:', err));
   };
 
   useEffect(loadMetrics, [leads.length, loans.length, callLogs.length]);
 
   const isLending = !orgSettings.industry || orgSettings.industry === 'lending';
   const primaryObject = metrics?.objectMetrics?.[0] || null;
-  const totalLeadsCount = leads.length;
-  const outstandingPortfolio = loans.reduce((s, l) => s + l.amount, 0);
-  const daysLeft = Math.max(0, Math.round(
-    (new Date(orgSettings.billingPeriodEnd).getTime() - Date.now()) / (1000 * 60 * 60 * 24)
-  ));
+
+  // Success = actually answered (see callFinalizer.js's callAnswered) —
+  // "Completed" alone doesn't mean the callee engaged; a call answered
+  // by a machine or cut short with no real talk isn't a success here.
+  const successCallsCount = callLogs.filter(c => c.status === 'Completed' && c.callAnswered !== false).length;
+  // "Successful outcome" = the same bar Reports/topInterestedClients use
+  // for conversion — the caller's own intent came back Interested.
+  const successfulOutcomesCount = callLogs.filter(c => c.intent === 'Interested').length;
 
   // Calls in period + volume-over-time trend — same "Report by Task" view
   // from ReportsView, ported here so the exec desk gives a quick pulse
@@ -132,50 +142,41 @@ export default function DashboardView({
 
       <KpiCard
         colSpan={3}
-        icon={UserCheck}
-        iconBg="#eff6ff"
-        iconColor="#2563eb"
-        label={isLending ? 'Active Loan Leads' : `Total ${primaryObject?.objectLabel || 'Records'}`}
-        value={isLending ? totalLeadsCount : (primaryObject?.totalRecords ?? 0)}
-        badge="+12.5%"
-        badgeColor="green"
-      />
-
-
-      <KpiCard
-        colSpan={3}
-        icon={DollarSign}
-        iconBg="#fffbeb"
-        iconColor="#d97706"
-        label={isLending ? 'Outstanding Portfolio' : 'New This Month'}
-        value={isLending
-          ? `$${(outstandingPortfolio / 1000).toFixed(0)}k`
-          : (primaryObject?.recordsTrend?.[primaryObject.recordsTrend.length - 1]?.count ?? 0)
-        }
-        badge="Active"
-        badgeColor="amber"
-      />
-
-      <KpiCard
-        colSpan={3}
-        icon={Clock}
-        iconBg="var(--bg-subtle)"
-        iconColor="var(--text-secondary)"
-        label="AI Voice Minutes This Period"
-        value={`${orgSettings.aiMinutesUsed.toFixed(2)} min`}
-        sub={`${formatInr(orgSettings.aiMinutesUsed * costPerMinuteInr)} at ₹${costPerMinuteInr}/min`}
-        badge={`${daysLeft}d Left`}
-        badgeColor="neutral"
-      />
-
-      <KpiCard
-        colSpan={3}
         icon={PhoneIncoming}
         iconBg="#eff6ff"
         iconColor="#2563eb"
-        label="Calls This Period"
-        value={callsInPeriod.length}
-        sub="Last 30 days"
+        label="Total Calls"
+        value={callLogs.length}
+        sub="All time"
+      />
+
+      <KpiCard
+        colSpan={3}
+        icon={UserCheck}
+        iconBg="#f0fdf4"
+        iconColor="#16a34a"
+        label="Success Calls"
+        value={successCallsCount}
+        sub={callLogs.length > 0 ? `${Math.round((successCallsCount / callLogs.length) * 100)}% of all calls` : undefined}
+      />
+
+      <KpiCard
+        colSpan={3}
+        icon={MessageCircleQuestion}
+        iconBg="#fffbeb"
+        iconColor="#d97706"
+        label="Enquiries"
+        value={enquiriesTotal ?? '—'}
+      />
+
+      <KpiCard
+        colSpan={3}
+        icon={Flame}
+        iconBg="#fdf4ff"
+        iconColor="#9333ea"
+        label="Successful Outcomes"
+        value={successfulOutcomesCount}
+        sub="Interested intent"
       />
 
       {/* ── Row 2: Charts ── */}
