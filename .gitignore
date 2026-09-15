@@ -3,3 +3,4 @@ dist
 .env
 .env.prod
 .vercel
+.DS_Store
