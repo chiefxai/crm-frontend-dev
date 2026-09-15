@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState, ReactNode } from 'react';
 import { apiFetch } from '../lib/api';
-import { PhoneOutgoing, Clock, DollarSign, Smile, CheckCircle2, ListChecks, FileDown, Download, FileText, Phone, Flame, Activity, UserCheck, MessageCircleQuestion } from 'lucide-react';
-import { XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, BarChart, Bar } from 'recharts';
+import { PhoneOutgoing, PhoneIncoming, Clock, DollarSign, Smile, CheckCircle2, ListChecks, FileDown, Download, FileText, Phone, Flame, Activity, UserCheck, MessageCircleQuestion, TrendingUp, TrendingDown, BarChart3, Users, PieChart as PieChartIcon } from 'lucide-react';
+import { XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, BarChart, Bar, LineChart, Line, AreaChart, Area, Legend } from 'recharts';
 import PageShell from './ui/PageShell';
 import Button from './ui/Button';
 import Widget from './ui/Widget';
@@ -125,6 +125,54 @@ function getCallOutcome(status: string, callAnswered?: boolean): string {
   return status;
 }
 
+// ── Business-level Call Outcome vs. Call Status ─────────────────────────
+// Kept deliberately separate: CALL STATUS (getCallOutcome above) is about
+// connectivity — did the phone call itself connect and get engaged with.
+// CALL OUTCOME is the business result of the conversation — what call_logs
+// (and a dialer task's per-lead callResults) already store as `intent`.
+// "Successful outcome" isn't hard-coded to a fixed list of industry labels
+// (the backend has no per-org configurable-outcomes model yet — a real
+// gap, not something to fake with mock data) — the one real, existing
+// signal for "this call achieved a positive business result" is
+// intent === 'Interested', already the convention Executive Desk and
+// Campaign use for the same concept ("Successful Outcomes" KPI,
+// topInterestedClients). Outcome Analysis below is still dynamic in the
+// sense that it plots whatever intent values actually appear in the data,
+// not a hard-coded slice list.
+function isSuccessfulOutcome(intent?: string | null): boolean {
+  return intent === 'Interested';
+}
+
+const INTENT_COLOR: Record<string, string> = {
+  'Interested': '#059669',
+  'Not Interested': '#e11d48',
+  'Callback Scheduled': '#2563eb',
+  'Wrong Number': '#d97706',
+  'Unknown': '#94a3b8',
+};
+function intentColor(intent: string): string {
+  return INTENT_COLOR[intent] || '#7c3aed';
+}
+
+// ↑/↓ trend chip for a KPI card — compares this period's value against
+// the immediately preceding period of the same length. No previous-period
+// data (e.g. a brand-new org) reads as "—", not a misleading 0%/∞% swing.
+function trendBadge(current: number, previous: number): { label: string; color: 'green' | 'rose' | 'neutral' } {
+  if (previous <= 0) return current > 0 ? { label: 'New', color: 'green' } : { label: '—', color: 'neutral' };
+  const pct = Math.round(((current - previous) / previous) * 100);
+  if (pct === 0) return { label: '0%', color: 'neutral' };
+  return pct > 0 ? { label: `↑ ${pct}%`, color: 'green' } : { label: `↓ ${Math.abs(pct)}%`, color: 'rose' };
+}
+
+const DURATION_BUCKETS: { label: string; min: number; max: number }[] = [
+  { label: '0-30s', min: 0, max: 30 },
+  { label: '30-60s', min: 30, max: 60 },
+  { label: '1-2m', min: 60, max: 120 },
+  { label: '2-5m', min: 120, max: 300 },
+  { label: '5-10m', min: 300, max: 600 },
+  { label: '10m+', min: 600, max: Infinity },
+];
+
 function formatDuration(totalSeconds: number): string {
   const h = Math.floor(totalSeconds / 3600);
   const m = Math.floor((totalSeconds % 3600) / 60);
@@ -247,40 +295,258 @@ export default function ReportsView({ callLogs, dialerTasks, leads, costPerMinut
     setLoadingAnswersFor(null);
   }
 
+  const inRange = (iso: string, from: string, to: string) => {
+    const d = new Date(iso);
+    return d >= new Date(from + 'T00:00:00') && d <= new Date(to + 'T23:59:59');
+  };
+
   const filteredCalls = useMemo(() => {
-    const from = new Date(fromDate + 'T00:00:00');
-    const to = new Date(toDate + 'T23:59:59');
     return callLogs.filter((c) => {
-      const created = new Date(c.createdAt);
-      if (created < from || created > to) return false;
+      if (!inRange(c.createdAt, fromDate, toDate)) return false;
       if (direction !== 'all' && c.direction !== direction) return false;
       return true;
     });
   }, [callLogs, fromDate, toDate, direction]);
 
-  // Page-wide summary KPIs — scoped to the same From/To/Direction filters
-  // as filteredCalls above, NOT to whichever task is selected below (that
-  // row further down stays task-scoped, for "how did this one run do").
-  const periodSummary = useMemo(() => {
-    const totalCalls = filteredCalls.length;
-    const totalTalkTime = filteredCalls.reduce((sum, c) => sum + (c.duration || 0), 0);
-    const avgCallDuration = totalCalls > 0 ? Math.round(totalTalkTime / totalCalls) : 0;
-    const successCalls = filteredCalls.filter(c => c.status === 'Completed' && c.callAnswered !== false).length;
-    const successRate = totalCalls > 0 ? Math.round((successCalls / totalCalls) * 100) : 0;
-    const totalCost = filteredCalls.reduce((sum, c) => sum + callCostInr(c.duration || 0, costPerMinuteInr), 0);
-    return { totalCalls, totalTalkTime, avgCallDuration, successRate, totalCost };
-  }, [filteredCalls, costPerMinuteInr]);
+  // Immediately preceding period of the same length — e.g. "last 7 days"
+  // compares against the 7 days before that. Powers the ↑/↓ trend chip on
+  // every KPI card below.
+  const [prevFromDate, prevToDate] = useMemo(() => {
+    const from = new Date(fromDate + 'T00:00:00');
+    const to = new Date(toDate + 'T23:59:59');
+    const spanMs = to.getTime() - from.getTime();
+    const prevTo = new Date(from.getTime() - 24 * 60 * 60 * 1000);
+    const prevFrom = new Date(prevTo.getTime() - spanMs);
+    return [prevFrom.toISOString().slice(0, 10), prevTo.toISOString().slice(0, 10)];
+  }, [fromDate, toDate]);
 
-  // Total Enquiries — not date-filterable server-side yet, so this is an
-  // org-wide total rather than scoped to the From/To filters above (same
-  // approach Executive Desk uses for its Enquiries KPI).
-  const [enquiriesTotal, setEnquiriesTotal] = useState<number | null>(null);
+  const prevFilteredCalls = useMemo(() => {
+    return callLogs.filter((c) => {
+      if (!inRange(c.createdAt, prevFromDate, prevToDate)) return false;
+      if (direction !== 'all' && c.direction !== direction) return false;
+      return true;
+    });
+  }, [callLogs, prevFromDate, prevToDate, direction]);
+
+  function summarize(calls: CallLog[]) {
+    const totalCalls = calls.length;
+    const totalTalkTime = calls.reduce((sum, c) => sum + (c.duration || 0), 0);
+    const avgCallDuration = totalCalls > 0 ? Math.round(totalTalkTime / totalCalls) : 0;
+    const successCalls = calls.filter(c => c.status === 'Completed' && c.callAnswered !== false).length;
+    const successRate = totalCalls > 0 ? Math.round((successCalls / totalCalls) * 100) : 0;
+    const totalCost = calls.reduce((sum, c) => sum + callCostInr(c.duration || 0, costPerMinuteInr), 0);
+    return { totalCalls, totalTalkTime, avgCallDuration, successRate, totalCost };
+  }
+
+  // Page-wide summary KPIs — scoped to the same From/To/Direction filters
+  // as filteredCalls above, NOT to whichever task is selected further down
+  // (that row stays task-scoped, for "how did this one run do").
+  const periodSummary = useMemo(() => summarize(filteredCalls), [filteredCalls]);
+  const prevPeriodSummary = useMemo(() => summarize(prevFilteredCalls), [prevFilteredCalls]);
+
+  // Enquiries — fetched once (a generous page size, not the whole table)
+  // with their real createdAt/callId so both the KPI and the Inquiry
+  // Analysis widget can filter/bucket by the same global date range
+  // client-side, the same way filteredCalls does for calls. The backend
+  // doesn't support filtering this collection by date server-side yet.
+  const [allEnquiries, setAllEnquiries] = useState<{ id: string; callId: string | null; queryText: string; status: string; createdAt: string }[]>([]);
   useEffect(() => {
-    apiFetch('/api/enquiries?page=1&limit=1')
+    apiFetch('/api/enquiries?page=1&limit=1000')
       .then(r => { if (!r.ok) throw new Error(); return r.json(); })
-      .then((data: { total?: number }) => setEnquiriesTotal(data.total ?? 0))
-      .catch(err => console.error('Failed to load enquiries total:', err));
+      .then((data: { rows?: typeof allEnquiries }) => setAllEnquiries(data.rows ?? []))
+      .catch(err => console.error('Failed to load enquiries:', err));
   }, []);
+  const filteredEnquiries = useMemo(() => allEnquiries.filter(e => inRange(e.createdAt, fromDate, toDate)), [allEnquiries, fromDate, toDate]);
+  const prevFilteredEnquiries = useMemo(() => allEnquiries.filter(e => inRange(e.createdAt, prevFromDate, prevToDate)), [allEnquiries, prevFromDate, prevToDate]);
+
+  // Agent id -> name, for Agent Performance (dialerTasks only carries the
+  // agent's id).
+  const [agentNames, setAgentNames] = useState<Record<string, string>>({});
+  useEffect(() => {
+    apiFetch('/api/agents')
+      .then(r => { if (!r.ok) throw new Error(); return r.json(); })
+      .then((data: { id: string; name: string }[]) => setAgentNames(Object.fromEntries((Array.isArray(data) ? data : []).map(a => [a.id, a.name]))))
+      .catch(err => console.error('Failed to load agents:', err));
+  }, []);
+
+  // Tasks whose run falls inside the selected period — drives Success Rate
+  // by Campaign, Agent Performance, and the campaign/agent filters on
+  // Inbound vs Outbound below, so those widgets also respect the global
+  // date filter (a callResult entry has no createdAt of its own, so a
+  // task's own createdAt is the closest available date to filter by).
+  const tasksInPeriod = useMemo(() => (dialerTasks as DialTask[]).filter(t => inRange(t.createdAt, fromDate, toDate)), [dialerTasks, fromDate, toDate]);
+
+  // callId -> {workflowName, agentId} — lets any call_logs-derived widget
+  // (Inbound vs Outbound's campaign/agent filters, Inquiry Analysis's
+  // campaign/agent breakdown) join back to the campaign/agent that placed
+  // it, since call_logs itself doesn't carry either.
+  const callTaskIndex = useMemo(() => {
+    const idx = new Map<string, { workflowName: string; agentId: string | null }>();
+    for (const task of tasksInPeriod) {
+      for (const result of Object.values(task.callResults || {})) {
+        if (result.callId) idx.set(result.callId, { workflowName: task.workflowName || 'Other', agentId: (task as any).assignedTeamMemberId || null });
+      }
+    }
+    return idx;
+  }, [tasksInPeriod]);
+
+  // Duration buckets — Widget 2: Call Duration Distribution.
+  const durationDistribution = useMemo(() => {
+    return DURATION_BUCKETS.map(b => ({
+      bucket: b.label,
+      count: filteredCalls.filter(c => (c.duration || 0) >= b.min && (c.duration || 0) < b.max).length,
+    }));
+  }, [filteredCalls]);
+
+  // Widget 4: Outcome Analysis — dynamic donut over whatever intent
+  // values actually appear in this period's calls.
+  const outcomeAnalysis = useMemo(() => {
+    const counts: Record<string, number> = {};
+    for (const c of filteredCalls) {
+      const intent = c.intent || 'Unknown';
+      counts[intent] = (counts[intent] || 0) + 1;
+    }
+    return Object.entries(counts)
+      .map(([label, value]) => ({ label, value, color: intentColor(label) }))
+      .sort((a, b) => b.value - a.value);
+  }, [filteredCalls]);
+
+  // Widget 3: Success Rate by Campaign — business-outcome success
+  // (intent === 'Interested'), not the connectivity-level "Answered" used
+  // for Call Status elsewhere. Sortable by success rate (asc/desc).
+  const [campaignSortAsc, setCampaignSortAsc] = useState(false);
+  const campaignSuccessRate = useMemo(() => {
+    const byWorkflow: Record<string, { total: number; successful: number }> = {};
+    for (const task of tasksInPeriod) {
+      const name = task.workflowName || 'Other';
+      if (!byWorkflow[name]) byWorkflow[name] = { total: 0, successful: 0 };
+      for (const result of Object.values(task.callResults || {})) {
+        if (!result?.status || result.status === 'Pending') continue;
+        byWorkflow[name].total++;
+        if (isSuccessfulOutcome(result.intent)) byWorkflow[name].successful++;
+      }
+    }
+    const rows = Object.entries(byWorkflow).map(([campaign, { total, successful }]) => ({
+      campaign, total, successful, rate: total > 0 ? Math.round((successful / total) * 100) : 0,
+    }));
+    rows.sort((a, b) => campaignSortAsc ? a.rate - b.rate : b.rate - a.rate);
+    return rows.slice(0, 10);
+  }, [tasksInPeriod, campaignSortAsc]);
+
+  // Widget 5: Agent Performance — selectable metric, computed once per
+  // agent so switching the dropdown is instant (no re-fetch).
+  type AgentMetricKey = 'totalCalls' | 'answeredCalls' | 'inquiries' | 'successfulOutcomes' | 'successRate' | 'avgDuration';
+  const [agentMetric, setAgentMetric] = useState<AgentMetricKey>('successRate');
+  const agentPerformance = useMemo(() => {
+    const byAgent: Record<string, { totalCalls: number; answeredCalls: number; successfulOutcomes: number; totalDuration: number }> = {};
+    for (const task of tasksInPeriod) {
+      const agentId = (task as any).assignedTeamMemberId || 'unassigned';
+      for (const result of Object.values(task.callResults || {})) {
+        if (!result?.status || result.status === 'Pending') continue;
+        if (!byAgent[agentId]) byAgent[agentId] = { totalCalls: 0, answeredCalls: 0, successfulOutcomes: 0, totalDuration: 0 };
+        byAgent[agentId].totalCalls++;
+        byAgent[agentId].totalDuration += result.duration || 0;
+        if (getCallOutcome(result.status, result.callAnswered) === 'Answered') byAgent[agentId].answeredCalls++;
+        if (isSuccessfulOutcome(result.intent)) byAgent[agentId].successfulOutcomes++;
+      }
+    }
+    // Inquiries per agent — joined via callTaskIndex (enquiry -> callId -> task -> agent).
+    const inquiriesByAgent: Record<string, number> = {};
+    for (const e of filteredEnquiries) {
+      const agentId = (e.callId && callTaskIndex.get(e.callId)?.agentId) || 'unassigned';
+      inquiriesByAgent[agentId] = (inquiriesByAgent[agentId] || 0) + 1;
+    }
+    const agentIds = new Set([...Object.keys(byAgent), ...Object.keys(inquiriesByAgent)]);
+    const rows = Array.from(agentIds).map(agentId => {
+      const stats = byAgent[agentId] || { totalCalls: 0, answeredCalls: 0, successfulOutcomes: 0, totalDuration: 0 };
+      return {
+        agent: agentId === 'unassigned' ? 'Unassigned' : (agentNames[agentId] || 'Unknown Agent'),
+        totalCalls: stats.totalCalls,
+        answeredCalls: stats.answeredCalls,
+        inquiries: inquiriesByAgent[agentId] || 0,
+        successfulOutcomes: stats.successfulOutcomes,
+        successRate: stats.totalCalls > 0 ? Math.round((stats.successfulOutcomes / stats.totalCalls) * 100) : 0,
+        avgDuration: stats.totalCalls > 0 ? Math.round(stats.totalDuration / stats.totalCalls) : 0,
+      };
+    });
+    rows.sort((a, b) => (b[agentMetric] as number) - (a[agentMetric] as number));
+    return rows.slice(0, 10);
+  }, [tasksInPeriod, agentNames, agentMetric, filteredEnquiries, callTaskIndex]);
+
+  // Widget 6: Inbound vs Outbound Analysis — optional campaign/agent
+  // filters on top of the global date range, joined via callTaskIndex.
+  const [ioCampaignFilter, setIoCampaignFilter] = useState('all');
+  const [ioAgentFilter, setIoAgentFilter] = useState('all');
+  const inboundOutboundAnalysis = useMemo(() => {
+    const scoped = filteredCalls.filter(c => {
+      if (ioCampaignFilter === 'all' && ioAgentFilter === 'all') return true;
+      const link = callTaskIndex.get(c.id);
+      if (ioCampaignFilter !== 'all' && link?.workflowName !== ioCampaignFilter) return false;
+      if (ioAgentFilter !== 'all' && (link?.agentId || 'unassigned') !== ioAgentFilter) return false;
+      return true;
+    });
+    const bucket = (dir: 'inbound' | 'outbound') => {
+      const calls = scoped.filter(c => c.direction === dir);
+      const answered = calls.filter(c => getCallOutcome(c.status, c.callAnswered) === 'Answered').length;
+      return { direction: dir === 'inbound' ? 'Inbound' : 'Outbound', total: calls.length, answered, notAnswered: calls.length - answered };
+    };
+    return [bucket('inbound'), bucket('outbound')];
+  }, [filteredCalls, ioCampaignFilter, ioAgentFilter, callTaskIndex]);
+
+  // Widget 7: Inquiry Analysis — daily counts over the period.
+  const inquiryAnalysis = useMemo(() => {
+    const buckets: Record<string, number> = {};
+    for (const e of filteredEnquiries) {
+      const key = new Date(e.createdAt).toISOString().slice(0, 10);
+      buckets[key] = (buckets[key] || 0) + 1;
+    }
+    return Object.entries(buckets).map(([period, count]) => ({ period, count })).sort((a, b) => a.period.localeCompare(b.period));
+  }, [filteredEnquiries]);
+
+  // Widget 1: Call Volume Over Time (daily, inbound/outbound) and
+  // Widget 8: Call Outcomes Over Time (daily, by intent) — same daily
+  // bucketing pass over filteredCalls, two different breakdowns.
+  const callVolumeOverTime = useMemo(() => {
+    const buckets: Record<string, { period: string; inbound: number; outbound: number }> = {};
+    for (const c of filteredCalls) {
+      const key = new Date(c.createdAt).toISOString().slice(0, 10);
+      if (!buckets[key]) buckets[key] = { period: key, inbound: 0, outbound: 0 };
+      if (c.direction === 'inbound') buckets[key].inbound++;
+      else if (c.direction === 'outbound') buckets[key].outbound++;
+    }
+    return Object.values(buckets).sort((a, b) => a.period.localeCompare(b.period));
+  }, [filteredCalls]);
+
+  const outcomesOverTime = useMemo(() => {
+    const buckets: Record<string, { period: string } & Record<string, number>> = {};
+    const intentsSeen = new Set<string>();
+    for (const c of filteredCalls) {
+      const key = new Date(c.createdAt).toISOString().slice(0, 10);
+      if (!buckets[key]) buckets[key] = { period: key } as { period: string } & Record<string, number>;
+      const intent = c.intent || 'Unknown';
+      intentsSeen.add(intent);
+      buckets[key][intent] = (buckets[key][intent] || 0) + 1;
+    }
+    return { data: Object.values(buckets).sort((a, b) => a.period.localeCompare(b.period)), intents: Array.from(intentsSeen) };
+  }, [filteredCalls]);
+
+  // Widget 10: Cost Analysis — daily total cost, plus the two per-unit
+  // metrics that can actually be derived from existing data (cost per
+  // call, cost per successful outcome). No per-call AI/token or telephony
+  // cost breakdown exists in call_logs, so those two metrics from the
+  // spec are intentionally not shown here rather than invented.
+  const costOverTime = useMemo(() => {
+    const buckets: Record<string, { period: string; cost: number }> = {};
+    for (const c of filteredCalls) {
+      const key = new Date(c.createdAt).toISOString().slice(0, 10);
+      if (!buckets[key]) buckets[key] = { period: key, cost: 0 };
+      buckets[key].cost += callCostInr(c.duration || 0, costPerMinuteInr);
+    }
+    return Object.values(buckets).sort((a, b) => a.period.localeCompare(b.period));
+  }, [filteredCalls, costPerMinuteInr]);
+  const costPerCall = periodSummary.totalCalls > 0 ? periodSummary.totalCost / periodSummary.totalCalls : 0;
+  const successfulOutcomesInPeriod = filteredCalls.filter(c => isSuccessfulOutcome(c.intent)).length;
+  const costPerSuccessfulOutcome = successfulOutcomesInPeriod > 0 ? periodSummary.totalCost / successfulOutcomesInPeriod : 0;
 
   const selectedTask = selectedTaskId.startsWith(ALL_RUNS_PREFIX) ? null : dialerTasks.find((t) => t.id === selectedTaskId) || null;
   // "All runs" of one workflow, combined — the group whose synthetic id
@@ -392,47 +658,15 @@ export default function ReportsView({ callLogs, dialerTasks, leads, costPerMinut
         </Button>
       }
     >
-        {/* Page-wide KPI tiles — scoped to the From/To/Direction filters
-            below (same period as Calls in Period / filteredCalls), not to
-            whichever task is selected — that's what the row below is for. */}
-        <KpiCard colSpan={2} icon={PhoneOutgoing} iconBg="#eff6ff" iconColor="#2563eb" label="Total Calls" value={periodSummary.totalCalls} />
-        <KpiCard colSpan={2} icon={Clock} iconBg="#f0fdf4" iconColor="#16a34a" label="Avg Call Duration" value={formatDuration(periodSummary.avgCallDuration)} />
-        <KpiCard colSpan={2} icon={UserCheck} iconBg="#f0fdf4" iconColor="#16a34a" label="Success Rate" value={`${periodSummary.successRate}%`} />
-        <KpiCard colSpan={2} icon={Clock} iconBg="#eff6ff" iconColor="#2563eb" label="Total Talk Time" value={formatDuration(periodSummary.totalTalkTime)} />
-        <KpiCard colSpan={2} icon={MessageCircleQuestion} iconBg="#fffbeb" iconColor="#d97706" label="Total Enquiries" value={enquiriesTotal ?? '—'} />
-        <KpiCard colSpan={2} icon={DollarSign} iconBg="#fffbeb" iconColor="#d97706" label="Total Cost" value={formatInr(periodSummary.totalCost)} sub={`at ₹${costPerMinuteInr}/min`} />
-
-        {/* Task-scoped KPI tiles — reflect whichever task is selected below */}
-        <KpiCard colSpan={2} icon={PhoneOutgoing} iconBg="#eff6ff" iconColor="#2563eb" label="Leads in Task" value={taskReport?.total ?? 0} />
-        <KpiCard colSpan={2} icon={CheckCircle2} iconBg="#f0fdf4" iconColor="#16a34a" label="Completed" value={taskReport?.completed ?? 0} />
-        <KpiCard colSpan={2} icon={Smile} iconBg="#fdf4ff" iconColor="#9333ea" label="Conversion Rate" value={`${taskReport?.conversionRate ?? 0}%`} />
-        <KpiCard colSpan={2} icon={Clock} iconBg="#f0fdf4" iconColor="#16a34a" label="Total Duration" value={formatDuration(taskReport?.totalDuration ?? 0)} />
-        <KpiCard colSpan={2} icon={DollarSign} iconBg="#fffbeb" iconColor="#d97706" label="Total Cost" value={formatInr(taskReport?.totalCost ?? 0)} sub={`at ₹${costPerMinuteInr}/min`} />
-        <KpiCard colSpan={2} icon={Smile} iconBg="#fdf4ff" iconColor="#9333ea" label="Positive Sentiment" value={`${taskReport?.positivePct ?? 0}%`} />
-
-        {/* Filters — task dropdown (grouped by source workflow, so repeated
-            runs of the same workflow sit together) drives the whole page;
-            direction/date-range/granularity are separate and only scope the
-            Preview Report / CSV export tools further down. */}
+        {/* ── Global date-range filter — everything below (KPIs and all 10
+            widgets) is scoped to this one control. ── */}
         <Widget colSpan={12} showHeader={false} padding="md">
           <FilterBar
+            dates={[
+              { key: 'from', label: 'From', value: fromDate, onChange: setFromDate },
+              { key: 'to', label: 'To', value: toDate, onChange: setToDate },
+            ]}
             selects={[
-              {
-                key: 'task',
-                label: 'Task',
-                value: selectedTaskId,
-                onChange: setSelectedTaskId,
-                groups: taskGroups.map((g) => ({
-                  label: g.label,
-                  options: [
-                    // "All runs" combined — only worth offering once a
-                    // workflow actually HAS more than one run to combine.
-                    ...(g.tasks.length > 1 ? [{ label: `All Runs (${g.tasks.length})`, value: ALL_RUNS_PREFIX + g.label }] : []),
-                    ...g.tasks.map((t) => ({ label: formatRunDateTime(t.createdAt), value: t.id })),
-                  ],
-                })),
-                placeholder: dialerTasks.length === 0 ? 'No tasks yet' : 'Select a task…',
-              },
               {
                 key: 'direction',
                 label: 'Direction',
@@ -444,33 +678,9 @@ export default function ReportsView({ callLogs, dialerTasks, leads, costPerMinut
                   { label: 'Outgoing only', value: 'outbound' },
                 ],
               },
-              {
-                key: 'granularity',
-                label: 'Group by',
-                value: granularity,
-                onChange: (v) => setGranularity(v as Granularity),
-                options: [
-                  { label: 'Day', value: 'day' },
-                  { label: 'Month', value: 'month' },
-                  { label: 'Year', value: 'year' },
-                ],
-              },
-            ]}
-            dates={[
-              { key: 'from', label: 'From', value: fromDate, onChange: setFromDate },
-              { key: 'to', label: 'To', value: toDate, onChange: setToDate },
             ]}
             actions={
               <>
-                {reportDisplayName && (
-                  <button
-                    onClick={() => exportTaskCsv(reportDisplayName, taskReport)}
-                    disabled={exportingCsv}
-                    className="flex items-center gap-1.5 px-3 py-2 text-[11px] font-semibold bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white rounded-lg"
-                  >
-                    <Download className="h-3.5 w-3.5" /> {exportingCsv ? 'Exporting…' : 'Export to CSV'}
-                  </button>
-                )}
                 {[7, 30, 90].map((n) => (
                   <button
                     key={n}
@@ -488,10 +698,281 @@ export default function ReportsView({ callLogs, dialerTasks, leads, costPerMinut
           />
         </Widget>
 
-        {/* Leads by Source / Pipeline by Stage — moved here from Executive
-            Desk, same /api/dashboard/metrics data. */}
+        {/* Page-wide KPI tiles — scoped to the global date filter above,
+            each with a ↑/↓ trend chip vs. the immediately preceding period
+            of the same length. Not to be confused with the task-scoped
+            row below (that's "how did this one run do"). */}
+        <KpiCard
+          colSpan={2} icon={PhoneOutgoing} iconBg="#eff6ff" iconColor="#2563eb" label="Total Calls"
+          value={periodSummary.totalCalls}
+          badge={trendBadge(periodSummary.totalCalls, prevPeriodSummary.totalCalls).label}
+          badgeColor={trendBadge(periodSummary.totalCalls, prevPeriodSummary.totalCalls).color}
+        />
+        <KpiCard
+          colSpan={2} icon={Clock} iconBg="#f0fdf4" iconColor="#16a34a" label="Avg Call Duration"
+          value={formatDuration(periodSummary.avgCallDuration)}
+          badge={trendBadge(periodSummary.avgCallDuration, prevPeriodSummary.avgCallDuration).label}
+          badgeColor={trendBadge(periodSummary.avgCallDuration, prevPeriodSummary.avgCallDuration).color}
+        />
+        <KpiCard
+          colSpan={2} icon={UserCheck} iconBg="#f0fdf4" iconColor="#16a34a" label="Success Rate"
+          value={`${periodSummary.successRate}%`}
+          badge={trendBadge(periodSummary.successRate, prevPeriodSummary.successRate).label}
+          badgeColor={trendBadge(periodSummary.successRate, prevPeriodSummary.successRate).color}
+        />
+        <KpiCard
+          colSpan={2} icon={Clock} iconBg="#eff6ff" iconColor="#2563eb" label="Total Talk Time"
+          value={formatDuration(periodSummary.totalTalkTime)}
+          badge={trendBadge(periodSummary.totalTalkTime, prevPeriodSummary.totalTalkTime).label}
+          badgeColor={trendBadge(periodSummary.totalTalkTime, prevPeriodSummary.totalTalkTime).color}
+        />
+        <KpiCard
+          colSpan={2} icon={MessageCircleQuestion} iconBg="#fffbeb" iconColor="#d97706" label="Total Enquiries"
+          value={filteredEnquiries.length}
+          badge={trendBadge(filteredEnquiries.length, prevFilteredEnquiries.length).label}
+          badgeColor={trendBadge(filteredEnquiries.length, prevFilteredEnquiries.length).color}
+        />
+        <KpiCard
+          colSpan={2} icon={DollarSign} iconBg="#fffbeb" iconColor="#d97706" label="Total Cost"
+          value={formatInr(periodSummary.totalCost)} sub={`at ₹${costPerMinuteInr}/min`}
+          badge={trendBadge(periodSummary.totalCost, prevPeriodSummary.totalCost).label}
+          badgeColor={trendBadge(periodSummary.totalCost, prevPeriodSummary.totalCost).color}
+        />
+
+        {/* Task-scoped KPI tiles — reflect whichever task is selected below */}
+        <KpiCard colSpan={2} icon={PhoneOutgoing} iconBg="#eff6ff" iconColor="#2563eb" label="Leads in Task" value={taskReport?.total ?? 0} />
+        <KpiCard colSpan={2} icon={CheckCircle2} iconBg="#f0fdf4" iconColor="#16a34a" label="Completed" value={taskReport?.completed ?? 0} />
+        <KpiCard colSpan={2} icon={Smile} iconBg="#fdf4ff" iconColor="#9333ea" label="Conversion Rate" value={`${taskReport?.conversionRate ?? 0}%`} />
+        <KpiCard colSpan={2} icon={Clock} iconBg="#f0fdf4" iconColor="#16a34a" label="Total Duration" value={formatDuration(taskReport?.totalDuration ?? 0)} />
+        <KpiCard colSpan={2} icon={DollarSign} iconBg="#fffbeb" iconColor="#d97706" label="Total Cost" value={formatInr(taskReport?.totalCost ?? 0)} sub={`at ₹${costPerMinuteInr}/min`} />
+        <KpiCard colSpan={2} icon={Smile} iconBg="#fdf4ff" iconColor="#9333ea" label="Positive Sentiment" value={`${taskReport?.positivePct ?? 0}%`} />
+
+        {/* ══════════════════════════════════════════════════════════════
+            REPORTS WIDGETS — 10 widgets, 2 per row, all reading from
+            filteredCalls/filteredEnquiries/tasksInPeriod above, so every
+            one of them already respects the global date filter.
+            ══════════════════════════════════════════════════════════════ */}
+
+        {/* Row 1a: Call Volume Over Time */}
+        <Widget colSpan={6} title="Call Volume Over Time" subtitle="Inbound vs. outbound calls per day." icon={PhoneIncoming} accent="#2563eb" padding="md" hover>
+          <div className="h-64 w-full mt-1">
+            {callVolumeOverTime.length > 0 ? (
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart data={callVolumeOverTime} margin={{ top: 8, right: 8, left: -20, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                  <XAxis dataKey="period" stroke="#94a3b8" fontSize={11} tickLine={false} />
+                  <YAxis stroke="#94a3b8" fontSize={11} tickLine={false} axisLine={false} allowDecimals={false} />
+                  <RechartsTooltip {...CHART_TOOLTIP} />
+                  <Legend wrapperStyle={{ fontSize: 11 }} />
+                  <Line type="monotone" dataKey="inbound" name="Inbound" stroke="#2563eb" strokeWidth={2} dot={false} />
+                  <Line type="monotone" dataKey="outbound" name="Outbound" stroke="#f97316" strokeWidth={2} dot={false} />
+                </LineChart>
+              </ResponsiveContainer>
+            ) : <EmptyState heading="No calls in this period" />}
+          </div>
+        </Widget>
+
+        {/* Row 1b: Call Duration Distribution */}
+        <Widget colSpan={6} title="Call Duration Distribution" subtitle="How long calls typically run." icon={BarChart3} accent="#7c3aed" padding="md" hover>
+          <div className="h-64 w-full mt-1">
+            {filteredCalls.length > 0 ? (
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={durationDistribution} margin={{ top: 8, right: 8, left: -20, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                  <XAxis dataKey="bucket" stroke="#94a3b8" fontSize={11} tickLine={false} />
+                  <YAxis stroke="#94a3b8" fontSize={11} tickLine={false} axisLine={false} allowDecimals={false} />
+                  <RechartsTooltip {...CHART_TOOLTIP} />
+                  <Bar dataKey="count" name="Calls" fill="#7c3aed" radius={[4, 4, 0, 0]} barSize={28} />
+                </BarChart>
+              </ResponsiveContainer>
+            ) : <EmptyState heading="No calls in this period" />}
+          </div>
+        </Widget>
+
+        {/* Row 2a: Success Rate by Campaign */}
         <Widget
-          colSpan={12}
+          colSpan={6}
+          title="Success Rate by Campaign"
+          subtitle="% of leads with a successful outcome (intent: Interested)."
+          icon={BarChart3}
+          accent="#059669"
+          padding="md"
+          hover
+          action={
+            <button
+              onClick={() => setCampaignSortAsc(s => !s)}
+              className="text-[10px] font-semibold px-2.5 py-1 rounded-lg border cursor-pointer"
+              style={{ borderColor: 'var(--border)', color: 'var(--text-secondary)' }}
+            >
+              Sort: {campaignSortAsc ? 'Lowest first' : 'Highest first'}
+            </button>
+          }
+        >
+          <div className="w-full mt-1" style={{ height: Math.max(160, campaignSuccessRate.length * 36) }}>
+            {campaignSuccessRate.length > 0 ? (
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={campaignSuccessRate} layout="vertical" margin={{ top: 8, right: 24, left: 8, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#f1f5f9" />
+                  <XAxis type="number" domain={[0, 100]} unit="%" stroke="#94a3b8" fontSize={11} tickLine={false} axisLine={false} />
+                  <YAxis type="category" dataKey="campaign" stroke="#94a3b8" fontSize={11} tickLine={false} axisLine={false} width={120} />
+                  <RechartsTooltip {...CHART_TOOLTIP} formatter={(v: number, _n, p: any) => [`${v}% (${p?.payload?.successful ?? 0}/${p?.payload?.total ?? 0})`, 'Success Rate']} />
+                  <Bar dataKey="rate" name="Success Rate" fill="#059669" radius={[0, 3, 3, 0]} barSize={16} />
+                </BarChart>
+              </ResponsiveContainer>
+            ) : <EmptyState heading="No campaign calls in this period" message="Run a dialing task from Campaign to see performance here." />}
+          </div>
+        </Widget>
+
+        {/* Row 2b: Outcome Analysis */}
+        <Widget colSpan={6} title="Outcome Analysis" subtitle="Distribution of call outcomes (intent) this period." icon={PieChartIcon} accent="#d97706" padding="md" hover>
+          {outcomeAnalysis.length > 0 ? (
+            <div className="flex flex-col sm:flex-row items-center gap-6 mt-1">
+              <PieChart slices={outcomeAnalysis} size={150} />
+              <div className="w-full space-y-1.5">
+                {outcomeAnalysis.map(s => (
+                  <div key={s.label} className="flex items-center justify-between text-xs">
+                    <span className="flex items-center gap-1.5 text-slate-500">
+                      <span className="h-2 w-2 rounded-full shrink-0" style={{ backgroundColor: s.color }} />
+                      {s.label}
+                    </span>
+                    <span className="font-semibold text-slate-700">{s.value}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : <EmptyState heading="No calls in this period" />}
+        </Widget>
+
+        {/* Row 3a: Agent Performance */}
+        <Widget
+          colSpan={6}
+          title="Agent Performance"
+          subtitle="Per AI calling agent, this period."
+          icon={Users}
+          accent="#2563eb"
+          padding="md"
+          hover
+          action={
+            <select
+              value={agentMetric}
+              onChange={(e) => setAgentMetric(e.target.value as typeof agentMetric)}
+              className="text-[11px] font-semibold px-2.5 py-1.5 rounded-lg border bg-[var(--bg-surface)] cursor-pointer"
+              style={{ borderColor: 'var(--border)', color: 'var(--text-secondary)' }}
+            >
+              <option value="successRate">Success Rate</option>
+              <option value="successfulOutcomes">Successful Outcomes</option>
+              <option value="totalCalls">Total Calls</option>
+              <option value="answeredCalls">Answered Calls</option>
+              <option value="inquiries">Inquiries</option>
+              <option value="avgDuration">Avg Call Duration</option>
+            </select>
+          }
+        >
+          <div className="w-full mt-1" style={{ height: Math.max(160, agentPerformance.length * 36) }}>
+            {agentPerformance.length > 0 ? (
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={agentPerformance} layout="vertical" margin={{ top: 8, right: 24, left: 8, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#f1f5f9" />
+                  <XAxis type="number" stroke="#94a3b8" fontSize={11} tickLine={false} axisLine={false} allowDecimals={false} unit={agentMetric === 'successRate' ? '%' : agentMetric === 'avgDuration' ? 's' : undefined} />
+                  <YAxis type="category" dataKey="agent" stroke="#94a3b8" fontSize={11} tickLine={false} axisLine={false} width={120} />
+                  <RechartsTooltip {...CHART_TOOLTIP} />
+                  <Bar dataKey={agentMetric} name={agentMetric === 'successRate' ? 'Success Rate' : agentMetric === 'avgDuration' ? 'Avg Duration (s)' : agentMetric} fill="#2563eb" radius={[0, 3, 3, 0]} barSize={16} />
+                </BarChart>
+              </ResponsiveContainer>
+            ) : <EmptyState heading="No campaign calls in this period" message="Run a dialing task from Campaign to see agent performance here." />}
+          </div>
+        </Widget>
+
+        {/* Row 3b: Inbound vs Outbound Analysis */}
+        <Widget
+          colSpan={6}
+          title="Inbound vs Outbound Analysis"
+          subtitle="Total and answered calls, by direction."
+          icon={PhoneOutgoing}
+          accent="#7c3aed"
+          padding="md"
+          hover
+          action={
+            <div className="flex items-center gap-1.5">
+              <select
+                value={ioCampaignFilter}
+                onChange={(e) => setIoCampaignFilter(e.target.value)}
+                className="text-[10px] font-semibold px-2 py-1 rounded-lg border bg-[var(--bg-surface)] cursor-pointer"
+                style={{ borderColor: 'var(--border)', color: 'var(--text-secondary)' }}
+              >
+                <option value="all">All Campaigns</option>
+                {taskGroups.map(g => <option key={g.label} value={g.label}>{g.label}</option>)}
+              </select>
+              <select
+                value={ioAgentFilter}
+                onChange={(e) => setIoAgentFilter(e.target.value)}
+                className="text-[10px] font-semibold px-2 py-1 rounded-lg border bg-[var(--bg-surface)] cursor-pointer"
+                style={{ borderColor: 'var(--border)', color: 'var(--text-secondary)' }}
+              >
+                <option value="all">All Agents</option>
+                {Object.entries(agentNames).map(([id, name]) => <option key={id} value={id}>{name}</option>)}
+              </select>
+            </div>
+          }
+        >
+          <div className="h-64 w-full mt-1">
+            {inboundOutboundAnalysis.some(r => r.total > 0) ? (
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={inboundOutboundAnalysis} margin={{ top: 8, right: 8, left: -20, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                  <XAxis dataKey="direction" stroke="#94a3b8" fontSize={11} tickLine={false} />
+                  <YAxis stroke="#94a3b8" fontSize={11} tickLine={false} axisLine={false} allowDecimals={false} />
+                  <RechartsTooltip {...CHART_TOOLTIP} />
+                  <Legend wrapperStyle={{ fontSize: 11 }} />
+                  <Bar dataKey="answered" name="Answered" stackId="calls" fill="#059669" />
+                  <Bar dataKey="notAnswered" name="Not Answered" stackId="calls" fill="#e11d48" radius={[3, 3, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            ) : <EmptyState heading="No calls in this period" />}
+          </div>
+        </Widget>
+
+        {/* Row 4a: Inquiry Analysis */}
+        <Widget colSpan={6} title="Inquiry Analysis" subtitle="Customer inquiries handled, per day." icon={MessageCircleQuestion} accent="#d97706" padding="md" hover>
+          <div className="h-64 w-full mt-1">
+            {inquiryAnalysis.length > 0 ? (
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={inquiryAnalysis} margin={{ top: 8, right: 8, left: -20, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                  <XAxis dataKey="period" stroke="#94a3b8" fontSize={11} tickLine={false} />
+                  <YAxis stroke="#94a3b8" fontSize={11} tickLine={false} axisLine={false} allowDecimals={false} />
+                  <RechartsTooltip {...CHART_TOOLTIP} />
+                  <Bar dataKey="count" name="Inquiries" fill="#d97706" radius={[4, 4, 0, 0]} barSize={22} />
+                </BarChart>
+              </ResponsiveContainer>
+            ) : <EmptyState heading="No inquiries in this period" />}
+          </div>
+        </Widget>
+
+        {/* Row 4b: Call Outcomes Over Time */}
+        <Widget colSpan={6} title="Call Outcomes Over Time" subtitle="Daily outcome (intent) breakdown." icon={Activity} accent="#2563eb" padding="md" hover>
+          <div className="h-64 w-full mt-1">
+            {outcomesOverTime.data.length > 0 ? (
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={outcomesOverTime.data} margin={{ top: 8, right: 8, left: -20, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                  <XAxis dataKey="period" stroke="#94a3b8" fontSize={11} tickLine={false} />
+                  <YAxis stroke="#94a3b8" fontSize={11} tickLine={false} axisLine={false} allowDecimals={false} />
+                  <RechartsTooltip {...CHART_TOOLTIP} />
+                  <Legend wrapperStyle={{ fontSize: 11 }} />
+                  {outcomesOverTime.intents.map(intent => (
+                    <Area key={intent} type="monotone" dataKey={intent} name={intent} stackId="1" stroke={intentColor(intent)} fill={intentColor(intent)} fillOpacity={0.5} />
+                  ))}
+                </AreaChart>
+              </ResponsiveContainer>
+            ) : <EmptyState heading="No calls in this period" />}
+          </div>
+        </Widget>
+
+        {/* Row 5a: Leads by Source / Pipeline by Stage — moved here from
+            Executive Desk, same /api/dashboard/metrics data. */}
+        <Widget
+          colSpan={6}
           title={isLending ? 'Leads by Source' : `${primaryObject?.objectLabel || 'Pipeline'} by Stage`}
           subtitle={isLending ? 'How your leads are actually arriving.' : 'Where records currently sit in the pipeline.'}
           icon={Activity}
@@ -529,6 +1010,85 @@ export default function ReportsView({ callLogs, dialerTasks, leads, costPerMinut
                 : <EmptyState heading="No pipeline stages configured yet" />
             }
           </div>
+        </Widget>
+
+        {/* Row 5b: Cost Analysis — only metrics that can actually be
+            derived from existing data (total cost per day, cost per call,
+            cost per successful outcome). No per-call AI/token or
+            telephony cost breakdown exists in call_logs yet, so those two
+            metrics from the spec are intentionally left out here rather
+            than invented. */}
+        <Widget colSpan={6} title="Cost Analysis" subtitle="Total cost per day, this period." icon={DollarSign} accent="#d97706" padding="md" hover>
+          <div className="flex items-center gap-4 mb-3 text-xs">
+            <span className="text-slate-500">Cost / Call: <strong className="text-slate-700">{formatInr(costPerCall)}</strong></span>
+            <span className="text-slate-500">Cost / Successful Outcome: <strong className="text-slate-700">{successfulOutcomesInPeriod > 0 ? formatInr(costPerSuccessfulOutcome) : '—'}</strong></span>
+          </div>
+          <div className="h-52 w-full">
+            {costOverTime.length > 0 ? (
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={costOverTime} margin={{ top: 8, right: 8, left: -10, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                  <XAxis dataKey="period" stroke="#94a3b8" fontSize={11} tickLine={false} />
+                  <YAxis stroke="#94a3b8" fontSize={11} tickLine={false} axisLine={false} tickFormatter={(v) => formatInr(v)} />
+                  <RechartsTooltip {...CHART_TOOLTIP} formatter={(v: number) => [formatInr(v), 'Cost']} />
+                  <Bar dataKey="cost" name="Cost" fill="#d97706" radius={[4, 4, 0, 0]} barSize={22} />
+                </BarChart>
+              </ResponsiveContainer>
+            ) : <EmptyState heading="No calls in this period" />}
+          </div>
+          <p className="text-[10px] text-slate-400 mt-2">AI/token and telephony cost aren't broken out per call in the current data — only the totals above are shown.</p>
+        </Widget>
+
+        {/* ══════════════════════════════════════════════════════════════
+            Below: the existing per-task deep-dive (task selector, sentiment
+            breakdown, per-lead table, CSV export) — unchanged, still its
+            own section since it answers a different question ("how did
+            this ONE campaign run do") than the period-wide widgets above.
+            ══════════════════════════════════════════════════════════════ */}
+
+        {/* Filters — task dropdown (grouped by source workflow, so repeated
+            runs of the same workflow sit together). */}
+        <Widget colSpan={12} showHeader={false} padding="md">
+          <FilterBar
+            selects={[
+              {
+                key: 'task',
+                label: 'Task',
+                value: selectedTaskId,
+                onChange: setSelectedTaskId,
+                groups: taskGroups.map((g) => ({
+                  label: g.label,
+                  options: [
+                    ...(g.tasks.length > 1 ? [{ label: `All Runs (${g.tasks.length})`, value: ALL_RUNS_PREFIX + g.label }] : []),
+                    ...g.tasks.map((t) => ({ label: formatRunDateTime(t.createdAt), value: t.id })),
+                  ],
+                })),
+                placeholder: dialerTasks.length === 0 ? 'No tasks yet' : 'Select a task…',
+              },
+              {
+                key: 'granularity',
+                label: 'Group by',
+                value: granularity,
+                onChange: (v) => setGranularity(v as Granularity),
+                options: [
+                  { label: 'Day', value: 'day' },
+                  { label: 'Month', value: 'month' },
+                  { label: 'Year', value: 'year' },
+                ],
+              },
+            ]}
+            actions={
+              reportDisplayName ? (
+                <button
+                  onClick={() => exportTaskCsv(reportDisplayName, taskReport)}
+                  disabled={exportingCsv}
+                  className="flex items-center gap-1.5 px-3 py-2 text-[11px] font-semibold bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white rounded-lg"
+                >
+                  <Download className="h-3.5 w-3.5" /> {exportingCsv ? 'Exporting…' : 'Export to CSV'}
+                </button>
+              ) : undefined
+            }
+          />
         </Widget>
 
         {/* Sentiment breakdown — for the selected task's calls */}
