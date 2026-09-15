@@ -771,6 +771,7 @@ export default function App() {
             leads={leads}
             callLogs={callLogs}
             loans={loans}
+            dialerTasks={dialerTasks}
             orgSettings={orgSettings}
             costPerMinuteInr={costPerMinuteInr}
           />
