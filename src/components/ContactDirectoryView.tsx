@@ -29,6 +29,8 @@ import FilterBar from './ui/FilterBar';
 import ActionMenu from './ui/ActionMenu';
 import DataTable, { Column } from './ui/DataTable';
 import { newClientId } from '../lib/ids';
+import Badge from './ui/Badge';
+import { usePipelineStages, stageLabel } from '../lib/pipelineStages';
 
 
 interface ContactDirectoryViewProps {
@@ -54,6 +56,7 @@ export default function ContactDirectoryView({
   // drive contact. financialInfo still gets a harmless default under the
   // hood so existing lending-only code paths keep working unchanged.
   const isLending = !industry || industry === 'lending';
+  const { stages: pipelineStages } = usePipelineStages();
   // Navigation & filtering state
   const [searchTerm, setSearchTerm] = useState('');
   const [sourceFilter, setSourceFilter] = useState('All');
@@ -534,6 +537,16 @@ export default function ContactDirectoryView({
                   ))}
                 </div>
               ),
+            },
+            {
+              key: 'stage',
+              header: 'Stage',
+              cell: (lead) => {
+                const STAGE_COLOR: Record<string, 'blue' | 'amber' | 'green' | 'slate' | 'indigo'> = {
+                  contact: 'slate', campaign: 'blue', lead: 'indigo', opportunity: 'amber', client: 'green',
+                };
+                return <Badge color={STAGE_COLOR[lead.pipelineStage || 'contact']}>{stageLabel(pipelineStages, lead.pipelineStage)}</Badge>;
+              },
             },
             {
               key: 'actions',

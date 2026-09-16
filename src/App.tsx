@@ -778,7 +778,7 @@ export default function App() {
           />
         );
       case 'leads':
-        return <LeadsView />;
+        return <LeadsView leads={leads} setLeads={setLeads} />;
       case 'contacts':
         return (
           <ContactDirectoryView

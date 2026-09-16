@@ -24,24 +24,20 @@ export interface Lead {
   // Contact Directory groups this contact belongs to — zero, one, or many.
   // Undefined/empty means "no group" (solo contact).
   groupIds?: string[];
+  // Universal contact -> campaign -> lead -> opportunity -> client
+  // progression every contact moves through, worded per-industry (see
+  // src/lib/pipelineStages.ts / GET /api/settings/pipeline-stages).
+  // Advanced automatically when a contact joins a campaign or a call to
+  // them is answered; advanced manually (via `status`) into opportunity/
+  // client. Missing/undefined reads as "contact", the starting stage.
+  pipelineStage?: 'contact' | 'campaign' | 'lead' | 'opportunity' | 'client';
 }
 
-// A raw/unqualified lead — a pipeline stage BEFORE a real Contact (Lead,
-// above — confusingly also called "leads" at the data layer, since that's
-// the Contact Directory's table). Lives on its own Leads page; converting
-// one creates a genuinely new, independent Contact rather than just
-// relabeling this row, and leaves a convertedLeadId trail behind.
-export interface Prospect {
-  id: string;
-  name: string;
-  phone: string;
-  email?: string;
-  source: string;
-  status: 'New' | 'Contacted' | 'Qualified' | 'Disqualified' | 'Converted';
-  notes?: string;
-  convertedLeadId?: string;
-  createdAt: string;
-  updatedAt?: string;
+// One of the 5 universal pipeline stage keys, worded for this org's
+// industry — see GET /api/settings/pipeline-stages.
+export interface PipelineStageLabel {
+  key: 'contact' | 'campaign' | 'lead' | 'opportunity' | 'client';
+  label: string;
 }
 
 export interface ContactGroup {

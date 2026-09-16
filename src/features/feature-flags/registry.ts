@@ -31,7 +31,7 @@ export const FEATURE_REGISTRY: FeatureFlagDef[] = [
   {
     key: 'leads',
     label: 'Leads',
-    description: 'Raw, unqualified prospects — a pipeline stage before converting into a full Contact',
+    description: 'Contacts actively being worked — in a campaign or already engaged, before becoming an Opportunity or Client',
     tabId: 'leads',
     enabledByDefault: true,
   },
