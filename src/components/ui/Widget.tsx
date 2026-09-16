@@ -59,6 +59,17 @@ interface WidgetProps {
   /** Override the scrollable body's max-height (CSS value, e.g. "40vh") */
   maxBodyHeight?: string;
   /**
+   * Overflow behavior for the non-scrollable body (ignored when
+   * `scrollable` is true). Defaults to 'auto' (horizontal scroll for wide
+   * content, e.g. tables). Chart widgets (ResponsiveContainer + Recharts
+   * Tooltip) should pass 'hidden' — Recharts' hover tooltip is an
+   * absolutely-positioned div whose transform can transiently land a few
+   * px outside this box, which with 'auto' shows up as a scrollbar
+   * flashing on every hover (horizontal, vertical, or both) even though
+   * nothing is actually meant to scroll.
+   */
+  bodyOverflow?: 'auto' | 'hidden' | 'visible';
+  /**
    * When true (default when scrollable=true), Widget forcibly pins every
    * <thead> inside its body to the top of the scroll container so developers
    * don't have to add sticky classes to individual tables.
@@ -68,6 +79,7 @@ interface WidgetProps {
 }
 
 const PADDING = { none: '', sm: 'p-4', md: 'p-5', lg: 'p-6' };
+const BODY_OVERFLOW = { auto: 'overflow-x-auto', hidden: 'overflow-hidden', visible: 'overflow-visible' };
 
 export default function Widget({
   colSpan = 12,
@@ -85,6 +97,7 @@ export default function Widget({
   hover = false,
   scrollable = false,
   maxBodyHeight = '60vh',
+  bodyOverflow = 'auto',
   stickyHeader,
 }: WidgetProps) {
   // stickyHeader defaults to true whenever the widget is scrollable
@@ -154,7 +167,7 @@ export default function Widget({
           {children}
         </div>
       ) : (
-        <div className={`flex-1 overflow-x-auto ${PADDING[padding]} ${bodyClassName}`}>
+        <div className={`flex-1 ${BODY_OVERFLOW[bodyOverflow]} ${PADDING[padding]} ${bodyClassName}`}>
           {children}
         </div>
       )}
