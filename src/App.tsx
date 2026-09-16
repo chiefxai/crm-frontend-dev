@@ -244,6 +244,7 @@ export default function App() {
   // Slug ↔ tab-ID mappings — URL uses human-readable slugs, internal code uses short IDs.
   const TAB_TO_SLUG: Record<string, string> = {
     dashboard:     'executive-dashboard',
+    leads:         'leads',
     contacts:      'contact-directory',
     workflows:     'workflow-builder',
     dialer:        'voice-simulator',
@@ -720,7 +721,7 @@ export default function App() {
 
     // Find the first sidebar tab the user can actually see
     const orderedTabs = [
-      'dashboard', 'contacts', 'workflows',
+      'dashboard', 'leads', 'contacts', 'workflows',
       'dialer', 'call-logs', 'reports', 'inbox', 'agent-studio',
       'compliance', 'knowledge', 'enquiries', 'audit-log', 'loans',
     ];
