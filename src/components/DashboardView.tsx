@@ -260,7 +260,7 @@ export default function DashboardView({
   };
 
   // Widget 4: Campaign Performance
-  const [campaignMetric, setCampaignMetric] = useState<MetricKey>('successfulOutcomes');
+  const [campaignMetric, setCampaignMetric] = useState<MetricKey>('totalCalls');
   const campaignPerformance = useMemo(() => {
     const byWorkflow: Record<string, { totalCalls: number; answeredCalls: number; successfulOutcomes: number }> = {};
     for (const task of tasksInPeriod) {
@@ -295,7 +295,7 @@ export default function DashboardView({
   }, [tasksInPeriod, filteredEnquiries, callTaskIndex, campaignMetric]);
 
   // Widget 5: Agent Performance
-  const [agentMetric, setAgentMetric] = useState<MetricKey>('successfulOutcomes');
+  const [agentMetric, setAgentMetric] = useState<MetricKey>('totalCalls');
   const agentPerformance = useMemo(() => {
     const byAgent: Record<string, { totalCalls: number; answeredCalls: number; successfulOutcomes: number }> = {};
     for (const task of tasksInPeriod) {
@@ -419,7 +419,7 @@ export default function DashboardView({
         ) : <EmptyState heading="No calls in this period" />}
       </Widget>
 
-      <Widget colSpan={6} title="Inbound vs Outbound Calls" subtitle="Call volume over time, by direction." icon={PhoneOutgoing} accent="#2563eb" padding="md" hover>
+      <Widget colSpan={6} title="Inbound vs Outbound Calls" subtitle="Call volume over time, by direction." icon={PhoneOutgoing} accent="#2563eb" padding="md" hover bodyOverflow="hidden">
         <div className="h-64 w-full mt-1">
           {inboundOutboundOverTime.length > 0 ? (
             <ResponsiveContainer width="100%" height="100%">
@@ -438,7 +438,7 @@ export default function DashboardView({
       </Widget>
 
       {/* ── Widget Row 2: Calls & Outcomes Over Time | Campaign Performance ── */}
-      <Widget colSpan={6} title="Calls & Outcomes Over Time" subtitle="Is more call activity producing more successful outcomes?" icon={Activity} accent="#2563eb" padding="md" hover>
+      <Widget colSpan={6} title="Calls & Outcomes Over Time" subtitle="Is more call activity producing more successful outcomes?" icon={Activity} accent="#2563eb" padding="md" hover bodyOverflow="hidden">
         <div className="h-64 w-full mt-1">
           {callsAndOutcomesOverTime.length > 0 ? (
             <ResponsiveContainer width="100%" height="100%">
@@ -464,6 +464,7 @@ export default function DashboardView({
         accent="#7c3aed"
         padding="md"
         hover
+        bodyOverflow="hidden"
         action={
           <select
             value={campaignMetric}
@@ -499,6 +500,7 @@ export default function DashboardView({
         accent="#2563eb"
         padding="md"
         hover
+        bodyOverflow="hidden"
         action={
           <select
             value={agentMetric}

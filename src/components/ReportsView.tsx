@@ -334,7 +334,7 @@ export default function ReportsView({ callLogs, dialerTasks, leads, costPerMinut
   // Widget 5: Agent Performance — selectable metric, computed once per
   // agent so switching the dropdown is instant (no re-fetch).
   type AgentMetricKey = 'totalCalls' | 'answeredCalls' | 'inquiries' | 'successfulOutcomes' | 'successRate' | 'avgDuration';
-  const [agentMetric, setAgentMetric] = useState<AgentMetricKey>('successRate');
+  const [agentMetric, setAgentMetric] = useState<AgentMetricKey>('totalCalls');
   const agentPerformance = useMemo(() => {
     const byAgent: Record<string, { totalCalls: number; answeredCalls: number; successfulOutcomes: number; totalDuration: number }> = {};
     for (const task of tasksInPeriod) {
@@ -544,7 +544,7 @@ export default function ReportsView({ callLogs, dialerTasks, leads, costPerMinut
             ══════════════════════════════════════════════════════════════ */}
 
         {/* Row 1a: Call Volume Over Time */}
-        <Widget colSpan={6} title="Call Volume Over Time" subtitle="Inbound vs. outbound calls per day." icon={PhoneIncoming} accent="#2563eb" padding="md" hover>
+        <Widget colSpan={6} title="Call Volume Over Time" subtitle="Inbound vs. outbound calls per day." icon={PhoneIncoming} accent="#2563eb" padding="md" hover bodyOverflow="hidden">
           <div className="h-64 w-full mt-1">
             {callVolumeOverTime.length > 0 ? (
               <ResponsiveContainer width="100%" height="100%">
@@ -563,7 +563,7 @@ export default function ReportsView({ callLogs, dialerTasks, leads, costPerMinut
         </Widget>
 
         {/* Row 1b: Call Duration Distribution */}
-        <Widget colSpan={6} title="Call Duration Distribution" subtitle="How long calls typically run." icon={BarChart3} accent="#7c3aed" padding="md" hover>
+        <Widget colSpan={6} title="Call Duration Distribution" subtitle="How long calls typically run." icon={BarChart3} accent="#7c3aed" padding="md" hover bodyOverflow="hidden">
           <div className="h-64 w-full mt-1">
             {filteredCalls.length > 0 ? (
               <ResponsiveContainer width="100%" height="100%">
@@ -588,6 +588,7 @@ export default function ReportsView({ callLogs, dialerTasks, leads, costPerMinut
           accent="#059669"
           padding="md"
           hover
+          bodyOverflow="hidden"
           action={
             <button
               onClick={() => setCampaignSortAsc(s => !s)}
@@ -644,6 +645,7 @@ export default function ReportsView({ callLogs, dialerTasks, leads, costPerMinut
           accent="#2563eb"
           padding="md"
           hover
+          bodyOverflow="hidden"
           action={
             <select
               value={agentMetric}
@@ -684,6 +686,7 @@ export default function ReportsView({ callLogs, dialerTasks, leads, costPerMinut
           accent="#7c3aed"
           padding="md"
           hover
+          bodyOverflow="hidden"
           action={
             <div className="flex items-center gap-1.5">
               <select
@@ -725,7 +728,7 @@ export default function ReportsView({ callLogs, dialerTasks, leads, costPerMinut
         </Widget>
 
         {/* Row 4a: Inquiry Analysis */}
-        <Widget colSpan={6} title="Inquiry Analysis" subtitle="Customer inquiries handled, per day." icon={MessageCircleQuestion} accent="#d97706" padding="md" hover>
+        <Widget colSpan={6} title="Inquiry Analysis" subtitle="Customer inquiries handled, per day." icon={MessageCircleQuestion} accent="#d97706" padding="md" hover bodyOverflow="hidden">
           <div className="h-64 w-full mt-1">
             {inquiryAnalysis.length > 0 ? (
               <ResponsiveContainer width="100%" height="100%">
@@ -742,7 +745,7 @@ export default function ReportsView({ callLogs, dialerTasks, leads, costPerMinut
         </Widget>
 
         {/* Row 4b: Call Outcomes Over Time */}
-        <Widget colSpan={6} title="Call Outcomes Over Time" subtitle="Daily outcome (intent) breakdown." icon={Activity} accent="#2563eb" padding="md" hover>
+        <Widget colSpan={6} title="Call Outcomes Over Time" subtitle="Daily outcome (intent) breakdown." icon={Activity} accent="#2563eb" padding="md" hover bodyOverflow="hidden">
           <div className="h-64 w-full mt-1">
             {outcomesOverTime.data.length > 0 ? (
               <ResponsiveContainer width="100%" height="100%">
@@ -771,6 +774,7 @@ export default function ReportsView({ callLogs, dialerTasks, leads, costPerMinut
           accent="#7c3aed"
           padding="md"
           hover
+          bodyOverflow="hidden"
         >
           <div className="h-64 w-full mt-1">
             {isLending
@@ -810,7 +814,7 @@ export default function ReportsView({ callLogs, dialerTasks, leads, costPerMinut
             telephony cost breakdown exists in call_logs yet, so those two
             metrics from the spec are intentionally left out here rather
             than invented. */}
-        <Widget colSpan={6} title="Cost Analysis" subtitle="Total cost per day, this period." icon={DollarSign} accent="#d97706" padding="md" hover>
+        <Widget colSpan={6} title="Cost Analysis" subtitle="Total cost per day, this period." icon={DollarSign} accent="#d97706" padding="md" hover bodyOverflow="hidden">
           <div className="flex items-center gap-4 mb-3 text-xs">
             <span className="text-slate-500">Cost / Call: <strong className="text-slate-700">{formatInr(costPerCall)}</strong></span>
             <span className="text-slate-500">Cost / Successful Outcome: <strong className="text-slate-700">{successfulOutcomesInPeriod > 0 ? formatInr(costPerSuccessfulOutcome) : '—'}</strong></span>

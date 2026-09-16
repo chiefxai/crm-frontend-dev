@@ -28,6 +28,7 @@ import Modal from './ui/Modal';
 import FilterBar from './ui/FilterBar';
 import ActionMenu from './ui/ActionMenu';
 import DataTable, { Column } from './ui/DataTable';
+import { newClientId } from '../lib/ids';
 
 
 interface ContactDirectoryViewProps {
@@ -243,7 +244,7 @@ export default function ContactDirectoryView({
       // Create mode — no group selected means "no group" (solo contact),
       // addable to one later from the edit modal.
       const newLead: Lead = {
-        id: `L-${100 + leads.length + 1}`,
+        id: newClientId('L'),
         name: formName,
         phone: formPhone,
         email: formEmail,
@@ -365,10 +366,9 @@ export default function ContactDirectoryView({
       return;
     }
 
-    const startIdNumber = 100 + leads.length + 1;
-    const finalLeadsToImport: Lead[] = parsedPreview.map((item, idx) => {
+    const finalLeadsToImport: Lead[] = parsedPreview.map((item) => {
       return {
-        id: `L-${startIdNumber + idx}`,
+        id: newClientId('L'),
         name: item.name || 'Anonymous Contact',
         phone: item.phone || '+1 (555) 000-0000',
         email: item.email || 'imported@email.com',
@@ -474,7 +474,7 @@ export default function ContactDirectoryView({
               cell: (lead) => (
                 <div className="flex items-center space-x-3">
                   <div className="h-8 w-8 rounded-lg bg-blue-50 text-blue-700 font-bold flex items-center justify-center uppercase">
-                    {lead.name.split(' ').map((n) => n[0]).join('')}
+                    {lead.name.split(' ').map((n) => n[0]).slice(0, 2).join('')}
                   </div>
                   <div>
                     <p className="font-semibold text-slate-800 text-sm">{lead.name}</p>
