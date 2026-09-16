@@ -1569,6 +1569,32 @@ Currently on question ${nextIndex} out of ${selectedTask.questions.length}. Next
           </div>
         )}
 
+        {/* Scheduled callback, if this call ended with the caller asking
+            to be called back — same signal the Scheduled Callbacks page
+            and dialerRetryEngine.js's automatic redial already key off
+            (status === "Callback Scheduled"), just surfaced here too so
+            it's visible without leaving the call's own detail panel. */}
+        {activeTapeResult.status === 'Callback Scheduled' ? (
+          <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 space-y-2">
+            <span className="text-[9px] font-mono text-blue-700 uppercase tracking-widest font-bold flex items-center gap-1.5">
+              <Clock className="h-3.5 w-3.5" />
+              Scheduled Callback
+            </span>
+            <p className="text-xs text-[var(--text-primary)]">
+              {activeTapeResult.callbackTime
+                ? new Date(activeTapeResult.callbackTime).toLocaleString(undefined, { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' })
+                : 'Time not specified — will retry soon'}
+            </p>
+            {(activeTapeResult as { callbackReason?: string }).callbackReason && (
+              <p className="text-xs text-[var(--text-secondary)] italic">"{(activeTapeResult as { callbackReason?: string }).callbackReason}"</p>
+            )}
+          </div>
+        ) : (
+          <div className="bg-[var(--bg-subtle)] border border-[var(--border)]/60 rounded-xl p-4 text-[11px] text-[var(--text-muted)] flex items-center gap-2">
+            <Clock className="h-3.5 w-3.5" /> No callback scheduled for this call.
+          </div>
+        )}
+
         {/* AI Summary */}
         <div className="bg-[var(--bg-subtle)] border border-[var(--border)]/60 rounded-xl p-4 space-y-1.5">
           <span className="text-[9px] font-mono text-[var(--text-muted)] uppercase tracking-widest font-bold block">AI Summarized Intake</span>
