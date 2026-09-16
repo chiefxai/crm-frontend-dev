@@ -28,7 +28,8 @@ import {
   Inbox,
   History,
   PhoneForwarded,
-  MessageCircleQuestion
+  MessageCircleQuestion,
+  GitBranch
 } from 'lucide-react';
 import { Lead, CallLog, VirtualNumber, TeamMember, ContactGroup, OrganizationSettings } from '../types';
 import { QuestionFlow } from '../features/workflows/types';
@@ -367,6 +368,64 @@ Real Tamil speakers do not say the "correct" written form of a word. They contra
   });
 
   const selectedTask = tasks.find((t) => t.id === selectedTaskId) || tasks[0];
+
+  // Campaign list: normal mode (Lead Contact/Value/Survey Status/AI
+  // Sentiment/Survey Outcome) vs. a per-workflow-variable detail view —
+  // same "one column per extracted answer" table as Reports' Campaign
+  // Details, scoped to just this task. Reset when the selected task
+  // changes so a stale detail table from a different campaign never shows.
+  const [showWorkflowDetailView, setShowWorkflowDetailView] = useState(false);
+  interface WorkflowDetailRow { leadId: string; leadName: string; phone: string; status: string; sentiment: string; answers: Record<string, string> }
+  const [workflowDetailRows, setWorkflowDetailRows] = useState<WorkflowDetailRow[]>([]);
+  const [workflowDetailColumns, setWorkflowDetailColumns] = useState<string[]>([]);
+  const [workflowDetailLoading, setWorkflowDetailLoading] = useState(false);
+
+  useEffect(() => {
+    if (!showWorkflowDetailView || !selectedTask) { setWorkflowDetailRows([]); setWorkflowDetailColumns([]); return; }
+    let cancelled = false;
+    setWorkflowDetailLoading(true);
+
+    const leadEntries = Object.entries(selectedTask.callResults).filter(([, r]) => r.callId);
+
+    Promise.all(leadEntries.map(async ([leadId, result]) => {
+      const lead = leadsDatabase.find((l) => l.id === leadId);
+      let answers: Record<string, string> = {};
+      try {
+        const res = await apiFetch(`/api/calls/${encodeURIComponent(result.callId!)}/lead-responses`);
+        if (res.ok) {
+          const rows: { label?: string; question: string; answer: string }[] = await res.json();
+          for (const row of rows) {
+            if (row.answer) answers[row.label || row.question] = row.answer;
+          }
+        }
+      } catch { /* leave answers empty for this lead */ }
+      const row: WorkflowDetailRow = {
+        leadId,
+        leadName: lead?.name || 'Unknown',
+        phone: lead?.phone || '—',
+        status: result.status,
+        sentiment: result.sentiment,
+        answers,
+      };
+      return row;
+    })).then((rows) => {
+      if (cancelled) return;
+      const columns: string[] = [];
+      const seen = new Set<string>();
+      for (const row of rows) {
+        for (const label of Object.keys(row.answers)) {
+          if (!seen.has(label)) { seen.add(label); columns.push(label); }
+        }
+      }
+      setWorkflowDetailRows(rows);
+      setWorkflowDetailColumns(columns);
+      setWorkflowDetailLoading(false);
+    }).catch(() => {
+      if (!cancelled) { setWorkflowDetailRows([]); setWorkflowDetailColumns([]); setWorkflowDetailLoading(false); }
+    });
+
+    return () => { cancelled = true; };
+  }, [showWorkflowDetailView, selectedTask, leadsDatabase]);
 
   // Task Creation Wizard States
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -1770,6 +1829,18 @@ Currently on question ${nextIndex} out of ${selectedTask.questions.length}. Next
                 <h3 className="text-lg font-bold text-[var(--text-primary)] uppercase tracking-widest">Active Campaign List</h3>
               </div>
 
+              <div className="flex items-center gap-2">
+                <Button
+                  variant={showWorkflowDetailView ? 'primary' : 'secondary'}
+                  size="sm"
+                  icon={GitBranch}
+                  onClick={() => setShowWorkflowDetailView((v) => !v)}
+                  title={showWorkflowDetailView
+                    ? 'Switch back to the normal list — Lead Contact / Value / Survey Status / AI Sentiment / Survey Outcome'
+                    : 'Show every extracted workflow answer as its own column, for every lead in this campaign'}
+                >
+                  {showWorkflowDetailView ? 'Normal View' : 'Workflow View'}
+                </Button>
               <Button
                 variant={selectedTask.autoDialEnabled ? 'danger' : 'primary'}
                 size="sm"
@@ -1782,6 +1853,7 @@ Currently on question ${nextIndex} out of ${selectedTask.questions.length}. Next
               >
                 {selectedTask.autoDialEnabled ? 'Stop Auto-Dial' : 'Start Campaign'}
               </Button>
+              </div>
             </div>
             {selectedTask.autoDialEnabled && (
               <p className="text-[11px] text-emerald-600 dark:text-emerald-400 -mt-2">
@@ -1789,9 +1861,47 @@ Currently on question ${nextIndex} out of ${selectedTask.questions.length}. Next
               </p>
             )}
 
-            {/* List Queue Table */}
+            {/* List Queue Table — normal mode (Lead Contact/Value/Survey
+                Status/AI Sentiment/Survey Outcome) or, toggled, one column
+                per workflow variable actually extracted for this campaign
+                (same shape as Reports' Campaign Details table, scoped to
+                just this task). */}
             <div className="flex-1 min-h-0">
-            {(() => {
+            {showWorkflowDetailView ? (
+              workflowDetailLoading ? (
+                <div className="flex items-center justify-center py-16 text-[var(--text-muted)] text-sm">Loading workflow details…</div>
+              ) : workflowDetailRows.length === 0 ? (
+                <EmptyState heading="No completed calls in this campaign yet" />
+              ) : (() => {
+                const columns: Column<WorkflowDetailRow>[] = [
+                  { key: 'leadName', header: 'Lead Contact', cell: (r) => (
+                    <div className="space-y-0.5">
+                      <p className="font-bold text-[var(--text-primary)]">{r.leadName}</p>
+                      <p className="text-[10px] text-[var(--text-muted)] font-mono">{r.phone}</p>
+                    </div>
+                  ) },
+                  { key: 'status', header: 'Survey Status', cell: (r) => <span className="text-xs" style={{ color: 'var(--text-secondary)' }}>{r.status}</span> },
+                  { key: 'sentiment', header: 'AI Sentiment', cell: (r) => <span className="text-xs" style={{ color: 'var(--text-secondary)' }}>{r.sentiment}</span> },
+                  ...workflowDetailColumns.map((label): Column<WorkflowDetailRow> => ({
+                    key: label,
+                    header: label,
+                    cell: (r) => r.answers[label]
+                      ? <span className="text-xs" style={{ color: 'var(--text-primary)' }}>{r.answers[label]}</span>
+                      : <span className="text-[var(--text-muted)] italic text-xs">—</span>,
+                  })),
+                ];
+                return (
+                  <DataTable
+                    bare
+                    resizable
+                    paginated
+                    columns={columns}
+                    rows={workflowDetailRows}
+                    rowKey={(r) => r.leadId}
+                  />
+                );
+              })()
+            ) : (() => {
               type QueueRow = { leadId: string; lead: Lead };
               const queueRows: QueueRow[] = selectedTask.leadIds
                 .map((leadId) => ({ leadId, lead: leadsDatabase.find((l) => l.id === leadId) }))
