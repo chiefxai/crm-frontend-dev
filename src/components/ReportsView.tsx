@@ -12,6 +12,7 @@ import { CallLog } from '../types';
 import { callCostInr, formatInr, COST_PER_MINUTE_INR_FALLBACK } from '../lib/pricing';
 import PrintableReport from './PrintableReport';
 import FilterBar from './ui/FilterBar';
+import DataTable, { Column } from './ui/DataTable';
 
 const CHART_TOOLTIP = {
   contentStyle: {
@@ -192,6 +193,89 @@ export default function ReportsView({ callLogs, dialerTasks, leads, costPerMinut
     return groups;
   }, [dialerTasks]);
   const [showPreview, setShowPreview] = useState(false);
+
+  // ── Campaign Details table (bottom, full width) ─────────────────────────
+  // Every dialer task is one campaign run — sorted newest first so the
+  // dropdown defaults to whatever's most likely being checked right now.
+  const campaignOptions = useMemo(
+    () => [...dialerTasks].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()),
+    [dialerTasks]
+  );
+  const [campaignDetailTaskId, setCampaignDetailTaskId] = useState<string>('');
+  useEffect(() => {
+    // Keep the selection valid as the task list loads/changes; default to
+    // the most recent campaign rather than leaving the dropdown empty.
+    if (campaignOptions.length === 0) { setCampaignDetailTaskId(''); return; }
+    if (!campaignOptions.some(t => t.id === campaignDetailTaskId)) {
+      setCampaignDetailTaskId(campaignOptions[0].id);
+    }
+  }, [campaignOptions]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const campaignDetailTask = campaignOptions.find(t => t.id === campaignDetailTaskId) || null;
+
+  interface CampaignDetailRow {
+    leadId: string;
+    leadName: string;
+    phone: string;
+    status: string;
+    sentiment: string;
+    answers: Record<string, string>;
+  }
+  const [campaignDetailRows, setCampaignDetailRows] = useState<CampaignDetailRow[]>([]);
+  const [campaignDetailColumns, setCampaignDetailColumns] = useState<string[]>([]);
+  const [campaignDetailLoading, setCampaignDetailLoading] = useState(false);
+
+  useEffect(() => {
+    if (!campaignDetailTask) { setCampaignDetailRows([]); setCampaignDetailColumns([]); return; }
+    let cancelled = false;
+    setCampaignDetailLoading(true);
+
+    const leadEntries = Object.entries(campaignDetailTask.callResults)
+      .filter(([, r]) => r.callId);
+
+    Promise.all(leadEntries.map(async ([leadId, result]) => {
+      const lead = leads.find(l => l.id === leadId);
+      let answers: Record<string, string> = {};
+      try {
+        const res = await apiFetch(`/api/calls/${encodeURIComponent(result.callId!)}/lead-responses`);
+        if (res.ok) {
+          const rows: { label?: string; question: string; answer: string }[] = await res.json();
+          for (const row of rows) {
+            if (row.answer) answers[row.label || row.question] = row.answer;
+          }
+        }
+      } catch { /* leave answers empty for this lead */ }
+      const row: CampaignDetailRow = {
+        leadId,
+        leadName: lead?.name || 'Unknown',
+        phone: lead?.phone || '—',
+        status: result.status,
+        sentiment: result.sentiment,
+        answers,
+      };
+      return row;
+    })).then((rows) => {
+      if (cancelled) return;
+      // Column set is the union of every label actually extracted for
+      // THIS campaign, in first-seen order — so switching campaigns
+      // naturally changes the column count/labels to match whatever that
+      // workflow's variables were, with no separate workflow lookup needed.
+      const columns: string[] = [];
+      const seen = new Set<string>();
+      for (const row of rows) {
+        for (const label of Object.keys(row.answers)) {
+          if (!seen.has(label)) { seen.add(label); columns.push(label); }
+        }
+      }
+      setCampaignDetailRows(rows);
+      setCampaignDetailColumns(columns);
+      setCampaignDetailLoading(false);
+    }).catch(() => {
+      if (!cancelled) { setCampaignDetailRows([]); setCampaignDetailColumns([]); setCampaignDetailLoading(false); }
+    });
+
+    return () => { cancelled = true; };
+  }, [campaignDetailTask, leads]);
 
   const inRange = (iso: string, from: string, to: string) => {
     const d = new Date(iso);
@@ -833,6 +917,72 @@ export default function ReportsView({ callLogs, dialerTasks, leads, costPerMinut
             ) : <EmptyState heading="No calls in this period" />}
           </div>
           <p className="text-[10px] text-slate-400 mt-2">AI/token and telephony cost aren't broken out per call in the current data — only the totals above are shown.</p>
+        </Widget>
+
+        {/* Row 6: Campaign Details — full width. One row per lead in the
+            selected campaign, with the base call columns plus one column
+            per workflow variable actually extracted for that campaign —
+            switching the dropdown changes both the rows AND the column
+            set, since a different campaign's workflow has different
+            variables. Reuses GET /api/calls/:id/lead-responses (already
+            self-resolves each answer's real name/dataType from the
+            call's dialer task -> workflowId), one fetch per lead in the
+            selected campaign only — not for every campaign at once. */}
+        <Widget
+          colSpan={12}
+          title="Campaign Details"
+          subtitle="Extracted answers for every lead in one campaign — pick a campaign to see its own questions as columns."
+          icon={Users}
+          accent="#2563eb"
+          padding="none"
+          hover
+          action={
+            <select
+              value={campaignDetailTaskId}
+              onChange={(e) => setCampaignDetailTaskId(e.target.value)}
+              className="text-[11px] font-semibold px-2.5 py-1.5 rounded-lg border bg-[var(--bg-surface)] cursor-pointer max-w-xs"
+              style={{ borderColor: 'var(--border)', color: 'var(--text-secondary)' }}
+            >
+              {campaignOptions.length === 0 && <option value="">No campaigns yet</option>}
+              {campaignOptions.map(t => (
+                <option key={t.id} value={t.id}>
+                  {t.name} — {new Date(t.createdAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
+                </option>
+              ))}
+            </select>
+          }
+        >
+          {campaignDetailLoading ? (
+            <div className="flex items-center justify-center py-16 text-slate-400 text-sm">Loading campaign details…</div>
+          ) : !campaignDetailTask ? (
+            <EmptyState heading="No campaigns yet" message="Run a dialing task from Campaign to see its details here." />
+          ) : campaignDetailRows.length === 0 ? (
+            <EmptyState heading="No completed calls in this campaign yet" />
+          ) : (() => {
+            const columns: Column<CampaignDetailRow>[] = [
+              { key: 'leadName', header: 'Name', cell: (r) => <span className="font-semibold text-slate-800">{r.leadName}</span> },
+              { key: 'phone', header: 'Phone', cell: (r) => <span className="text-slate-500 font-mono text-xs">{r.phone}</span> },
+              { key: 'status', header: 'Status', cell: (r) => <span className="text-slate-600 text-xs">{r.status}</span> },
+              { key: 'sentiment', header: 'Sentiment', cell: (r) => <span className="text-slate-600 text-xs">{r.sentiment}</span> },
+              ...campaignDetailColumns.map((label): Column<CampaignDetailRow> => ({
+                key: label,
+                header: label,
+                cell: (r) => r.answers[label]
+                  ? <span className="text-slate-700 text-xs">{r.answers[label]}</span>
+                  : <span className="text-slate-300 italic text-xs">—</span>,
+              })),
+            ];
+            return (
+              <DataTable
+                bare
+                resizable
+                paginated
+                columns={columns}
+                rows={campaignDetailRows}
+                rowKey={(r) => r.leadId}
+              />
+            );
+          })()}
         </Widget>
 
       {showPreview && (
