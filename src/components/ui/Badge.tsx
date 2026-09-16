@@ -9,21 +9,23 @@ interface BadgeProps {
   className?: string;
 }
 
-// Light-theme pairs deliberately go a step darker than a typical
-// bg-*-50/text-*-700 combo (bg-*-100/text-*-800) — at this badge's tiny
-// 10px size, the paler default read as washed-out/low-contrast on a white
-// card (worst offender: slate was bg-slate-100 + text-slate-600, a nearly
-// gray-on-gray pairing). Dark-theme pairs are untouched — no issue
-// reported there.
+// Light-theme pairs go a step darker than a typical bg-*-50/text-*-700
+// combo (bg-*-100/text-*-800), PLUS a matching-hue border — at this
+// badge's tiny 10px size, a tinted fill alone can still read as a plain
+// gray chip on some displays/color-blindness profiles (confirmed:
+// indigo/teal ["aqua blue"] and rose/amber ["pink"/"yellow"] all looked
+// washed-out-to-gray). A crisp same-hue border makes the color
+// unambiguous even when the fill itself looks pale. Dark-theme pairs are
+// untouched — no issue reported there.
 const COLOR: Record<BadgeColor, string> = {
-  blue:   'bg-blue-100   text-blue-800   dark:bg-blue-900/30   dark:text-blue-300',
-  green:  'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300',
-  amber:  'bg-amber-100  text-amber-800  dark:bg-amber-900/30  dark:text-amber-300',
-  rose:   'bg-rose-100   text-rose-800   dark:bg-rose-900/30   dark:text-rose-300',
-  slate:  'bg-slate-200  text-slate-700  dark:bg-slate-700     dark:text-slate-300',
-  purple: 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300',
-  indigo: 'bg-indigo-100 text-indigo-800 dark:bg-indigo-900/30 dark:text-indigo-300',
-  teal:   'bg-teal-100   text-teal-800   dark:bg-teal-900/30   dark:text-teal-300',
+  blue:   'bg-blue-100   text-blue-800   border border-blue-300   dark:bg-blue-900/30   dark:text-blue-300   dark:border-transparent',
+  green:  'bg-emerald-100 text-emerald-800 border border-emerald-300 dark:bg-emerald-900/30 dark:text-emerald-300 dark:border-transparent',
+  amber:  'bg-amber-100  text-amber-800  border border-amber-300  dark:bg-amber-900/30  dark:text-amber-300  dark:border-transparent',
+  rose:   'bg-rose-100   text-rose-800   border border-rose-300   dark:bg-rose-900/30   dark:text-rose-300   dark:border-transparent',
+  slate:  'bg-slate-200  text-slate-700  border border-slate-300  dark:bg-slate-700     dark:text-slate-300  dark:border-transparent',
+  purple: 'bg-purple-100 text-purple-800 border border-purple-300 dark:bg-purple-900/30 dark:text-purple-300 dark:border-transparent',
+  indigo: 'bg-indigo-100 text-indigo-800 border border-indigo-300 dark:bg-indigo-900/30 dark:text-indigo-300 dark:border-transparent',
+  teal:   'bg-teal-100   text-teal-800   border border-teal-300   dark:bg-teal-900/30   dark:text-teal-300   dark:border-transparent',
 };
 
 const DOT: Record<BadgeColor, string> = {
