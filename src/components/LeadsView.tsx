@@ -9,11 +9,11 @@ import Badge from './ui/Badge';
 import EmptyState from './ui/EmptyState';
 import DataTable, { Column } from './ui/DataTable';
 
-// Leads = contacts currently in the "campaign" or "lead" stage of the
-// universal contact -> campaign -> lead -> opportunity -> client pipeline
-// (see src/lib/pipelineStages.ts) — i.e. contacts actively being worked,
-// past the raw Contact Directory stage but not yet a qualified
-// Opportunity or a converted Client. A filtered VIEW over the same
+// Leads = contacts currently in the "lead" stage of the universal
+// contact -> campaign -> lead -> opportunity -> client pipeline (see
+// src/lib/pipelineStages.ts) — i.e. contacts who've actually engaged
+// (answered a call), past the raw Contact/Campaign stages but not yet a
+// qualified Opportunity or a converted Client. A filtered VIEW over the same
 // `leads` (Contacts) data App.tsx already manages, not a separate entity —
 // advancing a lead here just edits its `status` the same way Contact
 // Directory's edit form would, which the backend maps to the next
@@ -35,7 +35,7 @@ export default function LeadsView({ leads, setLeads }: LeadsViewProps) {
   const { stages } = usePipelineStages();
   const [advancingId, setAdvancingId] = React.useState<string | null>(null);
 
-  const activeLeads = leads.filter((l) => l.pipelineStage === 'campaign' || l.pipelineStage === 'lead');
+  const activeLeads = leads.filter((l) => l.pipelineStage === 'lead');
 
   // Advances a lead's `status` the same way an edit in Contact Directory
   // would — just local state, same as every other Contact edit in this
@@ -100,7 +100,7 @@ export default function LeadsView({ leads, setLeads }: LeadsViewProps) {
   return (
     <PageShell
       title="Leads"
-      subtitle={`Contacts currently in the ${stageLabel(stages, 'campaign')} or ${stageLabel(stages, 'lead')} stage — advance one to ${stageLabel(stages, 'opportunity')} or ${stageLabel(stages, 'client')} as it moves forward.`}
+      subtitle={`Contacts currently in the ${stageLabel(stages, 'lead')} stage — advance one to ${stageLabel(stages, 'opportunity')} or ${stageLabel(stages, 'client')} as it moves forward.`}
       layout="fill"
     >
       <div className="flex-1 flex flex-col overflow-hidden px-8 pb-8 pt-6">
@@ -109,7 +109,7 @@ export default function LeadsView({ leads, setLeads }: LeadsViewProps) {
             <EmptyState
               icon={UserPlus}
               heading="No active leads right now"
-              message={`Contacts show up here once they're added to a campaign or answer a call — track new prospects from Contact Directory first.`}
+              message="Contacts show up here once a call to them is actually answered and engaged with — track new prospects from Contact Directory first."
             />
           ) : (
             <DataTable bare resizable paginated columns={columns} rows={activeLeads} rowKey={(l) => l.id} />
