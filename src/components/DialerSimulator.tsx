@@ -1200,23 +1200,38 @@ Currently on question ${nextIndex} out of ${selectedTask.questions.length}. Next
   // here. Fetching them directly means older calls made before the backend fix
   // show their answers too, not just new ones going forward.
   const [tapeAnswersFallback, setTapeAnswersFallback] = useState<Record<string, string>>({});
+  // Resolved directly from the workflow's CURRENT variable definitions
+  // (backend re-matches by question text against ?workflowId=, see
+  // routes/calls.js) — this is the authoritative name + data type, always
+  // preferred over task.questionLabels/questionDataTypes, which were
+  // frozen at task-creation time and can be stale or wrong (e.g. a
+  // variable saved with no "Save answer as" name yet, later given one).
+  const [tapeResolvedByQuestion, setTapeResolvedByQuestion] = useState<Record<string, { label: string; dataType?: string }>>({});
   useEffect(() => {
     if (!activeTapeCallId) {
       setTapeAnswersFallback({});
+      setTapeResolvedByQuestion({});
       return;
     }
     let cancelled = false;
-    apiFetch(`/api/calls/${encodeURIComponent(activeTapeCallId)}/lead-responses`)
+    const workflowId = selectedTask?.workflowId;
+    const url = `/api/calls/${encodeURIComponent(activeTapeCallId)}/lead-responses${workflowId ? `?workflowId=${encodeURIComponent(workflowId)}` : ''}`;
+    apiFetch(url)
       .then((r) => (r.ok ? r.json() : []))
-      .then((rows: { label?: string; question: string; answer: string }[] | null) => {
+      .then((rows: { label?: string; question: string; answer: string; dataType?: string | null }[] | null) => {
         if (cancelled) return;
-        const map: Record<string, string> = {};
-        for (const row of rows || []) map[row.label || row.question] = row.answer;
-        setTapeAnswersFallback(map);
+        const answerMap: Record<string, string> = {};
+        const resolvedMap: Record<string, { label: string; dataType?: string }> = {};
+        for (const row of rows || []) {
+          answerMap[row.label || row.question] = row.answer;
+          if (row.label) resolvedMap[row.question] = { label: row.label, dataType: row.dataType || undefined };
+        }
+        setTapeAnswersFallback(answerMap);
+        setTapeResolvedByQuestion(resolvedMap);
       })
-      .catch(() => { if (!cancelled) setTapeAnswersFallback({}); });
+      .catch(() => { if (!cancelled) { setTapeAnswersFallback({}); setTapeResolvedByQuestion({}); } });
     return () => { cancelled = true; };
-  }, [activeTapeCallId]);
+  }, [activeTapeCallId, selectedTask?.workflowId]);
 
   const dialLead = (lead: Lead) => {
     const num = dialableNumbers.find((n) => n.number === selectedOutboundNumber);
@@ -1565,14 +1580,21 @@ Currently on question ${nextIndex} out of ${selectedTask.questions.length}. Next
                 // Workflow Builder) instead of restating the question.
                 // `label` stays exactly what it always was — the key
                 // actually used to store/extract this answer (see
-                // buildQuestionsPayload) — so old calls whose answers were
-                // saved under the raw question text (no distinct name ever
-                // set) still look up correctly. `displayName` is purely
-                // cosmetic: when no real name existed at call time, derive
-                // one from the question instead of showing the sentence.
+                // buildQuestionsPayload) — so the answer VALUE lookup below
+                // still works for old calls saved under the raw question
+                // text. `displayName`/`dataType` are what's actually
+                // shown, and always prefer the backend's resolution
+                // (tapeResolvedByQuestion — re-matched against the
+                // workflow's CURRENT variable definitions, see
+                // routes/calls.js) over the frozen task fields, since a
+                // variable can have its name filled in AFTER the task/call
+                // already happened. Only falls back to slugifying the
+                // question when nothing real was ever resolved anywhere.
                 const label = selectedTask.questionLabels?.[qIdx] || question;
-                const displayName = label === question ? slugifyQuestion(question) : label;
-                const dataType = selectedTask.questionDataTypes?.[qIdx];
+                const resolved = tapeResolvedByQuestion[question];
+                const displayName = resolved?.label
+                  || (label !== question ? label : slugifyQuestion(question));
+                const dataType = resolved?.dataType || selectedTask.questionDataTypes?.[qIdx];
                 const answer = activeTapeResult.answers?.[label] ?? activeTapeResult.answers?.[question]
                   ?? tapeAnswersFallback[label] ?? tapeAnswersFallback[question];
                 return (
@@ -1601,27 +1623,71 @@ Currently on question ${nextIndex} out of ${selectedTask.questions.length}. Next
             </div>
           </div>
         ) : !isOutbound ? (
-          <div className="bg-[var(--bg-subtle)] border border-[var(--border)] rounded-xl p-4 space-y-3">
-            <span className="text-xs font-mono text-[var(--text-secondary)] uppercase tracking-widest font-bold block border-b border-[var(--border)] pb-2">Inbound Metadata</span>
-            <div className="space-y-3 text-xs">
-              <div>
-                <span className="text-[var(--text-muted)] font-medium block">Caller Number</span>
-                <span className="font-mono font-bold text-[var(--text-secondary)] block mt-0.5">{inboundLog?.leadName}</span>
-              </div>
-              <div>
-                <span className="text-[var(--text-muted)] font-medium block">Status</span>
-                <span className="font-semibold text-blue-600 block mt-0.5">{activeTapeResult.status}</span>
-              </div>
-              <div>
-                <span className="text-[var(--text-muted)] font-medium block">Call Duration</span>
-                <span className="font-mono text-[var(--text-secondary)] block mt-0.5">{activeTapeResult.duration} seconds</span>
-              </div>
-              <div>
-                <span className="text-[var(--text-muted)] font-medium block">Recording Date</span>
-                <span className="font-mono text-[var(--text-secondary)] block mt-0.5">{inboundLog ? new Date(inboundLog.createdAt).toLocaleString() : ''}</span>
+          <>
+            <div className="bg-[var(--bg-subtle)] border border-[var(--border)] rounded-xl p-4 space-y-3">
+              <span className="text-xs font-mono text-[var(--text-secondary)] uppercase tracking-widest font-bold block border-b border-[var(--border)] pb-2">Inbound Metadata</span>
+              <div className="space-y-3 text-xs">
+                <div>
+                  <span className="text-[var(--text-muted)] font-medium block">Caller Number</span>
+                  <span className="font-mono font-bold text-[var(--text-secondary)] block mt-0.5">{inboundLog?.leadName}</span>
+                </div>
+                <div>
+                  <span className="text-[var(--text-muted)] font-medium block">Status</span>
+                  <span className="font-semibold text-blue-600 block mt-0.5">{activeTapeResult.status}</span>
+                </div>
+                <div>
+                  <span className="text-[var(--text-muted)] font-medium block">Call Duration</span>
+                  <span className="font-mono text-[var(--text-secondary)] block mt-0.5">{activeTapeResult.duration} seconds</span>
+                </div>
+                <div>
+                  <span className="text-[var(--text-muted)] font-medium block">Recording Date</span>
+                  <span className="font-mono text-[var(--text-secondary)] block mt-0.5">{inboundLog ? new Date(inboundLog.createdAt).toLocaleString() : ''}</span>
+                </div>
               </div>
             </div>
-          </div>
+            {(() => {
+              // Inbound calls aren't tied to a fixed DialTask with a known
+              // question list up front the way outbound campaign calls
+              // are — an inbound number's assigned agent/workflow can vary
+              // call to call — so unlike the outbound panel above, this
+              // renders whatever answers actually came back for THIS call
+              // (real-time inboundLog.answers first, falling back to the
+              // lead_responses fetch) instead of iterating an expected
+              // list. This is the same data source (db.getResponsesByCallId /
+              // extractWorkflowAnswers) inbound calls already populate —
+              // it just was never surfaced here, so an inbound campaign
+              // call with real extracted Q&A never showed "Extracted
+              // Campaign Answers" at all, only this generic metadata.
+              const inboundAnswers = { ...tapeAnswersFallback, ...(inboundLog?.answers || {}) };
+              const entries = Object.entries(inboundAnswers);
+              if (entries.length === 0) return null;
+              return (
+                <div className="bg-[var(--bg-surface)] p-4 rounded-2xl border border-[var(--border)] space-y-3">
+                  <span className="text-xs font-mono text-[var(--text-secondary)] uppercase tracking-widest font-bold pb-3 border-b border-[var(--border)] flex items-center gap-2">
+                    <Check className="h-4 w-4 text-emerald-500" />
+                    Extracted Campaign Answers
+                  </span>
+                  <div className="space-y-3">
+                    {entries.map(([name, answer]) => (
+                      <div key={name} className="p-3 bg-[var(--bg-subtle)] rounded-xl border border-[var(--border)] space-y-2">
+                        <span className="font-mono text-xs font-bold text-[var(--text-primary)]">{name}</span>
+                        <div className="bg-[var(--bg-surface)] border border-[var(--border)]/80 rounded-lg px-3 py-2.5 font-sans text-xs shadow-sm">
+                          {answer ? (
+                            <div className="text-emerald-600 flex items-start gap-2">
+                              <span className="text-emerald-500 font-bold shrink-0 text-sm">✓</span>
+                              <p className="text-[var(--text-primary)] leading-relaxed">{answer}</p>
+                            </div>
+                          ) : (
+                            <span className="text-[var(--text-muted)] italic">No answer captured.</span>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              );
+            })()}
+          </>
         ) : null}
       </div>
     );
