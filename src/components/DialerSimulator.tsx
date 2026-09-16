@@ -1148,6 +1148,32 @@ Currently on question ${nextIndex} out of ${selectedTask.questions.length}. Next
     return () => { cancelled = true; };
   }, [activeTapeCallId]);
 
+  // Fallback source for "Extracted Campaign Answers": task.callResults[...].answers
+  // was never populated for calls placed through the job queue (autoDialEngine.js/
+  // dialerRetryEngine.js) before this was fixed on the backend — every such call
+  // already has its answers safely stored in lead_responses (the AI's live
+  // save_question_response tool writes there regardless), just never surfaced
+  // here. Fetching them directly means older calls made before the backend fix
+  // show their answers too, not just new ones going forward.
+  const [tapeAnswersFallback, setTapeAnswersFallback] = useState<Record<string, string>>({});
+  useEffect(() => {
+    if (!activeTapeCallId) {
+      setTapeAnswersFallback({});
+      return;
+    }
+    let cancelled = false;
+    apiFetch(`/api/calls/${encodeURIComponent(activeTapeCallId)}/lead-responses`)
+      .then((r) => (r.ok ? r.json() : []))
+      .then((rows: { label?: string; question: string; answer: string }[] | null) => {
+        if (cancelled) return;
+        const map: Record<string, string> = {};
+        for (const row of rows || []) map[row.label || row.question] = row.answer;
+        setTapeAnswersFallback(map);
+      })
+      .catch(() => { if (!cancelled) setTapeAnswersFallback({}); });
+    return () => { cancelled = true; };
+  }, [activeTapeCallId]);
+
   const dialLead = (lead: Lead) => {
     const num = dialableNumbers.find((n) => n.number === selectedOutboundNumber);
     const provider = num?.provider || '';
@@ -1489,7 +1515,8 @@ Currently on question ${nextIndex} out of ${selectedTask.questions.length}. Next
             <div className="space-y-3">
               {selectedTask.questions.map((question, qIdx) => {
                 const label = selectedTask.questionLabels?.[qIdx] || question;
-                const answer = activeTapeResult.answers?.[label] ?? activeTapeResult.answers?.[question];
+                const answer = activeTapeResult.answers?.[label] ?? activeTapeResult.answers?.[question]
+                  ?? tapeAnswersFallback[label] ?? tapeAnswersFallback[question];
                 return (
                   <div key={qIdx} className="p-3 bg-[var(--bg-subtle)] rounded-xl border border-[var(--border)] space-y-2">
                     <div className="flex items-start gap-2">
