@@ -70,6 +70,16 @@ interface DataTableProps<T> {
 
 const MIN_COL_WIDTH_DEFAULT = 60;
 const PAGE_SIZE_OPTIONS_DEFAULT = [25, 50, 100, 150];
+// Width given to a resizable column that has no explicit `width` and
+// hasn't been manually resized yet — e.g. one auto-generated per workflow
+// variable (Reports' Campaign Details, Campaign's Workflow View), where
+// the column set (and count) is only known at render time. Without a
+// floor like this, `table-layout: fixed` + a table pinned to 100% of its
+// container squeezes every unsized column down to fit, sometimes to just
+// a few px each once there are a dozen+ columns — and since header cells
+// use whitespace-nowrap, that overflow visually overlaps the next
+// column's header instead of wrapping or clipping.
+const DEFAULT_RESIZABLE_COL_WIDTH = 160;
 
 export default function DataTable<T>({
   columns,
@@ -134,6 +144,28 @@ export default function DataTable<T>({
     return Number.isFinite(n) && w.trim().endsWith('px') ? n : undefined;
   };
 
+  // The CSS width actually applied to a column's <th>/<td> — resized
+  // (always px) first, then whatever the caller declared verbatim (so a
+  // percentage width like "35%" still works, not just px), then the
+  // floor default. Kept as a CSS string since callers can pass any valid
+  // width value, not just pixels.
+  const columnCssWidth = (col: Column<T>): string => {
+    const resized = colWidths[col.key];
+    if (resized) return `${resized}px`;
+    if (col.width) return col.width;
+    return `${DEFAULT_RESIZABLE_COL_WIDTH}px`;
+  };
+  // A numeric px ESTIMATE of the same, used only to size the whole table
+  // (see `minTableWidth` below) so it can naturally exceed its container
+  // and scroll instead of `w-full` squeezing an unbounded number of
+  // columns into a fixed width — a percentage-width column can't
+  // contribute an exact px figure here, so it falls back to the default
+  // floor for this sum only; its actual rendered width still honors the
+  // percentage via columnCssWidth above.
+  const columnWidthEstimate = (col: Column<T>): number =>
+    colWidths[col.key] ?? parseWidth(col.width) ?? DEFAULT_RESIZABLE_COL_WIDTH;
+  const minTableWidth = resizable ? columns.reduce((sum, c) => sum + columnWidthEstimate(c), 0) : undefined;
+
   const startResize = (e: React.MouseEvent, colKey: string) => {
     e.preventDefault();
     e.stopPropagation();
@@ -165,16 +197,20 @@ export default function DataTable<T>({
         </div>
       ) : (
         <div className={isPaginated ? 'flex-1 overflow-auto min-h-0' : undefined}>
-        <table ref={tableRef} className="w-full text-sm" style={resizable ? { tableLayout: 'fixed' } : undefined}>
+        <table
+          ref={tableRef}
+          className={resizable ? 'text-sm' : 'w-full text-sm'}
+          style={resizable ? { tableLayout: 'fixed', width: minTableWidth, minWidth: '100%' } : undefined}
+        >
           <thead className="sticky top-0 z-10" style={{ background: 'var(--bg-surface)' }}>
             <tr className="border-b border-slate-100 dark:border-[var(--border)]">
               {columns.map(col => {
-                const resizedWidth = colWidths[col.key];
-                const width = resizedWidth ? `${resizedWidth}px` : col.width;
+                const width = resizable ? columnCssWidth(col) : col.width;
                 return (
                   <th
                     key={col.key}
-                    className={`relative px-5 py-3 text-[10px] font-bold text-slate-400 dark:text-[var(--text-muted)] uppercase tracking-widest whitespace-nowrap ${col.align === 'right' ? 'text-right' : col.align === 'center' ? 'text-center' : 'text-left'}`}
+                    title={typeof col.header === 'string' ? col.header : undefined}
+                    className={`relative px-5 py-3 text-[10px] font-bold text-slate-400 dark:text-[var(--text-muted)] uppercase tracking-widest whitespace-nowrap ${resizable ? 'overflow-hidden text-ellipsis' : ''} ${col.align === 'right' ? 'text-right' : col.align === 'center' ? 'text-center' : 'text-left'}`}
                     style={width ? { width } : undefined}
                   >
                     {col.header}
