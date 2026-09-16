@@ -547,7 +547,27 @@ Real Tamil speakers do not say the "correct" written form of a word. They contra
     // that metadata instead of string-parsing a name.
     const taskName = workflow.name;
 
-    const questionPairs = (workflow.variables ?? [])
+    // Flattens top-level variables AND every branch's conditional follow-up
+    // variables (recursively — a follow-up can itself branch further, e.g.
+    // "education_level" -> branch "10th" -> follow-up "tenth_percentage").
+    // Only the top-level variables used to be included here, so a
+    // branch-only variable like tenth_percentage never made it into
+    // task.questions/questionLabels at all — meaning even though the AI
+    // correctly asked it live (driven by the full workflow, not this flat
+    // list) and the caller answered it, post-call extraction had no way to
+    // recognize or label that answer, and it never showed up anywhere.
+    const flattenVariables = (vars: typeof workflow.variables): NonNullable<typeof workflow.variables> => {
+      const out: NonNullable<typeof workflow.variables> = [];
+      for (const v of vars ?? []) {
+        out.push(v);
+        for (const branch of v.branches ?? []) {
+          out.push(...flattenVariables(branch.variables));
+        }
+      }
+      return out;
+    };
+
+    const questionPairs = flattenVariables(workflow.variables)
       .map(v => ({ label: v.name?.trim() || slugifyQuestion(v.questionText || ''), question: v.questionText || v.name, dataType: v.dataType }))
       .filter(p => p.question);
     const questions = questionPairs.map(p => p.question);
