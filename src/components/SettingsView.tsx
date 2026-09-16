@@ -212,9 +212,27 @@ export default function SettingsView({
   const [twilioPhone, setTwilioPhone] = useState('');
   const [twilioLabel, setTwilioLabel] = useState('');
   const [savingTwilio, setSavingTwilio] = useState(false);
+  // Twilio (like Vobiz.ai/TeleCMI below) is one account with credentials
+  // that can own many phone numbers — the `channels` row holds that one
+  // set of credentials per org, `virtual_numbers` holds the (unbounded)
+  // list of numbers under it. Previously every "add a number" resubmit of
+  // this form went through POST /api/channels/twilio again, which
+  // silently overwrote the org's single channel row's number/credentials
+  // with whatever was just typed — so a second number looked added in the
+  // list, but the org's actual outbound-calling fallback credentials had
+  // effectively been reassigned out from under the first. Once the
+  // provider is already connected, just register the new number locally
+  // (persisted by the existing debounced numbers/sync — see
+  // db.replaceNumbers) without touching the channel/credentials at all.
   const handleConnectTwilio = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!twilioSid.trim() || !twilioToken.trim() || !twilioPhone.trim()) return;
+    if (!twilioPhone.trim()) return;
+    if (twilioChannel) {
+      upsertVirtualNumber(twilioPhone.trim(), twilioLabel.trim() || 'Twilio Line', 'Twilio');
+      setTwilioPhone(''); setTwilioLabel('');
+      return;
+    }
+    if (!twilioSid.trim() || !twilioToken.trim()) return;
     setSavingTwilio(true);
     try {
       const res = await apiFetch('/api/channels/twilio', {
@@ -242,7 +260,13 @@ export default function SettingsView({
   const [savingVobiz, setSavingVobiz] = useState(false);
   const handleConnectVobiz = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!vobizAuthId.trim() || !vobizToken.trim() || !vobizPhone.trim()) return;
+    if (!vobizPhone.trim()) return;
+    if (vobizChannel) {
+      upsertVirtualNumber(vobizPhone.trim(), vobizLabel.trim() || 'Vobiz.ai Line', 'Vobiz.ai');
+      setVobizPhone(''); setVobizLabel('');
+      return;
+    }
+    if (!vobizAuthId.trim() || !vobizToken.trim()) return;
     setSavingVobiz(true);
     try {
       const res = await apiFetch('/api/channels/vobiz', {
@@ -270,7 +294,13 @@ export default function SettingsView({
   const [savingTelecmi, setSavingTelecmi] = useState(false);
   const handleConnectTelecmi = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!telecmiAppId.trim() || !telecmiSecret.trim() || !telecmiPhone.trim()) return;
+    if (!telecmiPhone.trim()) return;
+    if (telecmiChannel) {
+      upsertVirtualNumber(telecmiPhone.trim(), telecmiLabel.trim() || 'TeleCMI Line', 'TeleCMI');
+      setTelecmiPhone(''); setTelecmiLabel('');
+      return;
+    }
+    if (!telecmiAppId.trim() || !telecmiSecret.trim()) return;
     setSavingTelecmi(true);
     try {
       const res = await apiFetch('/api/channels/piopiy', {
@@ -650,14 +680,18 @@ export default function SettingsView({
                           </div>
                         )}
                         <div className="space-y-3">
-                          <div>
-                            <label className="block text-xs font-semibold text-slate-600 mb-1.5">Account SID</label>
-                            <input type="text" value={twilioSid} onChange={(e) => setTwilioSid(e.target.value)} placeholder="ACxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx" className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-red-400 focus:border-transparent transition-all" />
-                          </div>
-                          <div>
-                            <label className="block text-xs font-semibold text-slate-600 mb-1.5">Auth Token</label>
-                            <input type="password" value={twilioToken} onChange={(e) => setTwilioToken(e.target.value)} placeholder="••••••••••••••••••••••••••••••••" className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-red-400 focus:border-transparent transition-all" />
-                          </div>
+                          {!twilioChannel && (
+                            <>
+                              <div>
+                                <label className="block text-xs font-semibold text-slate-600 mb-1.5">Account SID</label>
+                                <input type="text" value={twilioSid} onChange={(e) => setTwilioSid(e.target.value)} placeholder="ACxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx" className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-red-400 focus:border-transparent transition-all" />
+                              </div>
+                              <div>
+                                <label className="block text-xs font-semibold text-slate-600 mb-1.5">Auth Token</label>
+                                <input type="password" value={twilioToken} onChange={(e) => setTwilioToken(e.target.value)} placeholder="••••••••••••••••••••••••••••••••" className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-red-400 focus:border-transparent transition-all" />
+                              </div>
+                            </>
+                          )}
                           <div className="grid grid-cols-2 gap-3">
                             <div>
                               <label className="block text-xs font-semibold text-slate-600 mb-1.5">Phone Number</label>
@@ -670,9 +704,9 @@ export default function SettingsView({
                           </div>
                         </div>
                         <div className="flex items-center justify-between pt-1">
-                          <p className="text-[11px] text-slate-400">Repeat to add another number.</p>
+                          <p className="text-[11px] text-slate-400">{twilioChannel ? 'Open "Add Provider" again any time to add more Twilio numbers.' : 'You can add more numbers for this account later.'}</p>
                           <button type="submit" disabled={savingTwilio} className="flex items-center gap-2 bg-red-500 hover:bg-red-600 disabled:opacity-60 text-white text-sm font-semibold rounded-xl px-6 py-2.5 transition-all cursor-pointer shadow-sm">
-                            {savingTwilio ? 'Connecting…' : twilioChannel ? 'Update Number' : 'Connect Twilio'}
+                            {savingTwilio ? 'Connecting…' : twilioChannel ? 'Add Number' : 'Connect Twilio'}
                           </button>
                         </div>
                       </form>
@@ -692,14 +726,18 @@ export default function SettingsView({
                           </div>
                         )}
                         <div className="space-y-3">
-                          <div>
-                            <label className="block text-xs font-semibold text-slate-600 mb-1.5">Auth ID</label>
-                            <input type="text" value={vobizAuthId} onChange={(e) => setVobizAuthId(e.target.value)} placeholder="Your Vobiz.ai Auth ID" className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-purple-400 focus:border-transparent transition-all" />
-                          </div>
-                          <div>
-                            <label className="block text-xs font-semibold text-slate-600 mb-1.5">Auth Token</label>
-                            <input type="password" value={vobizToken} onChange={(e) => setVobizToken(e.target.value)} placeholder="••••••••••••••••••••••••••••••••" className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-purple-400 focus:border-transparent transition-all" />
-                          </div>
+                          {!vobizChannel && (
+                            <>
+                              <div>
+                                <label className="block text-xs font-semibold text-slate-600 mb-1.5">Auth ID</label>
+                                <input type="text" value={vobizAuthId} onChange={(e) => setVobizAuthId(e.target.value)} placeholder="Your Vobiz.ai Auth ID" className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-purple-400 focus:border-transparent transition-all" />
+                              </div>
+                              <div>
+                                <label className="block text-xs font-semibold text-slate-600 mb-1.5">Auth Token</label>
+                                <input type="password" value={vobizToken} onChange={(e) => setVobizToken(e.target.value)} placeholder="••••••••••••••••••••••••••••••••" className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-purple-400 focus:border-transparent transition-all" />
+                              </div>
+                            </>
+                          )}
                           <div className="grid grid-cols-2 gap-3">
                             <div>
                               <label className="block text-xs font-semibold text-slate-600 mb-1.5">Phone Number</label>
@@ -712,9 +750,9 @@ export default function SettingsView({
                           </div>
                         </div>
                         <div className="flex items-center justify-between pt-1">
-                          <p className="text-[11px] text-slate-400">Repeat to add another number.</p>
+                          <p className="text-[11px] text-slate-400">{vobizChannel ? 'Open "Add Provider" again any time to add more Vobiz.ai numbers.' : 'You can add more numbers for this account later.'}</p>
                           <button type="submit" disabled={savingVobiz} className="flex items-center gap-2 bg-purple-600 hover:bg-purple-700 disabled:opacity-60 text-white text-sm font-semibold rounded-xl px-6 py-2.5 transition-all cursor-pointer shadow-sm">
-                            {savingVobiz ? 'Connecting…' : vobizChannel ? 'Update Number' : 'Connect Vobiz.ai'}
+                            {savingVobiz ? 'Connecting…' : vobizChannel ? 'Add Number' : 'Connect Vobiz.ai'}
                           </button>
                         </div>
                       </form>
@@ -734,14 +772,18 @@ export default function SettingsView({
                           </div>
                         )}
                         <div className="space-y-3">
-                          <div>
-                            <label className="block text-xs font-semibold text-slate-600 mb-1.5">App ID</label>
-                            <input type="text" value={telecmiAppId} onChange={(e) => setTelecmiAppId(e.target.value)} placeholder="Your TeleCMI App ID" className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-teal-400 focus:border-transparent transition-all" />
-                          </div>
-                          <div>
-                            <label className="block text-xs font-semibold text-slate-600 mb-1.5">App Secret</label>
-                            <input type="password" value={telecmiSecret} onChange={(e) => setTelecmiSecret(e.target.value)} placeholder="••••••••••••••••••••••••••••••••" className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-teal-400 focus:border-transparent transition-all" />
-                          </div>
+                          {!telecmiChannel && (
+                            <>
+                              <div>
+                                <label className="block text-xs font-semibold text-slate-600 mb-1.5">App ID</label>
+                                <input type="text" value={telecmiAppId} onChange={(e) => setTelecmiAppId(e.target.value)} placeholder="Your TeleCMI App ID" className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-teal-400 focus:border-transparent transition-all" />
+                              </div>
+                              <div>
+                                <label className="block text-xs font-semibold text-slate-600 mb-1.5">App Secret</label>
+                                <input type="password" value={telecmiSecret} onChange={(e) => setTelecmiSecret(e.target.value)} placeholder="••••••••••••••••••••••••••••••••" className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-teal-400 focus:border-transparent transition-all" />
+                              </div>
+                            </>
+                          )}
                           <div className="grid grid-cols-2 gap-3">
                             <div>
                               <label className="block text-xs font-semibold text-slate-600 mb-1.5">Phone Number</label>
@@ -754,9 +796,9 @@ export default function SettingsView({
                           </div>
                         </div>
                         <div className="flex items-center justify-between pt-1">
-                          <p className="text-[11px] text-slate-400">Repeat to add another number.</p>
+                          <p className="text-[11px] text-slate-400">{telecmiChannel ? 'Open "Add Provider" again any time to add more TeleCMI numbers.' : 'You can add more numbers for this account later.'}</p>
                           <button type="submit" disabled={savingTelecmi} className="flex items-center gap-2 bg-teal-600 hover:bg-teal-700 disabled:opacity-60 text-white text-sm font-semibold rounded-xl px-6 py-2.5 transition-all cursor-pointer shadow-sm">
-                            {savingTelecmi ? 'Connecting…' : telecmiChannel ? 'Update Number' : 'Connect TeleCMI'}
+                            {savingTelecmi ? 'Connecting…' : telecmiChannel ? 'Add Number' : 'Connect TeleCMI'}
                           </button>
                         </div>
                       </form>
