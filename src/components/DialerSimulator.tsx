@@ -1581,25 +1581,36 @@ Currently on question ${nextIndex} out of ${selectedTask.questions.length}. Next
         )}
         {/* Extracted Campaign Answers — rendered directly from the
             backend's resolved rows (see the tapeAnswerRows fetch above and
-            routes/calls.js) as plain name: value pairs. No fallback
-            guessing (slugifying the question, showing "No answer
-            captured") — a row only appears once the backend actually
-            resolved a real name and there's a real answer for it. Shown
-            for both outbound and inbound the same way; a call with
-            nothing extracted just shows no section at all. */}
+            routes/calls.js): name + data type on their own line, the
+            answer boxed on the line below. No fallback guessing
+            (slugifying the question, showing "No answer captured") — a
+            row only appears once the backend actually resolved a real
+            name and there's a real answer for it. Shown for both outbound
+            and inbound the same way; a call with nothing extracted just
+            shows no section at all. */}
         {tapeAnswerRows.length > 0 && (
           <div className="bg-[var(--bg-surface)] p-4 rounded-2xl border border-[var(--border)] space-y-3">
             <span className="text-xs font-mono text-[var(--text-secondary)] uppercase tracking-widest font-bold pb-3 border-b border-[var(--border)] flex items-center gap-2">
               <Check className="h-4 w-4 text-emerald-500" />
               Extracted Campaign Answers
             </span>
-            <div className="space-y-1.5 font-mono text-xs">
+            <div className="space-y-3">
               {tapeAnswerRows.map((row, i) => (
-                <div key={i} className="flex items-baseline gap-1.5">
-                  <span className="font-bold text-[var(--text-primary)]">{row.label}</span>
-                  {row.dataType && <span className="text-[9px] uppercase" style={{ color: 'var(--text-muted)' }}>({row.dataType})</span>}
-                  <span style={{ color: 'var(--text-muted)' }}>:</span>
-                  <span className="text-emerald-600">"{row.answer}"</span>
+                <div key={i} className="p-3 bg-[var(--bg-subtle)] rounded-xl border border-[var(--border)] space-y-2">
+                  <div className="flex items-center gap-2">
+                    <span className="font-mono text-xs font-bold text-[var(--text-primary)]">{row.label}</span>
+                    {row.dataType && (
+                      <span className="text-[9px] uppercase tracking-wide font-bold px-1.5 py-0.5 rounded bg-[var(--bg-subtle)] border border-[var(--border)] shrink-0" style={{ color: 'var(--text-muted)' }}>
+                        {row.dataType}
+                      </span>
+                    )}
+                  </div>
+                  <div className="bg-[var(--bg-surface)] border border-[var(--border)]/80 rounded-lg px-3 py-2.5 font-sans text-xs shadow-sm">
+                    <div className="text-emerald-600 flex items-start gap-2">
+                      <span className="text-emerald-500 font-bold shrink-0 text-sm">✓</span>
+                      <p className="text-[var(--text-primary)] leading-relaxed">{row.answer}</p>
+                    </div>
+                  </div>
                 </div>
               ))}
             </div>
