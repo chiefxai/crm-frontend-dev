@@ -179,6 +179,21 @@ const SUPER_STAR_QUESTIONS: string[] = [
   'Nomination details complete pannikanuma?'
 ];
 
+// Workflow variables' "Save answer as" field name is optional in the
+// builder (see WorkflowVariables.tsx's "field_name" input) and easy to
+// leave blank since the question text is the prominent element — when
+// left blank, v.name was falling back to the raw question sentence as the
+// display label, which is exactly what "Extracted Campaign Answers"
+// should NOT show (the question is only useful to the agent live, not
+// when reviewing what was learned). Auto-derives a short field-name-style
+// label from the question text instead, e.g. "What is your monthly
+// income?" -> "what_is_your_monthly", so every variable gets a real name
+// even if the user never typed one.
+function slugifyQuestion(question: string): string {
+  const words = question.toLowerCase().replace(/[^a-z0-9\s]/g, '').trim().split(/\s+/).filter(Boolean);
+  return words.slice(0, 4).join('_') || 'answer';
+}
+
 // Builds the wire-format questions payload for POST /api/{twilio,vobiz,piopiy}/call
 // — pairs each question with its label (falling back to the question text
 // itself when no label was set) so the backend can attach it to the
@@ -533,7 +548,7 @@ Real Tamil speakers do not say the "correct" written form of a word. They contra
     const taskName = workflow.name;
 
     const questionPairs = (workflow.variables ?? [])
-      .map(v => ({ label: v.name || v.questionText, question: v.questionText || v.name, dataType: v.dataType }))
+      .map(v => ({ label: v.name?.trim() || slugifyQuestion(v.questionText || ''), question: v.questionText || v.name, dataType: v.dataType }))
       .filter(p => p.question);
     const questions = questionPairs.map(p => p.question);
     const questionLabels = questionPairs.map(p => p.label);
@@ -1528,14 +1543,22 @@ Currently on question ${nextIndex} out of ${selectedTask.questions.length}. Next
                 // afterward is about what was LEARNED, so show the
                 // workflow variable's own name + declared type (set in
                 // Workflow Builder) instead of restating the question.
+                // `label` stays exactly what it always was — the key
+                // actually used to store/extract this answer (see
+                // buildQuestionsPayload) — so old calls whose answers were
+                // saved under the raw question text (no distinct name ever
+                // set) still look up correctly. `displayName` is purely
+                // cosmetic: when no real name existed at call time, derive
+                // one from the question instead of showing the sentence.
                 const label = selectedTask.questionLabels?.[qIdx] || question;
+                const displayName = label === question ? slugifyQuestion(question) : label;
                 const dataType = selectedTask.questionDataTypes?.[qIdx];
                 const answer = activeTapeResult.answers?.[label] ?? activeTapeResult.answers?.[question]
                   ?? tapeAnswersFallback[label] ?? tapeAnswersFallback[question];
                 return (
                   <div key={qIdx} className="p-3 bg-[var(--bg-subtle)] rounded-xl border border-[var(--border)] space-y-2">
                     <div className="flex items-center gap-2">
-                      <span className="font-mono text-xs font-bold text-[var(--text-primary)]">{label}</span>
+                      <span className="font-mono text-xs font-bold text-[var(--text-primary)]">{displayName}</span>
                       {dataType && (
                         <span className="text-[9px] uppercase tracking-wide font-bold px-1.5 py-0.5 rounded bg-[var(--bg-subtle)] border border-[var(--border)] shrink-0" style={{ color: 'var(--text-muted)' }}>
                           {dataType}
