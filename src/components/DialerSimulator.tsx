@@ -1453,12 +1453,12 @@ Currently on question ${nextIndex} out of ${selectedTask.questions.length}. Next
     tapeDetailContent = (
       <div className="space-y-5 font-sans text-[var(--text-primary)]">
         <div className="flex items-center gap-2">
-          <span className="text-[9px] font-mono text-blue-600 uppercase tracking-widest font-bold bg-blue-50 border border-blue-200 px-2 py-0.5 rounded-full">Archive Room</span>
-          <span className="text-[9px] font-mono text-emerald-600 uppercase tracking-widest font-bold bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full">{isOutbound ? 'Outbound Dial' : 'Inbound Line'}</span>
+          <Badge color="blue" className="font-mono uppercase tracking-widest">Archive Room</Badge>
+          <Badge color="green" className="font-mono uppercase tracking-widest">{isOutbound ? 'Outbound Dial' : 'Inbound Line'}</Badge>
           {/* Picked up but never actually engaged — still status
               "Completed" but no real conversation happened. */}
           {activeTapeResult.status === 'Completed' && activeTapeResult.callAnswered === false && (
-            <span className="text-[9px] font-mono text-rose-600 uppercase tracking-widest font-bold bg-rose-50 border border-rose-200 px-2 py-0.5 rounded-full">Not Answered</span>
+            <Badge color="rose" className="font-mono uppercase tracking-widest">Not Answered</Badge>
           )}
         </div>
 
@@ -1735,9 +1735,7 @@ Currently on question ${nextIndex} out of ${selectedTask.questions.length}. Next
           title="Today's Assigned lists"
           icon={FileSpreadsheet}
           action={
-            <span className="text-[10px] font-mono text-blue-600 bg-blue-50 font-bold px-2 py-0.5 rounded-full">
-              {tasks.length} Active
-            </span>
+            <Badge color="blue" className="font-mono">{tasks.length} Active</Badge>
           }
         >
           <div className="space-y-4">
@@ -1936,25 +1934,22 @@ Currently on question ${nextIndex} out of ${selectedTask.questions.length}. Next
                     return (
                       <>
                         {isCallingActive ? (
-                          <span className="inline-flex items-center gap-1 text-[10px] font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded-md animate-pulse border border-blue-100">
+                          <Badge color="blue" className="animate-pulse">
                             <span className="w-1.5 h-1.5 bg-red-500 rounded-full animate-ping"></span>
                             Call Active
-                          </span>
+                          </Badge>
                         ) : result ? (
                           <>
-                            <span className={`inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-md ${
-                              result.status === 'Completed'
-                                ? 'bg-emerald-50 text-emerald-700 border border-emerald-100'
-                                : result.status === 'Skipped'
-                                ? 'bg-[var(--bg-subtle)] text-[var(--text-muted)]'
-                                : result.status === 'Callback Scheduled'
-                                ? 'bg-amber-50 text-amber-700 border border-amber-200'
-                                : 'bg-[var(--bg-subtle)] text-[var(--text-secondary)]'
-                            }`}>
+                            <Badge color={
+                              result.status === 'Completed' ? 'green'
+                                : result.status === 'Skipped' ? 'slate'
+                                : result.status === 'Callback Scheduled' ? 'amber'
+                                : 'slate'
+                            }>
                               {result.status === 'Callback Scheduled' ? 'Upcoming' : result.status}
-                            </span>
+                            </Badge>
                             {result.status === 'Callback Scheduled' && (
-                              <p className="text-[9px] text-amber-600 mt-1">
+                              <p className="text-[9px] text-amber-700 mt-1">
                                 {result.callbackTime
                                   ? `Callback: ${new Date(result.callbackTime).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}`
                                   : 'Callback time not specified — will retry soon'}
@@ -1965,9 +1960,7 @@ Currently on question ${nextIndex} out of ${selectedTask.questions.length}. Next
                                 machine, no callback asked for) but not a
                                 real conversation. See callFinalizer.js. */}
                             {result.status === 'Completed' && result.callAnswered === false && (
-                              <span className="block mt-1 text-[9px] font-bold text-rose-600 bg-rose-50 border border-rose-100 px-1.5 py-0.5 rounded w-fit">
-                                Not Answered
-                              </span>
+                              <Badge color="rose" className="mt-1 w-fit">Not Answered</Badge>
                             )}
                           </>
                         ) : (
@@ -2219,9 +2212,7 @@ Currently on question ${nextIndex} out of ${selectedTask.questions.length}. Next
               title="Active Inbound Numbers"
               icon={PhoneForwarded}
               action={
-                <span className="text-[10px] font-mono text-blue-600 bg-blue-50 font-bold px-2 py-0.5 rounded-full">
-                  {activeVirtualNumbers.length} Online
-                </span>
+                <Badge color="blue" className="font-mono">{activeVirtualNumbers.length} Online</Badge>
               }
             >
               <div className="space-y-3.5">
@@ -2426,10 +2417,8 @@ Currently on question ${nextIndex} out of ${selectedTask.questions.length}. Next
                               </div>
                             </div>
                             <div className="flex flex-col items-end gap-1.5 shrink-0">
-                              <span className="text-[10px] font-bold text-blue-600 bg-blue-50 border border-blue-100 px-2 py-0.5 rounded-full">{qCount} question{qCount !== 1 ? 's' : ''}</span>
-                              {flow.active && (
-                                <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 border border-emerald-100 px-2 py-0.5 rounded-full">Active</span>
-                              )}
+                              <Badge color="blue">{qCount} question{qCount !== 1 ? 's' : ''}</Badge>
+                              {flow.active && <Badge color="green">Active</Badge>}
                               <div className={`h-5 w-5 rounded-full border-2 flex items-center justify-center ${isSelected ? 'border-blue-600 bg-blue-600' : 'border-[var(--border)]'}`}>
                                 {isSelected && <Check className="h-3 w-3 text-white" />}
                               </div>
