@@ -1,8 +1,9 @@
 import React from 'react';
-import { UserPlus, Phone, ArrowRightCircle, CheckCircle2 } from 'lucide-react';
+import { UserPlus, Phone, ArrowRightCircle, CheckCircle2, Download } from 'lucide-react';
 import { Lead } from '../types';
 import { formatPhone } from '../lib/phone';
 import { usePipelineStages, stageLabel } from '../lib/pipelineStages';
+import { CsvField } from '../lib/csvExport';
 import PageShell from './ui/PageShell';
 import Widget from './ui/Widget';
 import Badge from './ui/Badge';
@@ -10,6 +11,7 @@ import EmptyState from './ui/EmptyState';
 import DataTable, { Column } from './ui/DataTable';
 import FilterBar from './ui/FilterBar';
 import ContactDetailsSlideOver from './ui/ContactDetailsSlideOver';
+import ExportCsvModal from './ui/ExportCsvModal';
 
 // Leads = contacts currently in the "lead" stage of the universal
 // contact -> campaign -> lead -> opportunity -> client pipeline (see
@@ -51,6 +53,7 @@ export default function LeadsView({ leads, setLeads, dialerTasks = [] }: LeadsVi
   const [sourceFilter, setSourceFilter] = React.useState('All');
   const [campaignFilter, setCampaignFilter] = React.useState('All');
   const [selectedLead, setSelectedLead] = React.useState<Lead | null>(null);
+  const [exportOpen, setExportOpen] = React.useState(false);
 
   const activeLeads = leads.filter((l) => l.pipelineStage === 'lead');
   const uniqueSources = [...new Set(activeLeads.map((l) => l.source).filter(Boolean))].sort();
@@ -80,6 +83,22 @@ export default function LeadsView({ leads, setLeads, dialerTasks = [] }: LeadsVi
     setSelectedLead(null); // the row is about to leave this filtered list
     setTimeout(() => setAdvancingId(null), 400);
   };
+
+  const csvFields: CsvField<Lead>[] = [
+    { key: 'name', label: 'Name', getValue: (l) => l.name },
+    { key: 'phone', label: 'Phone', getValue: (l) => formatPhone(l.phone) || l.phone },
+    { key: 'email', label: 'Email', getValue: (l) => l.email },
+    { key: 'source', label: 'Source', getValue: (l) => l.source },
+    { key: 'stage', label: 'Stage', getValue: (l) => stageLabel(stages, l.pipelineStage) },
+    { key: 'status', label: 'CRM Status', getValue: (l) => l.status },
+    { key: 'score', label: 'AI Score', getValue: (l) => l.score },
+    { key: 'amountRequested', label: 'Amount Requested', getValue: (l) => l.amountRequested },
+    { key: 'employer', label: 'Employer', getValue: (l) => l.financialInfo?.employer },
+    { key: 'monthlyIncome', label: 'Monthly Income', getValue: (l) => l.financialInfo?.monthlyIncome },
+    { key: 'notes', label: 'Notes', getValue: (l) => l.notes },
+    { key: 'tags', label: 'Tags', getValue: (l) => (l.tags || []).join('; ') },
+    { key: 'createdAt', label: 'Added On', getValue: (l) => new Date(l.createdAt).toLocaleString() },
+  ];
 
   const columns: Column<Lead>[] = [
     {
@@ -154,9 +173,18 @@ export default function LeadsView({ leads, setLeads, dialerTasks = [] }: LeadsVi
               },
             ]}
             actions={
-              <div className="flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-slate-500 whitespace-nowrap">
-                <UserPlus className="h-3.5 w-3.5 text-blue-600" />
-                {filteredLeads.length} Lead{filteredLeads.length === 1 ? '' : 's'}
+              <div className="flex items-center gap-2">
+                <div className="flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-slate-500 whitespace-nowrap">
+                  <UserPlus className="h-3.5 w-3.5 text-blue-600" />
+                  {filteredLeads.length} Lead{filteredLeads.length === 1 ? '' : 's'}
+                </div>
+                <button
+                  onClick={() => setExportOpen(true)}
+                  disabled={filteredLeads.length === 0}
+                  className="flex items-center gap-1.5 px-3 py-2 text-xs font-semibold rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer whitespace-nowrap"
+                >
+                  <Download className="h-3.5 w-3.5" /> Export CSV
+                </button>
               </div>
             }
           />
@@ -198,6 +226,14 @@ export default function LeadsView({ leads, setLeads, dialerTasks = [] }: LeadsVi
             </button>
           </div>
         )}
+      />
+
+      <ExportCsvModal
+        open={exportOpen}
+        onClose={() => setExportOpen(false)}
+        filename="leads"
+        rows={filteredLeads}
+        fields={csvFields}
       />
     </PageShell>
   );

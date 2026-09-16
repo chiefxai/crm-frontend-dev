@@ -1,8 +1,9 @@
 import React from 'react';
-import { Target, Phone, CheckCircle2, Trophy } from 'lucide-react';
+import { Target, Phone, CheckCircle2, Trophy, Download } from 'lucide-react';
 import { Lead } from '../types';
 import { formatPhone } from '../lib/phone';
 import { usePipelineStages, stageLabel } from '../lib/pipelineStages';
+import { CsvField } from '../lib/csvExport';
 import PageShell from './ui/PageShell';
 import Widget from './ui/Widget';
 import Badge from './ui/Badge';
@@ -10,6 +11,7 @@ import EmptyState from './ui/EmptyState';
 import DataTable, { Column } from './ui/DataTable';
 import FilterBar from './ui/FilterBar';
 import ContactDetailsSlideOver from './ui/ContactDetailsSlideOver';
+import ExportCsvModal from './ui/ExportCsvModal';
 
 // Pipeline = the last two stages of the universal contact -> campaign ->
 // lead -> opportunity -> client progression (see src/lib/pipelineStages.ts),
@@ -44,6 +46,7 @@ export default function PipelineView({ leads, setLeads, dialerTasks = [] }: Pipe
   const [sourceFilter, setSourceFilter] = React.useState('All');
   const [campaignFilter, setCampaignFilter] = React.useState('All');
   const [selectedLead, setSelectedLead] = React.useState<Lead | null>(null);
+  const [exportOpen, setExportOpen] = React.useState(false);
 
   const ongoing = leads.filter((l) => l.pipelineStage === 'opportunity');
   const clients = leads.filter((l) => l.pipelineStage === 'client');
@@ -79,6 +82,22 @@ export default function PipelineView({ leads, setLeads, dialerTasks = [] }: Pipe
     setSelectedLead((cur) => (cur && cur.id === lead.id ? { ...cur, status: 'Converted', pipelineStage: 'client' } : cur));
     setTimeout(() => setAdvancingId(null), 400);
   };
+
+  const csvFields: CsvField<Lead>[] = [
+    { key: 'name', label: 'Name', getValue: (l) => l.name },
+    { key: 'phone', label: 'Phone', getValue: (l) => formatPhone(l.phone) || l.phone },
+    { key: 'email', label: 'Email', getValue: (l) => l.email },
+    { key: 'source', label: 'Source', getValue: (l) => l.source },
+    { key: 'stage', label: 'Stage', getValue: (l) => stageLabel(stages, l.pipelineStage) },
+    { key: 'status', label: 'CRM Status', getValue: (l) => l.status },
+    { key: 'score', label: 'AI Score', getValue: (l) => l.score },
+    { key: 'amountRequested', label: 'Amount Requested', getValue: (l) => l.amountRequested },
+    { key: 'employer', label: 'Employer', getValue: (l) => l.financialInfo?.employer },
+    { key: 'monthlyIncome', label: 'Monthly Income', getValue: (l) => l.financialInfo?.monthlyIncome },
+    { key: 'notes', label: 'Notes', getValue: (l) => l.notes },
+    { key: 'tags', label: 'Tags', getValue: (l) => (l.tags || []).join('; ') },
+    { key: 'createdAt', label: 'Added On', getValue: (l) => new Date(l.createdAt).toLocaleString() },
+  ];
 
   const baseColumns: Column<Lead>[] = [
     {
@@ -185,9 +204,18 @@ export default function PipelineView({ leads, setLeads, dialerTasks = [] }: Pipe
               },
             ]}
             actions={
-              <div className="flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-slate-500 whitespace-nowrap">
-                {subTab === 'ongoing' ? <Target className="h-3.5 w-3.5 text-blue-600" /> : <Trophy className="h-3.5 w-3.5 text-emerald-600" />}
-                {filtered.length} {subTab === 'ongoing' ? stageLabel(stages, 'opportunity') : `${stageLabel(stages, 'client')}s`}
+              <div className="flex items-center gap-2">
+                <div className="flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-slate-500 whitespace-nowrap">
+                  {subTab === 'ongoing' ? <Target className="h-3.5 w-3.5 text-blue-600" /> : <Trophy className="h-3.5 w-3.5 text-emerald-600" />}
+                  {filtered.length} {subTab === 'ongoing' ? stageLabel(stages, 'opportunity') : `${stageLabel(stages, 'client')}s`}
+                </div>
+                <button
+                  onClick={() => setExportOpen(true)}
+                  disabled={filtered.length === 0}
+                  className="flex items-center gap-1.5 px-3 py-2 text-xs font-semibold rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer whitespace-nowrap"
+                >
+                  <Download className="h-3.5 w-3.5" /> Export CSV
+                </button>
               </div>
             }
           />
@@ -230,6 +258,14 @@ export default function PipelineView({ leads, setLeads, dialerTasks = [] }: Pipe
             <CheckCircle2 className="h-4 w-4" /> Mark as {stageLabel(stages, 'client')}
           </button>
         )}
+      />
+
+      <ExportCsvModal
+        open={exportOpen}
+        onClose={() => setExportOpen(false)}
+        filename={subTab === 'ongoing' ? 'opportunities' : 'clients'}
+        rows={filtered}
+        fields={csvFields}
       />
     </PageShell>
   );
