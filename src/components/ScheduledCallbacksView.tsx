@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Clock, Loader2, Phone, MessageCircleQuestion, GitBranch, ArrowUpRight, ArrowDownLeft } from 'lucide-react';
+import { Clock, Loader2, Phone, MessageCircleQuestion, GitBranch, ArrowUpRight, ArrowDownLeft, PhoneMissed, CalendarClock } from 'lucide-react';
 import { apiFetch } from '../lib/api';
 import { formatPhone } from '../lib/phone';
 import PageShell from './ui/PageShell';
@@ -12,6 +12,13 @@ interface ScheduledCallback {
   leadName: string;
   callerNumber?: string;
   direction?: 'inbound' | 'outbound';
+  status?: string;
+  // "callback" — the caller explicitly asked to be called back.
+  // "not_answered" — nobody picked up, or it hit voicemail/an answering
+  // machine — still queued for an automatic redial, just for a different
+  // reason. See db.getScheduledCallbacks.
+  kind?: 'callback' | 'not_answered';
+  reason?: string;
   callbackTime?: string;
   callbackReason?: string;
   nextRetryAt?: string;
@@ -19,6 +26,11 @@ interface ScheduledCallback {
   workflowName?: string | null;
   workflowQuestions?: string[];
 }
+
+const KIND_CHIP: Record<'callback' | 'not_answered', { label: string; className: string }> = {
+  callback: { label: 'Callback', className: 'bg-blue-50 text-blue-700 border-blue-200' },
+  not_answered: { label: 'Not Answered', className: 'bg-rose-50 text-rose-700 border-rose-200' },
+};
 
 export default function ScheduledCallbacksView() {
   const [rows, setRows] = useState<ScheduledCallback[]>([]);
@@ -54,7 +66,7 @@ export default function ScheduledCallbacksView() {
   return (
     <PageShell
       title="Scheduled Callbacks"
-      subtitle="Calls where the caller said they were busy and asked to be called back — automatically redialed at the time shown."
+      subtitle="Calls waiting on an automatic redial — either the caller asked to be called back, or nobody answered — with the reason and when it'll try again."
       onRefresh={() => load()}
       layout="fill"
     >
@@ -64,9 +76,22 @@ export default function ScheduledCallbacksView() {
         ) : (
           <Widget className="flex-1" showHeader={false} padding="none">
             {rows.length === 0
-              ? <EmptyState icon={Clock} heading="No callbacks scheduled" message="When a caller says they're busy and asks to be called back, it'll show up here with the time and reason." />
+              ? <EmptyState icon={Clock} heading="Nothing pending a redial" message="A caller asking to be called back, or a call nobody answered, will show up here with the reason and next attempt time." />
               : (() => {
                   const columns: Column<ScheduledCallback>[] = [
+                    {
+                      key: 'kind',
+                      header: 'Status',
+                      cell: (r) => {
+                        const chip = KIND_CHIP[r.kind || 'not_answered'];
+                        return (
+                          <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-semibold border whitespace-nowrap ${chip.className}`}>
+                            {r.kind === 'callback' ? <CalendarClock className="h-3 w-3" /> : <PhoneMissed className="h-3 w-3" />}
+                            {chip.label}
+                          </span>
+                        );
+                      },
+                    },
                     {
                       key: 'who',
                       header: 'Who',
@@ -87,23 +112,25 @@ export default function ScheduledCallbacksView() {
                     {
                       key: 'reason',
                       header: 'Reason',
-                      cell: (r) => r.callbackReason
-                        ? <span className="text-slate-600 max-w-sm block italic">"{r.callbackReason}"</span>
+                      cell: (r) => (r.reason || r.callbackReason)
+                        ? <span className="text-slate-600 max-w-sm block italic">"{r.reason || r.callbackReason}"</span>
                         : <span className="text-slate-300 italic">Not specified</span>,
                     },
                     {
                       key: 'when',
-                      header: 'Callback Time',
+                      header: 'Timing',
                       cell: (r) => (
                         <div>
-                          <div className="text-slate-700 font-medium whitespace-nowrap">
-                            {r.callbackTime
-                              ? new Date(r.callbackTime).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })
-                              : 'Not specified'}
-                          </div>
+                          {r.kind === 'callback' && (
+                            <div className="text-slate-700 font-medium whitespace-nowrap">
+                              {r.callbackTime
+                                ? new Date(r.callbackTime).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })
+                                : 'Not specified'}
+                            </div>
+                          )}
                           {r.nextRetryAt && (
-                            <div className="text-[10px] text-slate-400 mt-0.5 whitespace-nowrap">
-                              Next attempt: {new Date(r.nextRetryAt).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}
+                            <div className={r.kind === 'callback' ? 'text-[10px] text-slate-400 mt-0.5 whitespace-nowrap' : 'text-xs text-slate-700 font-medium whitespace-nowrap'}>
+                              {r.kind === 'callback' ? 'Next attempt: ' : 'Retries at '}{new Date(r.nextRetryAt).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}
                             </div>
                           )}
                         </div>
