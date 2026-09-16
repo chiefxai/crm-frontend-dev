@@ -196,11 +196,14 @@ function slugifyQuestion(question: string): string {
 
 // Builds the wire-format questions payload for POST /api/{twilio,vobiz,piopiy}/call
 // — pairs each question with its label (falling back to the question text
-// itself when no label was set) so the backend can attach it to the
-// extracted answer.
-function buildQuestionsPayload(task: DialTask | null | undefined): { label: string; question: string }[] {
+// itself when no label was set) and its declared data type, so the backend
+// can both attach the right label to the extracted answer AND format/
+// coerce that answer to match what the workflow variable actually expects
+// (a number as digits, a boolean as Yes/No, etc. — see
+// postCallAgents/workflowAnswersAgent.js).
+function buildQuestionsPayload(task: DialTask | null | undefined): { label: string; question: string; dataType?: string }[] {
   if (!task) return [];
-  return task.questions.map((q, i) => ({ question: q, label: task.questionLabels?.[i] || q }));
+  return task.questions.map((q, i) => ({ question: q, label: task.questionLabels?.[i] || q, dataType: task.questionDataTypes?.[i] }));
 }
 
 interface DialTask {
