@@ -9,6 +9,7 @@ import Badge from './ui/Badge';
 import EmptyState from './ui/EmptyState';
 import DataTable, { Column } from './ui/DataTable';
 import FilterBar from './ui/FilterBar';
+import ContactDetailsSlideOver from './ui/ContactDetailsSlideOver';
 
 // Leads = contacts currently in the "lead" stage of the universal
 // contact -> campaign -> lead -> opportunity -> client pipeline (see
@@ -49,6 +50,7 @@ export default function LeadsView({ leads, setLeads, dialerTasks = [] }: LeadsVi
   const [searchTerm, setSearchTerm] = React.useState('');
   const [sourceFilter, setSourceFilter] = React.useState('All');
   const [campaignFilter, setCampaignFilter] = React.useState('All');
+  const [selectedLead, setSelectedLead] = React.useState<Lead | null>(null);
 
   const activeLeads = leads.filter((l) => l.pipelineStage === 'lead');
   const uniqueSources = [...new Set(activeLeads.map((l) => l.source).filter(Boolean))].sort();
@@ -75,6 +77,7 @@ export default function LeadsView({ leads, setLeads, dialerTasks = [] }: LeadsVi
   const advance = (lead: Lead, toStatus: Lead['status'], toStage: Lead['pipelineStage']) => {
     setAdvancingId(lead.id);
     setLeads(leads.map((l) => (l.id === lead.id ? { ...l, status: toStatus, pipelineStage: toStage } : l)));
+    setSelectedLead(null); // the row is about to leave this filtered list
     setTimeout(() => setAdvancingId(null), 400);
   };
 
@@ -102,7 +105,7 @@ export default function LeadsView({ leads, setLeads, dialerTasks = [] }: LeadsVi
       header: 'Actions',
       align: 'right',
       cell: (l) => (
-        <div className="flex items-center justify-end gap-1.5">
+        <div className="flex items-center justify-end gap-1.5" onClick={(e) => e.stopPropagation()}>
           <button
             onClick={() => advance(l, 'Qualified', 'opportunity')}
             disabled={advancingId === l.id}
@@ -168,10 +171,34 @@ export default function LeadsView({ leads, setLeads, dialerTasks = [] }: LeadsVi
           ) : filteredLeads.length === 0 ? (
             <EmptyState icon={UserPlus} heading="No leads match your search" />
           ) : (
-            <DataTable bare resizable paginated columns={columns} rows={filteredLeads} rowKey={(l) => l.id} />
+            <DataTable bare resizable paginated columns={columns} rows={filteredLeads} rowKey={(l) => l.id} onRowClick={setSelectedLead} />
           )}
         </Widget>
       </div>
+
+      <ContactDetailsSlideOver
+        lead={selectedLead}
+        onClose={() => setSelectedLead(null)}
+        stages={stages}
+        actions={selectedLead && (
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => advance(selectedLead, 'Qualified', 'opportunity')}
+              disabled={advancingId === selectedLead.id}
+              className="flex items-center gap-1.5 text-xs font-semibold text-amber-600 hover:text-amber-700 disabled:opacity-50 px-3 py-2 rounded-xl border border-amber-200 hover:bg-amber-50 cursor-pointer"
+            >
+              <ArrowRightCircle className="h-4 w-4" /> Advance to {stageLabel(stages, 'opportunity')}
+            </button>
+            <button
+              onClick={() => advance(selectedLead, 'Converted', 'client')}
+              disabled={advancingId === selectedLead.id}
+              className="flex items-center gap-1.5 text-xs font-semibold text-emerald-600 hover:text-emerald-700 disabled:opacity-50 px-3 py-2 rounded-xl border border-emerald-200 hover:bg-emerald-50 cursor-pointer"
+            >
+              <CheckCircle2 className="h-4 w-4" /> Mark as {stageLabel(stages, 'client')}
+            </button>
+          </div>
+        )}
+      />
     </PageShell>
   );
 }

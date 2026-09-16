@@ -9,6 +9,7 @@ import Badge from './ui/Badge';
 import EmptyState from './ui/EmptyState';
 import DataTable, { Column } from './ui/DataTable';
 import FilterBar from './ui/FilterBar';
+import ContactDetailsSlideOver from './ui/ContactDetailsSlideOver';
 
 // Pipeline = the last two stages of the universal contact -> campaign ->
 // lead -> opportunity -> client progression (see src/lib/pipelineStages.ts),
@@ -42,6 +43,7 @@ export default function PipelineView({ leads, setLeads, dialerTasks = [] }: Pipe
   const [searchTerm, setSearchTerm] = React.useState('');
   const [sourceFilter, setSourceFilter] = React.useState('All');
   const [campaignFilter, setCampaignFilter] = React.useState('All');
+  const [selectedLead, setSelectedLead] = React.useState<Lead | null>(null);
 
   const ongoing = leads.filter((l) => l.pipelineStage === 'opportunity');
   const clients = leads.filter((l) => l.pipelineStage === 'client');
@@ -74,6 +76,7 @@ export default function PipelineView({ leads, setLeads, dialerTasks = [] }: Pipe
   const markAsClient = (lead: Lead) => {
     setAdvancingId(lead.id);
     setLeads(leads.map((l) => (l.id === lead.id ? { ...l, status: 'Converted', pipelineStage: 'client' } : l)));
+    setSelectedLead((cur) => (cur && cur.id === lead.id ? { ...cur, status: 'Converted', pipelineStage: 'client' } : cur));
     setTimeout(() => setAdvancingId(null), 400);
   };
 
@@ -106,14 +109,16 @@ export default function PipelineView({ leads, setLeads, dialerTasks = [] }: Pipe
           header: 'Actions',
           align: 'right',
           cell: (l) => (
-            <button
-              onClick={() => markAsClient(l)}
-              disabled={advancingId === l.id}
-              className="flex items-center gap-1 text-[11px] font-semibold text-emerald-600 hover:text-emerald-700 disabled:opacity-50 px-2 py-1 rounded-lg hover:bg-emerald-50 dark:hover:bg-emerald-500/10 cursor-pointer ml-auto"
-              title={`Mark as ${stageLabel(stages, 'client')}`}
-            >
-              <CheckCircle2 className="h-3.5 w-3.5" /> {stageLabel(stages, 'client')}
-            </button>
+            <div className="flex justify-end" onClick={(e) => e.stopPropagation()}>
+              <button
+                onClick={() => markAsClient(l)}
+                disabled={advancingId === l.id}
+                className="flex items-center gap-1 text-[11px] font-semibold text-emerald-600 hover:text-emerald-700 disabled:opacity-50 px-2 py-1 rounded-lg hover:bg-emerald-50 dark:hover:bg-emerald-500/10 cursor-pointer"
+                title={`Mark as ${stageLabel(stages, 'client')}`}
+              >
+                <CheckCircle2 className="h-3.5 w-3.5" /> {stageLabel(stages, 'client')}
+              </button>
+            </div>
           ),
         },
       ]
@@ -207,10 +212,25 @@ export default function PipelineView({ leads, setLeads, dialerTasks = [] }: Pipe
           ) : filtered.length === 0 ? (
             <EmptyState heading="No contacts match your search" />
           ) : (
-            <DataTable bare resizable paginated columns={columns} rows={filtered} rowKey={(l) => l.id} />
+            <DataTable bare resizable paginated columns={columns} rows={filtered} rowKey={(l) => l.id} onRowClick={setSelectedLead} />
           )}
         </Widget>
       </div>
+
+      <ContactDetailsSlideOver
+        lead={selectedLead}
+        onClose={() => setSelectedLead(null)}
+        stages={stages}
+        actions={selectedLead && selectedLead.pipelineStage !== 'client' && (
+          <button
+            onClick={() => markAsClient(selectedLead)}
+            disabled={advancingId === selectedLead.id}
+            className="flex items-center gap-1.5 text-xs font-semibold text-emerald-600 hover:text-emerald-700 disabled:opacity-50 px-3 py-2 rounded-xl border border-emerald-200 hover:bg-emerald-50 cursor-pointer"
+          >
+            <CheckCircle2 className="h-4 w-4" /> Mark as {stageLabel(stages, 'client')}
+          </button>
+        )}
+      />
     </PageShell>
   );
 }
