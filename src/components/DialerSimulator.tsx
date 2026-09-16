@@ -205,6 +205,13 @@ interface DialTask {
   // the literal text spoken) is untouched; only reporting/extraction
   // surfaces read this.
   questionLabels?: string[];
+  // Same order/length as `questions` — the workflow variable's declared
+  // type (string/number/boolean/date/array/object). Only meaningful post-
+  // call: the Call Analysis sidebar's Extracted Campaign Answers panel
+  // shows each answer as "name (dataType): value" instead of restating
+  // the full question the agent asked live — the question text is only
+  // useful to the agent in the moment, not for reviewing what was learned.
+  questionDataTypes?: string[];
   leadIds: string[];
   status: 'Pending' | 'In Progress' | 'Completed';
   createdAt: string;
@@ -526,10 +533,11 @@ Real Tamil speakers do not say the "correct" written form of a word. They contra
     const taskName = workflow.name;
 
     const questionPairs = (workflow.variables ?? [])
-      .map(v => ({ label: v.name || v.questionText, question: v.questionText || v.name }))
+      .map(v => ({ label: v.name || v.questionText, question: v.questionText || v.name, dataType: v.dataType }))
       .filter(p => p.question);
     const questions = questionPairs.map(p => p.question);
     const questionLabels = questionPairs.map(p => p.label);
+    const questionDataTypes = questionPairs.map(p => p.dataType);
 
     // New contacts → add to leadsDatabase first
     const newLeads: Lead[] = wizardNewContacts.map(c => ({
@@ -557,6 +565,7 @@ Real Tamil speakers do not say the "correct" written form of a word. They contra
       workflowName: workflow.name,
       questions,
       questionLabels,
+      questionDataTypes,
       leadIds: allLeadIds,
       status: 'Pending',
       createdAt: new Date().toISOString(),
@@ -1514,20 +1523,30 @@ Currently on question ${nextIndex} out of ${selectedTask.questions.length}. Next
             </span>
             <div className="space-y-3">
               {selectedTask.questions.map((question, qIdx) => {
+                // The question TEXT is only useful to the agent live, on
+                // the call, to know what to actually ask aloud — reviewing
+                // afterward is about what was LEARNED, so show the
+                // workflow variable's own name + declared type (set in
+                // Workflow Builder) instead of restating the question.
                 const label = selectedTask.questionLabels?.[qIdx] || question;
+                const dataType = selectedTask.questionDataTypes?.[qIdx];
                 const answer = activeTapeResult.answers?.[label] ?? activeTapeResult.answers?.[question]
                   ?? tapeAnswersFallback[label] ?? tapeAnswersFallback[question];
                 return (
                   <div key={qIdx} className="p-3 bg-[var(--bg-subtle)] rounded-xl border border-[var(--border)] space-y-2">
-                    <div className="flex items-start gap-2">
-                      <span className="text-[9px] bg-[var(--bg-subtle)] px-2 py-0.5 rounded font-mono shrink-0 font-bold" style={{ color: 'var(--text-secondary)' }}>Q{qIdx + 1}</span>
-                      <p className="font-medium text-xs leading-snug text-[var(--text-secondary)]">{label}</p>
+                    <div className="flex items-center gap-2">
+                      <span className="font-mono text-xs font-bold text-[var(--text-primary)]">{label}</span>
+                      {dataType && (
+                        <span className="text-[9px] uppercase tracking-wide font-bold px-1.5 py-0.5 rounded bg-[var(--bg-subtle)] border border-[var(--border)] shrink-0" style={{ color: 'var(--text-muted)' }}>
+                          {dataType}
+                        </span>
+                      )}
                     </div>
                     <div className="bg-[var(--bg-surface)] border border-[var(--border)]/80 rounded-lg px-3 py-2.5 font-sans text-xs shadow-sm">
                       {answer ? (
                         <div className="text-emerald-600 flex items-start gap-2">
                           <span className="text-emerald-500 font-bold shrink-0 text-sm">✓</span>
-                          <p className="text-[var(--text-primary)] italic leading-relaxed">"{answer}"</p>
+                          <p className="text-[var(--text-primary)] leading-relaxed">{answer}</p>
                         </div>
                       ) : (
                         <span className="text-[var(--text-muted)] italic">No answer captured.</span>
