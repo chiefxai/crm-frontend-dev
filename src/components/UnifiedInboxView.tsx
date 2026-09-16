@@ -5,6 +5,7 @@ import { Channel, Conversation, ChatMessage } from '../lib/inbox';
 import PageShell from './ui/PageShell';
 import Button from './ui/Button';
 import Modal from './ui/Modal';
+import Badge from './ui/Badge';
 
 function ChannelIcon({ type, className }: { type: string; className?: string }) {
   return type === 'whatsapp' ? <MessageCircle className={className} /> : <IgIcon className={className} />;
@@ -185,9 +186,12 @@ export default function UnifiedInboxView() {
                       <span className="font-semibold text-indigo-900">Summary:</span>
                       <span className="text-indigo-800">{selectedConversation.summary}</span>
                       {selectedConversation.sentiment && (
-                        <span className={`ml-auto text-[10px] font-bold px-2 py-0.5 rounded-full ${selectedConversation.sentiment === 'Positive' ? 'bg-emerald-100 text-emerald-700' : selectedConversation.sentiment === 'Negative' ? 'bg-rose-100 text-rose-700' : 'bg-slate-100 text-slate-600'}`}>
+                        <Badge
+                          color={selectedConversation.sentiment === 'Positive' ? 'green' : selectedConversation.sentiment === 'Negative' ? 'rose' : 'slate'}
+                          className="ml-auto"
+                        >
                           {selectedConversation.sentiment}
-                        </span>
+                        </Badge>
                       )}
                     </div>
                     {selectedConversation.nextAction && <div className="text-indigo-700"><span className="font-semibold">Next step:</span> {selectedConversation.nextAction}</div>}
