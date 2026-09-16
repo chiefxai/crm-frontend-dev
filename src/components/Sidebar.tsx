@@ -10,6 +10,7 @@ import {
   Layers,
   Contact,
   UserPlus,
+  Target,
   Building2,
   Inbox,
   Sparkles,
@@ -252,6 +253,7 @@ export default function Sidebar({
 
   const allMenuItems = [
     { id: 'leads',        label: 'Leads',             icon: UserPlus },
+    { id: 'pipeline',     label: 'Pipeline',          icon: Target },
     { id: 'contacts',     label: 'Contact Directory', icon: Contact },
     { id: 'workflows',    label: 'Workflow Builder',  icon: GitBranch },
     { id: 'call-logs',    label: 'Call Logs',         icon: History },

@@ -36,6 +36,13 @@ export const FEATURE_REGISTRY: FeatureFlagDef[] = [
     enabledByDefault: true,
   },
   {
+    key: 'pipeline',
+    label: 'Pipeline',
+    description: 'Opportunity and Client contacts managed together, in one place',
+    tabId: 'pipeline',
+    enabledByDefault: true,
+  },
+  {
     key: 'contact_directory',
     label: 'Contact Directory',
     description: 'Organisation-wide contact book',

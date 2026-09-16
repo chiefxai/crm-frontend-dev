@@ -49,6 +49,7 @@ import ScheduledCallbacksView from './components/ScheduledCallbacksView';
 import LoanLifecycleView from './components/LoanLifecycleView';
 import SettingsView from './components/SettingsView';
 import LeadsView from './components/LeadsView';
+import PipelineView from './components/PipelineView';
 import ContactDirectoryView from './components/ContactDirectoryView';
 import CallLogsView from './components/CallLogsView';
 import ReportsView from './components/ReportsView';
@@ -245,6 +246,7 @@ export default function App() {
   const TAB_TO_SLUG: Record<string, string> = {
     dashboard:     'executive-dashboard',
     leads:         'leads',
+    pipeline:      'pipeline',
     contacts:      'contact-directory',
     workflows:     'workflow-builder',
     dialer:        'voice-simulator',
@@ -721,7 +723,7 @@ export default function App() {
 
     // Find the first sidebar tab the user can actually see
     const orderedTabs = [
-      'dashboard', 'leads', 'contacts', 'workflows',
+      'dashboard', 'leads', 'pipeline', 'contacts', 'workflows',
       'dialer', 'call-logs', 'reports', 'inbox', 'agent-studio',
       'compliance', 'knowledge', 'enquiries', 'audit-log', 'loans',
     ];
@@ -780,6 +782,8 @@ export default function App() {
         );
       case 'leads':
         return <LeadsView leads={leads} setLeads={setLeads} />;
+      case 'pipeline':
+        return <PipelineView leads={leads} setLeads={setLeads} />;
       case 'contacts':
         return (
           <ContactDirectoryView
