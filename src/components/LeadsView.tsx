@@ -8,6 +8,7 @@ import Widget from './ui/Widget';
 import Badge from './ui/Badge';
 import EmptyState from './ui/EmptyState';
 import DataTable, { Column } from './ui/DataTable';
+import FilterBar from './ui/FilterBar';
 
 // Leads = contacts currently in the "lead" stage of the universal
 // contact -> campaign -> lead -> opportunity -> client pipeline (see
@@ -34,8 +35,19 @@ interface LeadsViewProps {
 export default function LeadsView({ leads, setLeads }: LeadsViewProps) {
   const { stages } = usePipelineStages();
   const [advancingId, setAdvancingId] = React.useState<string | null>(null);
+  const [searchTerm, setSearchTerm] = React.useState('');
+  const [sourceFilter, setSourceFilter] = React.useState('All');
 
   const activeLeads = leads.filter((l) => l.pipelineStage === 'lead');
+  const uniqueSources = [...new Set(activeLeads.map((l) => l.source).filter(Boolean))].sort();
+  const filteredLeads = activeLeads.filter((l) => {
+    const matchesSearch = !searchTerm ||
+      l.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      l.phone.includes(searchTerm) ||
+      (l.email || '').toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesSource = sourceFilter === 'All' || l.source === sourceFilter;
+    return matchesSearch && matchesSource;
+  });
 
   // Advances a lead's `status` the same way an edit in Contact Directory
   // would — just local state, same as every other Contact edit in this
@@ -103,7 +115,27 @@ export default function LeadsView({ leads, setLeads }: LeadsViewProps) {
       subtitle={`Contacts currently in the ${stageLabel(stages, 'lead')} stage — advance one to ${stageLabel(stages, 'opportunity')} or ${stageLabel(stages, 'client')} as it moves forward.`}
       layout="fill"
     >
-      <div className="flex-1 flex flex-col overflow-hidden px-8 pb-8 pt-6">
+      <div className="flex-1 flex flex-col overflow-hidden px-8 pb-8 pt-6 gap-6">
+        <Widget showHeader={false} padding="md">
+          <FilterBar
+            search={{ value: searchTerm, onChange: setSearchTerm, placeholder: 'Search leads by name, phone, or email…' }}
+            selects={[
+              {
+                key: 'source',
+                label: 'Source',
+                value: sourceFilter,
+                onChange: setSourceFilter,
+                options: [{ label: 'All Sources', value: 'All' }, ...uniqueSources.map((src) => ({ label: src, value: src }))],
+              },
+            ]}
+            actions={
+              <div className="flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-slate-500 whitespace-nowrap">
+                <UserPlus className="h-3.5 w-3.5 text-blue-600" />
+                {filteredLeads.length} Lead{filteredLeads.length === 1 ? '' : 's'}
+              </div>
+            }
+          />
+        </Widget>
         <Widget className="flex-1" showHeader title="Leads" icon={UserPlus} accent="#2563eb" padding="none">
           {activeLeads.length === 0 ? (
             <EmptyState
@@ -111,8 +143,10 @@ export default function LeadsView({ leads, setLeads }: LeadsViewProps) {
               heading="No active leads right now"
               message="Contacts show up here once a call to them is actually answered and engaged with — track new prospects from Contact Directory first."
             />
+          ) : filteredLeads.length === 0 ? (
+            <EmptyState icon={UserPlus} heading="No leads match your search" />
           ) : (
-            <DataTable bare resizable paginated columns={columns} rows={activeLeads} rowKey={(l) => l.id} />
+            <DataTable bare resizable paginated columns={columns} rows={filteredLeads} rowKey={(l) => l.id} />
           )}
         </Widget>
       </div>
