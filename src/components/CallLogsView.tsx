@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Phone, PlayCircle, Download, X, Check, ChevronDown, MessageCircleQuestion, RefreshCw } from 'lucide-react';
+import { Eye, PlayCircle, Download, X, Check, ChevronDown, MessageCircleQuestion, RefreshCw } from 'lucide-react';
 import SlideOver from './ui/SlideOver';
 import { CallLog, Lead } from '../types';
 import { callCostInr, formatInr } from '../lib/pricing';
@@ -239,9 +239,9 @@ export default function CallLogsView({ callLogs, costPerMinuteInr, leads = [] }:
               header: 'Actions',
               align: 'right',
               cell: (c) => (
-                <button onClick={() => setSelected(c)} className="text-blue-600 hover:underline font-semibold flex items-center gap-1 ml-auto text-xs">
-                  <Phone className="h-3 w-3" /> View
-                </button>
+                <Button variant="secondary" size="xs" icon={Eye} onClick={() => setSelected(c)} className="ml-auto">
+                  View
+                </Button>
               ),
             },
           ];

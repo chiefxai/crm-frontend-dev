@@ -16,7 +16,7 @@ import {
   Pause,
   Plus,
   Trash2,
-  Headphones,
+  Eye,
   CheckCircle2,
   XCircle,
   HelpCircle,
@@ -42,6 +42,7 @@ import Button from './ui/Button';
 import EmptyState from './ui/EmptyState';
 import DataTable, { Column } from './ui/DataTable';
 import SlideOver from './ui/SlideOver';
+import Badge from './ui/Badge';
 import { apiFetch, getPlayableRecordingUrl } from '../lib/api';
 import { callCostInr, formatInr } from '../lib/pricing';
 
@@ -1098,7 +1099,9 @@ Currently on question ${nextIndex} out of ${selectedTask.questions.length}. Next
     setPlayingTapeType(type);
     setTapeProgress(0);
     setTapeDuration(0);
-    setIsTapePlaying(true);
+    // Open the player paused — it used to auto-play the recording the
+    // instant the sidebar opened, before the user had asked for it.
+    setIsTapePlaying(false);
   };
 
   const activeTapeResult = playingTapeType === 'inbound'
@@ -1850,7 +1853,7 @@ Currently on question ${nextIndex} out of ${selectedTask.questions.length}. Next
                             </Button>
                           </>
                         ) : result.status === 'Completed' ? (
-                          <Button variant="secondary" size="xs" icon={Headphones} onClick={() => handleOpenTapePlayer(row.leadId)}>
+                          <Button variant="secondary" size="xs" icon={Eye} onClick={() => handleOpenTapePlayer(row.leadId)}>
                             View
                           </Button>
                         ) : (
@@ -2088,12 +2091,12 @@ Currently on question ${nextIndex} out of ${selectedTask.questions.length}. Next
                         </p>
 
                         <div className="flex flex-wrap items-center gap-2 pt-1">
-                          <span className="text-[9px] font-mono text-emerald-600 bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded-full">
+                          <Badge color={log.sentiment === 'Positive' ? 'green' : log.sentiment === 'Negative' ? 'rose' : 'slate'} className="font-mono">
                             {log.sentiment}
-                          </span>
-                          <span className="text-[9px] font-mono text-blue-600 bg-blue-50 border border-blue-200 px-1.5 py-0.5 rounded-full">
+                          </Badge>
+                          <Badge color="blue" className="font-mono">
                             {log.status}
-                          </span>
+                          </Badge>
                           <span className="text-[9px] font-mono text-[var(--text-muted)] bg-[var(--bg-subtle)] px-1.5 py-0.5 rounded-full">
                             Duration: {log.duration}s
                           </span>
@@ -2101,14 +2104,12 @@ Currently on question ${nextIndex} out of ${selectedTask.questions.length}. Next
                             {formatInr(callCostInr(log.duration))}
                           </span>
                           {log.status === 'Completed' && log.callAnswered === false && (
-                            <span className="text-[9px] font-bold text-rose-600 bg-rose-50 border border-rose-100 px-1.5 py-0.5 rounded-full">
-                              Not Answered
-                            </span>
+                            <Badge color="rose">Not Answered</Badge>
                           )}
                         </div>
                       </div>
 
-                      <Button variant="secondary" size="sm" icon={Play} onClick={() => handleOpenTapePlayer(log.id, 'inbound')} className="shrink-0">
+                      <Button variant="secondary" size="sm" icon={Eye} onClick={() => handleOpenTapePlayer(log.id, 'inbound')} className="shrink-0">
                         View
                       </Button>
                     </div>
