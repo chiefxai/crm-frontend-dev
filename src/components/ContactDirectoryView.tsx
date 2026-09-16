@@ -481,7 +481,6 @@ export default function ContactDirectoryView({
                   </div>
                   <div>
                     <p className="font-semibold text-slate-800 text-sm">{lead.name}</p>
-                    <p className="text-[10px] text-slate-400 font-mono mt-0.5">ID: {lead.id}</p>
                   </div>
                 </div>
               ),
