@@ -29,7 +29,9 @@ import Widget from './ui/Widget';
 import SlideOver from './ui/SlideOver';
 import Modal from './ui/Modal';
 import FilterBar from './ui/FilterBar';
+import Badge from './ui/Badge';
 import { formatPhone } from '../lib/phone';
+import { newClientId } from '../lib/ids';
 
 interface LeadManagementViewProps {
   leads: Lead[];
@@ -82,7 +84,7 @@ export default function LeadManagementView({
     if (!newLeadName || !newLeadPhone || !newLeadEmail) return;
 
     const added: Lead = {
-      id: `L-${100 + leads.length + 1}`,
+      id: newClientId('L'),
       name: newLeadName,
       phone: newLeadPhone,
       email: newLeadEmail,
@@ -138,7 +140,6 @@ export default function LeadManagementView({
     }
 
     const importedLeads: Lead[] = [];
-    let rowIndex = leads.length;
     for (let i = 1; i < lines.length; i++) {
       if (!lines[i].trim()) continue;
       const cols = lines[i].split(',').map((c) => c.trim());
@@ -147,9 +148,8 @@ export default function LeadManagementView({
         if (cols[idx] !== undefined) rowObj[header] = cols[idx];
       });
 
-      rowIndex += 1;
       importedLeads.push({
-        id: `L-${100 + rowIndex}`,
+        id: newClientId('L'),
         name: rowObj.name || `Lead #${i}`,
         phone: rowObj.phone || 'N/A',
         email: rowObj.email || 'N/A',
@@ -598,15 +598,9 @@ export default function LeadManagementView({
                         >
                           <div className="flex items-center justify-between">
                             <span className="text-xs font-bold text-slate-800">{log.id}</span>
-                            <span
-                              className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${
-                                log.sentiment === 'Positive'
-                                  ? 'bg-emerald-50 text-emerald-700'
-                                  : 'bg-rose-50 text-rose-700'
-                              }`}
-                            >
+                            <Badge color={log.sentiment === 'Positive' ? 'green' : log.sentiment === 'Negative' ? 'rose' : 'slate'} className="text-[9px]">
                               {log.sentiment}
-                            </span>
+                            </Badge>
                           </div>
                           <p className="text-[10px] text-slate-400 mt-1 truncate">{log.summary}</p>
                         </button>
