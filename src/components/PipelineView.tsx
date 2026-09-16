@@ -20,36 +20,51 @@ import FilterBar from './ui/FilterBar';
 // the matching pipeline stage.
 type SubTab = 'ongoing' | 'clients';
 
+// Minimal shape of a dialer task ("campaign") needed here — matches
+// LeadsView.tsx's identical CampaignTask.
+interface CampaignTask {
+  id: string;
+  name: string;
+  leadIds: string[];
+  createdAt: string;
+}
+
 interface PipelineViewProps {
   leads: Lead[];
   setLeads: React.Dispatch<React.SetStateAction<Lead[]>>;
+  dialerTasks?: CampaignTask[];
 }
 
-export default function PipelineView({ leads, setLeads }: PipelineViewProps) {
+export default function PipelineView({ leads, setLeads, dialerTasks = [] }: PipelineViewProps) {
   const { stages } = usePipelineStages();
   const [subTab, setSubTab] = React.useState<SubTab>('ongoing');
   const [advancingId, setAdvancingId] = React.useState<string | null>(null);
   const [searchTerm, setSearchTerm] = React.useState('');
   const [sourceFilter, setSourceFilter] = React.useState('All');
+  const [campaignFilter, setCampaignFilter] = React.useState('All');
 
   const ongoing = leads.filter((l) => l.pipelineStage === 'opportunity');
   const clients = leads.filter((l) => l.pipelineStage === 'client');
   const activeSet = subTab === 'ongoing' ? ongoing : clients;
 
   const uniqueSources = [...new Set(activeSet.map((l) => l.source).filter(Boolean))].sort();
+  const campaignOptions = [...dialerTasks].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  const selectedCampaign = campaignOptions.find((t) => t.id === campaignFilter) || null;
   const filtered = activeSet.filter((l) => {
     const matchesSearch = !searchTerm ||
       l.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
       l.phone.includes(searchTerm) ||
       (l.email || '').toLowerCase().includes(searchTerm.toLowerCase());
     const matchesSource = sourceFilter === 'All' || l.source === sourceFilter;
-    return matchesSearch && matchesSource;
+    const matchesCampaign = !selectedCampaign || selectedCampaign.leadIds.includes(l.id);
+    return matchesSearch && matchesSource && matchesCampaign;
   });
 
-  // Reset the source filter (options differ between the two sub-tabs) and
-  // clear the search when switching, so stale filter state from "Ongoing"
-  // doesn't silently hide everything the moment someone switches to "Clients".
-  const switchTab = (t: SubTab) => { setSubTab(t); setSourceFilter('All'); setSearchTerm(''); };
+  // Reset the source/campaign filters (options differ between the two
+  // sub-tabs) and clear the search when switching, so stale filter state
+  // from "Ongoing" doesn't silently hide everything the moment someone
+  // switches to "Clients".
+  const switchTab = (t: SubTab) => { setSubTab(t); setSourceFilter('All'); setCampaignFilter('All'); setSearchTerm(''); };
 
   // Wins the deal — the only forward action from here, since "client" is
   // the terminal stage of the pipeline. Same pattern as LeadsView.tsx's
@@ -116,33 +131,35 @@ export default function PipelineView({ leads, setLeads }: PipelineViewProps) {
         },
       ];
 
+  const subTabToggle = (
+    <div className="flex items-center gap-1.5 shrink-0 bg-slate-100 dark:bg-[var(--bg-subtle)] rounded-xl p-1">
+      <button
+        onClick={() => switchTab('ongoing')}
+        className={`flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold rounded-lg transition-all cursor-pointer ${
+          subTab === 'ongoing' ? 'bg-white dark:bg-[var(--bg-surface)] text-blue-600 shadow-sm' : 'text-slate-500 dark:text-[var(--text-muted)] hover:text-slate-700'
+        }`}
+      >
+        <Target className="h-3.5 w-3.5" /> {stageLabel(stages, 'opportunity')} ({ongoing.length})
+      </button>
+      <button
+        onClick={() => switchTab('clients')}
+        className={`flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold rounded-lg transition-all cursor-pointer ${
+          subTab === 'clients' ? 'bg-white dark:bg-[var(--bg-surface)] text-emerald-600 shadow-sm' : 'text-slate-500 dark:text-[var(--text-muted)] hover:text-slate-700'
+        }`}
+      >
+        <Trophy className="h-3.5 w-3.5" /> {stageLabel(stages, 'client')}s ({clients.length})
+      </button>
+    </div>
+  );
+
   return (
     <PageShell
       title="Pipeline"
       subtitle={`Manage ${stageLabel(stages, 'opportunity')} and ${stageLabel(stages, 'client')} contacts in one place.`}
       layout="fill"
+      action={subTabToggle}
     >
       <div className="flex-1 flex flex-col overflow-hidden px-8 pb-8 pt-6 gap-6">
-        {/* Sub-tab toggle */}
-        <div className="flex items-center gap-1.5 shrink-0 bg-slate-100 dark:bg-[var(--bg-subtle)] rounded-xl p-1 w-fit">
-          <button
-            onClick={() => switchTab('ongoing')}
-            className={`flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold rounded-lg transition-all cursor-pointer ${
-              subTab === 'ongoing' ? 'bg-white dark:bg-[var(--bg-surface)] text-blue-600 shadow-sm' : 'text-slate-500 dark:text-[var(--text-muted)] hover:text-slate-700'
-            }`}
-          >
-            <Target className="h-3.5 w-3.5" /> {stageLabel(stages, 'opportunity')} ({ongoing.length})
-          </button>
-          <button
-            onClick={() => switchTab('clients')}
-            className={`flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold rounded-lg transition-all cursor-pointer ${
-              subTab === 'clients' ? 'bg-white dark:bg-[var(--bg-surface)] text-emerald-600 shadow-sm' : 'text-slate-500 dark:text-[var(--text-muted)] hover:text-slate-700'
-            }`}
-          >
-            <Trophy className="h-3.5 w-3.5" /> {stageLabel(stages, 'client')}s ({clients.length})
-          </button>
-        </div>
-
         <Widget showHeader={false} padding="md">
           <FilterBar
             search={{ value: searchTerm, onChange: setSearchTerm, placeholder: `Search by name, phone, or email…` }}
@@ -153,6 +170,13 @@ export default function PipelineView({ leads, setLeads }: PipelineViewProps) {
                 value: sourceFilter,
                 onChange: setSourceFilter,
                 options: [{ label: 'All Sources', value: 'All' }, ...uniqueSources.map((src) => ({ label: src, value: src }))],
+              },
+              {
+                key: 'campaign',
+                label: 'Campaign',
+                value: campaignFilter,
+                onChange: setCampaignFilter,
+                options: [{ label: 'All Campaigns', value: 'All' }, ...campaignOptions.map((t) => ({ label: t.name, value: t.id }))],
               },
             ]}
             actions={

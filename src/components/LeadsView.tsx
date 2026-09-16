@@ -27,26 +27,41 @@ const STAGE_COLOR: Record<string, 'blue' | 'amber' | 'green' | 'rose' | 'slate' 
   client: 'green',
 };
 
+// Minimal shape of a dialer task ("campaign") needed here — just enough
+// to list campaigns and check which leads were part of one. Matches the
+// DialTask shape defined locally in DialerSimulator.tsx/ReportsView.tsx.
+interface CampaignTask {
+  id: string;
+  name: string;
+  leadIds: string[];
+  createdAt: string;
+}
+
 interface LeadsViewProps {
   leads: Lead[];
   setLeads: React.Dispatch<React.SetStateAction<Lead[]>>;
+  dialerTasks?: CampaignTask[];
 }
 
-export default function LeadsView({ leads, setLeads }: LeadsViewProps) {
+export default function LeadsView({ leads, setLeads, dialerTasks = [] }: LeadsViewProps) {
   const { stages } = usePipelineStages();
   const [advancingId, setAdvancingId] = React.useState<string | null>(null);
   const [searchTerm, setSearchTerm] = React.useState('');
   const [sourceFilter, setSourceFilter] = React.useState('All');
+  const [campaignFilter, setCampaignFilter] = React.useState('All');
 
   const activeLeads = leads.filter((l) => l.pipelineStage === 'lead');
   const uniqueSources = [...new Set(activeLeads.map((l) => l.source).filter(Boolean))].sort();
+  const campaignOptions = [...dialerTasks].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  const selectedCampaign = campaignOptions.find((t) => t.id === campaignFilter) || null;
   const filteredLeads = activeLeads.filter((l) => {
     const matchesSearch = !searchTerm ||
       l.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
       l.phone.includes(searchTerm) ||
       (l.email || '').toLowerCase().includes(searchTerm.toLowerCase());
     const matchesSource = sourceFilter === 'All' || l.source === sourceFilter;
-    return matchesSearch && matchesSource;
+    const matchesCampaign = !selectedCampaign || selectedCampaign.leadIds.includes(l.id);
+    return matchesSearch && matchesSource && matchesCampaign;
   });
 
   // Advances a lead's `status` the same way an edit in Contact Directory
@@ -126,6 +141,13 @@ export default function LeadsView({ leads, setLeads }: LeadsViewProps) {
                 value: sourceFilter,
                 onChange: setSourceFilter,
                 options: [{ label: 'All Sources', value: 'All' }, ...uniqueSources.map((src) => ({ label: src, value: src }))],
+              },
+              {
+                key: 'campaign',
+                label: 'Campaign',
+                value: campaignFilter,
+                onChange: setCampaignFilter,
+                options: [{ label: 'All Campaigns', value: 'All' }, ...campaignOptions.map((t) => ({ label: t.name, value: t.id }))],
               },
             ]}
             actions={
