@@ -48,6 +48,7 @@ import DialerSimulator from './components/DialerSimulator';
 import ScheduledCallbacksView from './components/ScheduledCallbacksView';
 import LoanLifecycleView from './components/LoanLifecycleView';
 import SettingsView from './components/SettingsView';
+import LeadsView from './components/LeadsView';
 import ContactDirectoryView from './components/ContactDirectoryView';
 import CallLogsView from './components/CallLogsView';
 import ReportsView from './components/ReportsView';
@@ -776,6 +777,8 @@ export default function App() {
             costPerMinuteInr={costPerMinuteInr}
           />
         );
+      case 'leads':
+        return <LeadsView />;
       case 'contacts':
         return (
           <ContactDirectoryView

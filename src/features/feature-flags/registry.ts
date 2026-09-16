@@ -29,6 +29,13 @@ export const FEATURE_REGISTRY: FeatureFlagDef[] = [
     enabledByDefault: true,
   },
   {
+    key: 'leads',
+    label: 'Leads',
+    description: 'Raw, unqualified prospects — a pipeline stage before converting into a full Contact',
+    tabId: 'leads',
+    enabledByDefault: true,
+  },
+  {
     key: 'contact_directory',
     label: 'Contact Directory',
     description: 'Organisation-wide contact book',

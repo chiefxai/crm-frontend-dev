@@ -26,6 +26,24 @@ export interface Lead {
   groupIds?: string[];
 }
 
+// A raw/unqualified lead — a pipeline stage BEFORE a real Contact (Lead,
+// above — confusingly also called "leads" at the data layer, since that's
+// the Contact Directory's table). Lives on its own Leads page; converting
+// one creates a genuinely new, independent Contact rather than just
+// relabeling this row, and leaves a convertedLeadId trail behind.
+export interface Prospect {
+  id: string;
+  name: string;
+  phone: string;
+  email?: string;
+  source: string;
+  status: 'New' | 'Contacted' | 'Qualified' | 'Disqualified' | 'Converted';
+  notes?: string;
+  convertedLeadId?: string;
+  createdAt: string;
+  updatedAt?: string;
+}
+
 export interface ContactGroup {
   id: string;
   name: string;

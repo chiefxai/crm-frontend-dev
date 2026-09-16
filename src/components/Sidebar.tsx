@@ -9,6 +9,7 @@ import {
   Settings,
   Layers,
   Contact,
+  UserPlus,
   Building2,
   Inbox,
   Sparkles,
@@ -250,6 +251,7 @@ export default function Sidebar({
   const tagline = INDUSTRY_TAGLINES[industry] || 'AI CRM Platform';
 
   const allMenuItems = [
+    { id: 'leads',        label: 'Leads',             icon: UserPlus },
     { id: 'contacts',     label: 'Contact Directory', icon: Contact },
     { id: 'workflows',    label: 'Workflow Builder',  icon: GitBranch },
     { id: 'call-logs',    label: 'Call Logs',         icon: History },
