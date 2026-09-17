@@ -1,6 +1,7 @@
 import React from 'react';
 import { RefreshCw } from 'lucide-react';
 import { usePageHeaderContext } from '../../lib/PageHeaderContext';
+import Tooltip from './Tooltip';
 
 // Permanently-mounted counterpart to PageShell's header markup — rendered
 // once in App.tsx so switching tabs (which unmounts/remounts the whole view,
@@ -29,18 +30,19 @@ export default function PageHeaderBar() {
     <>
       <div className="shrink-0 h-16 px-8 flex items-center justify-between gap-4 border-b border-slate-100 dark:border-[var(--border)] bg-white dark:bg-[var(--bg-surface)]">
         <div className="min-w-0 flex items-center gap-1.5 shrink-0">
-          {header.titlePrefix}
           <h1 className="text-lg font-semibold tracking-tight text-slate-900 dark:text-[var(--text-primary)] leading-snug truncate">
             {header.title}
           </h1>
+          {header.titleSuffix}
           {refresh && (
-            <button
-              onClick={handleRefresh}
-              title="Refresh"
-              className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 dark:hover:bg-[var(--bg-subtle)] transition-colors shrink-0"
-            >
-              <RefreshCw className={`h-4 w-4 ${spinning ? 'animate-spin' : ''}`} />
-            </button>
+            <Tooltip label="Refresh" side="bottom">
+              <button
+                onClick={handleRefresh}
+                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 dark:hover:bg-[var(--bg-subtle)] transition-colors shrink-0"
+              >
+                <RefreshCw className={`h-4 w-4 ${spinning ? 'animate-spin' : ''}`} />
+              </button>
+            </Tooltip>
           )}
           {header.titleActions}
         </div>

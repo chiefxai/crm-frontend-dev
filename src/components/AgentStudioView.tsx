@@ -5,6 +5,7 @@ import {
   Cpu, Wrench, X,
 } from 'lucide-react';
 import { apiFetch } from '../lib/api';
+import { isDevEnv } from '../lib/env';
 import PageShell from './ui/PageShell';
 import Modal from './ui/Modal';
 import IconButton from './ui/IconButton';
@@ -339,22 +340,28 @@ export default function AgentStudioView() {
       onRefresh={() => loadData()}
       action={
         <div className="flex items-center gap-2">
-          <div className="flex items-center bg-slate-100 rounded-xl p-1">
-            <button
-              type="button"
-              onClick={() => setAgentView('user')}
-              className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors cursor-pointer ${agentView === 'user' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
-            >
-              User Agents
-            </button>
-            <button
-              type="button"
-              onClick={() => setAgentView('system')}
-              className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors cursor-pointer ${agentView === 'system' ? 'bg-white text-slate-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
-            >
-              System Agents
-            </button>
-          </div>
+          {/* System Agents (built-in post-call prompt editor) is dev-only —
+              gated on VITE_APP_ENV=dev (see src/lib/env.ts) so it's not
+              reachable in a real production build at all, not just
+              visually hidden. */}
+          {isDevEnv && (
+            <div className="flex items-center bg-slate-100 rounded-xl p-1">
+              <button
+                type="button"
+                onClick={() => setAgentView('user')}
+                className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors cursor-pointer ${agentView === 'user' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+              >
+                User Agents
+              </button>
+              <button
+                type="button"
+                onClick={() => setAgentView('system')}
+                className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors cursor-pointer ${agentView === 'system' ? 'bg-white text-slate-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+              >
+                System Agents
+              </button>
+            </div>
+          )}
           {agentView === 'user' && <IconButton icon={Plus} label="New Agent" onClick={openCreate} />}
         </div>
       }
@@ -488,8 +495,8 @@ export default function AgentStudioView() {
       </div>
       )}
 
-      {/* ── System Agents ── */}
-      {agentView === 'system' && (
+      {/* ── System Agents — dev-only, see the action toggle's comment above ── */}
+      {isDevEnv && agentView === 'system' && (
         <div className="col-span-12">
           {systemAgents.length === 0 ? (
             <div className="flex items-center justify-center py-20 text-slate-400">

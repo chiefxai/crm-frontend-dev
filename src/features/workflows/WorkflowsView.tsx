@@ -262,7 +262,7 @@ export default function WorkflowsView({ flows, setFlows, openFlowId, onOpenFlow,
         title={<BreadcrumbTitle group="Workflow Builder" page={editingFlow.name} />}
         subtitle={VIEW_SUBTITLE[editorView]}
         layout="fill"
-        titlePrefix={switchFlowMenu}
+        titleSuffix={switchFlowMenu}
         titleActions={
           <>
             <IconButton

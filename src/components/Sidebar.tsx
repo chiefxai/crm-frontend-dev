@@ -25,7 +25,6 @@ import {
   ChevronRight,
   Phone,
   Clock,
-  Key,
   Scale,
   Globe,
   UserCheck,
@@ -85,11 +84,12 @@ const SIDEBAR_GROUPS: SidebarGroup[] = [
     label: 'Administration',
     icon: Settings,
     adminOnly: true,
+    // 'api' (API Keys) hidden from navigation for now — SettingsView.tsx's
+    // content for it is untouched, just not reachable from here.
     subItems: [
       { id: 'numbers',  label: 'Virtual Numbers', icon: Phone },
       { id: 'team',     label: 'Staff & Teams',   icon: Users },
       { id: 'billing',  label: 'Billing & Usage', icon: CreditCard },
-      { id: 'api',      label: 'API Keys',         icon: Key },
     ],
   },
 ];

@@ -3,6 +3,7 @@ import { RefreshCw } from 'lucide-react';
 import { useRefresh } from '../../lib/RefreshContext';
 import { usePageHeaderContext } from '../../lib/PageHeaderContext';
 import { useIsActiveTab } from '../../lib/ActiveTabContext';
+import Tooltip from './Tooltip';
 
 // ── Grid helpers ──────────────────────────────────────────────────────────────
 
@@ -44,11 +45,11 @@ interface PageShellProps {
   title: React.ReactNode;
   /** Short descriptive line under the title */
   subtitle?: string;
-  /** Extra controls rendered BEFORE the title (e.g. a workflow switcher
-   * dropdown) — still in the left-hand title group, not clipped by the
-   * title's own truncate styling the way embedding it inside `title`
-   * itself would be. */
-  titlePrefix?: React.ReactNode;
+  /** Extra controls rendered right AFTER the title, before the refresh
+   * icon (e.g. a workflow switcher dropdown) — still in the left-hand
+   * title group, not clipped by the title's own truncate styling the way
+   * embedding it inside `title` itself would be. */
+  titleSuffix?: React.ReactNode;
   /** Extra controls rendered right after the title/refresh icon, still in
    * the left-hand title group — for per-page icon actions that should read
    * as "belonging to this page" (e.g. Copy/Save) rather than sitting in
@@ -71,7 +72,7 @@ interface PageShellProps {
   onRefresh?: () => void;
 }
 
-export default function PageShell({ title, subtitle, titlePrefix, titleActions, action, toolbar, children, className = '', layout = 'grid', onRefresh }: PageShellProps) {
+export default function PageShell({ title, subtitle, titleSuffix, titleActions, action, toolbar, children, className = '', layout = 'grid', onRefresh }: PageShellProps) {
   const contextRefresh = useRefresh();
   const refresh = onRefresh ?? contextRefresh;
   const [spinning, setSpinning] = React.useState(false);
@@ -104,7 +105,7 @@ export default function PageShell({ title, subtitle, titlePrefix, titleActions, 
   // flash blank on every first visit to a page in development.
   React.useEffect(() => {
     if (!pageHeaderCtx || !isActiveTab) return;
-    pageHeaderCtx.setHeader({ title, subtitle, titlePrefix, titleActions, action, toolbar, onRefresh: refresh });
+    pageHeaderCtx.setHeader({ title, subtitle, titleSuffix, titleActions, action, toolbar, onRefresh: refresh });
     // Depend on pageHeaderCtx.setHeader specifically, NOT the pageHeaderCtx
     // object itself — setHeader is a stable useState setter, so this only
     // re-fires on a real prop change. Depending on the whole context object
@@ -116,7 +117,7 @@ export default function PageShell({ title, subtitle, titlePrefix, titleActions, 
     // enough to saturate React's render queue and make the whole app
     // (including sidebar navigation elsewhere) stop responding.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pageHeaderCtx?.setHeader, isActiveTab, title, subtitle, titlePrefix, titleActions, action, toolbar, refresh]);
+  }, [pageHeaderCtx?.setHeader, isActiveTab, title, subtitle, titleSuffix, titleActions, action, toolbar, refresh]);
 
   const renderOwnHeader = !pageHeaderCtx;
 
@@ -126,18 +127,19 @@ export default function PageShell({ title, subtitle, titlePrefix, titleActions, 
       {renderOwnHeader && (
         <div className="shrink-0 h-16 px-8 flex items-center justify-between gap-4 border-b border-slate-100 dark:border-[var(--border)] bg-white dark:bg-[var(--bg-surface)]">
           <div className="min-w-0 flex items-center gap-1.5 shrink-0">
-            {titlePrefix}
             <h1 className="text-lg font-semibold tracking-tight text-slate-900 dark:text-[var(--text-primary)] leading-snug truncate">
               {title}
             </h1>
+            {titleSuffix}
             {refresh && (
-              <button
-                onClick={handleRefresh}
-                title="Refresh"
-                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 dark:hover:bg-[var(--bg-subtle)] transition-colors shrink-0"
-              >
-                <RefreshCw className={`h-4 w-4 ${spinning ? 'animate-spin' : ''}`} />
-              </button>
+              <Tooltip label="Refresh" side="bottom">
+                <button
+                  onClick={handleRefresh}
+                  className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 dark:hover:bg-[var(--bg-subtle)] transition-colors shrink-0"
+                >
+                  <RefreshCw className={`h-4 w-4 ${spinning ? 'animate-spin' : ''}`} />
+                </button>
+              </Tooltip>
             )}
             {titleActions}
           </div>
