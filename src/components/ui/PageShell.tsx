@@ -118,9 +118,6 @@ export default function PageShell({ title, subtitle, action, toolbar, children, 
             <h1 className="text-lg font-semibold tracking-tight text-slate-900 dark:text-[var(--text-primary)] leading-snug truncate">
               {title}
             </h1>
-            {subtitle && (
-              <p className="text-xs text-slate-400 dark:text-[var(--text-muted)] mt-0.5 truncate">{subtitle}</p>
-            )}
           </div>
           <div className="shrink-0 flex items-center gap-2">
             {refresh && (
