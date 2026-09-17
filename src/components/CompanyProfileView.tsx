@@ -307,7 +307,12 @@ export default function CompanyProfileView({
 
   return (
     <PageShell
-      title="Company Information"
+      title={`Company Profile / ${
+        activeSubTab === 'profile' ? 'Organization Profile'
+        : activeSubTab === 'legal' ? 'Legal & Registration'
+        : activeSubTab === 'channels' ? 'Communication Channels'
+        : 'Compliance'
+      }`}
       subtitle={`Configure your organization identity, legal registrations, operating ${config.sectors.label.toLowerCase()}, and verify compliance criteria.`}
       layout="fill"
       action={

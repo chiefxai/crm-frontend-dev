@@ -65,7 +65,7 @@ export default function ScheduledCallbacksView() {
 
   return (
     <PageShell
-      title="Scheduled Callbacks"
+      title="Campaign / Scheduled Callbacks"
       subtitle="Calls waiting on an automatic redial — either the caller asked to be called back, or nobody answered — with the reason and when it'll try again."
       onRefresh={() => load()}
       layout="fill"

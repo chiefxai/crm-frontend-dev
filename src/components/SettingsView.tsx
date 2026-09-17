@@ -414,7 +414,16 @@ export default function SettingsView({
   };
 
   return (
-    <PageShell title="Administration" subtitle="Configure virtual telephone lines, distribute agent permissions, and manage security settings." onRefresh={handlePageRefresh}>
+    <PageShell
+      title={`Administration / ${
+        subTab === 'numbers' ? 'Virtual Numbers'
+        : subTab === 'team' ? 'Staff & Teams'
+        : subTab === 'billing' ? 'Billing & Usage'
+        : 'API Keys'
+      }`}
+      subtitle="Configure virtual telephone lines, distribute agent permissions, and manage security settings."
+      onRefresh={handlePageRefresh}
+    >
       <div className="col-span-12 space-y-6">
 
           {/* Subtab: Virtual numbers */}

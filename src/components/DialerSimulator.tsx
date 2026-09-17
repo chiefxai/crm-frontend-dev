@@ -1581,7 +1581,7 @@ Currently on question ${nextIndex} out of ${selectedTask.questions.length}. Next
 
   return (
     <PageShell
-      title="Campaign"
+      title={`Campaign / ${dialerMode === 'outbound' ? 'Outbound Campaigns' : 'Inbound Virtual Center'}`}
       subtitle="Configure automated workflows, initiate sequential campaigns, or trigger dynamic incoming calls to your virtual phone lines."
       layout="fill"
       action={
