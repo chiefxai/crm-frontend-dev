@@ -49,7 +49,6 @@ interface DialTask {
   id: string;
   name: string;
   workflowId?: string;
-  workflowName?: string;
   leadIds: string[];
   status: string;
   createdAt: string;
@@ -186,16 +185,18 @@ export default function ReportsView({ callLogs, dialerTasks, leads, costPerMinut
       .catch(err => console.error('Failed to load dashboard metrics:', err));
   }, []);
 
-  // Groups tasks by the workflow they were created from, so repeated runs
-  // of the same workflow ("Loan Follow-up — Week 1", "...— Week 2") sit
-  // together in the dropdown instead of being an undifferentiated flat
-  // list. Tasks created before workflowName existed have no group to join
-  // — they fall back into "Other Tasks". Groups are ordered by their own
-  // most-recently-created task, and tasks within a group newest-first.
+  // Groups tasks by their own name (dialer_tasks.name — NOT a
+  // "workflowName" field, which never existed on the real row; see
+  // db.getScheduledCallbacks' identical bug), so repeated runs of the same
+  // campaign ("Loan Follow-up — Week 1", "...— Week 2") sit together in
+  // the dropdown instead of being an undifferentiated flat list. A task
+  // with no name falls back into "Other Tasks". Groups are ordered by
+  // their own most-recently-created task, and tasks within a group
+  // newest-first.
   const taskGroups = useMemo(() => {
     const byWorkflow = new Map<string, DialTask[]>();
     for (const t of dialerTasks) {
-      const key = t.workflowName || 'Other Tasks';
+      const key = t.name || 'Other Tasks';
       if (!byWorkflow.has(key)) byWorkflow.set(key, []);
       byWorkflow.get(key)!.push(t);
     }
@@ -380,7 +381,7 @@ export default function ReportsView({ callLogs, dialerTasks, leads, costPerMinut
     const idx = new Map<string, { workflowName: string; agentId: string | null }>();
     for (const task of tasksInPeriod) {
       for (const result of Object.values(task.callResults || {})) {
-        if (result.callId) idx.set(result.callId, { workflowName: task.workflowName || 'Other', agentId: (task as any).assignedTeamMemberId || null });
+        if (result.callId) idx.set(result.callId, { workflowName: task.name || 'Other', agentId: (task as any).assignedTeamMemberId || null });
       }
     }
     return idx;
@@ -414,7 +415,7 @@ export default function ReportsView({ callLogs, dialerTasks, leads, costPerMinut
   const campaignSuccessRate = useMemo(() => {
     const byWorkflow: Record<string, { total: number; successful: number }> = {};
     for (const task of tasksInPeriod) {
-      const name = task.workflowName || 'Other';
+      const name = task.name || 'Other';
       if (!byWorkflow[name]) byWorkflow[name] = { total: 0, successful: 0 };
       for (const result of Object.values(task.callResults || {})) {
         if (!result?.status || result.status === 'Pending') continue;

@@ -40,10 +40,13 @@ import FilterBar from './ui/FilterBar';
 import SlideOver from './ui/SlideOver';
 
 // Loosely typed like ReportsView's DialTask — this page only needs
-// workflowName + each lead's call outcome, not the full shape.
+// the task's own name + each lead's call outcome, not the full shape.
+// `name` — NOT `workflowName`, which doesn't exist on the real
+// dialer_tasks row (see db.getScheduledCallbacks' identical bug) — is
+// this campaign/task's own name, e.g. "Term Insurance Outreach — Sept".
 interface DashboardDialTask {
   id: string;
-  workflowName?: string;
+  name?: string;
   createdAt: string;
   // Despite the name, this is the wizard-selected AI calling agent's id
   // (org_agents), not a human team member — same field DialerSimulator.tsx
@@ -227,7 +230,7 @@ export default function DashboardView({
     const idx = new Map<string, { campaign: string; agentId: string | null }>();
     for (const task of tasksInPeriod) {
       for (const result of Object.values(task.callResults || {})) {
-        if (result.callId) idx.set(result.callId, { campaign: task.workflowName || 'Other', agentId: task.assignedTeamMemberId || null });
+        if (result.callId) idx.set(result.callId, { campaign: task.name || 'Other', agentId: task.assignedTeamMemberId || null });
       }
     }
     return idx;
@@ -310,7 +313,7 @@ export default function DashboardView({
   const campaignPerformance = useMemo(() => {
     const byWorkflow: Record<string, { totalCalls: number; answeredCalls: number; successfulOutcomes: number }> = {};
     for (const task of tasksInPeriod) {
-      const name = task.workflowName || 'Other';
+      const name = task.name || 'Other';
       if (!byWorkflow[name]) byWorkflow[name] = { totalCalls: 0, answeredCalls: 0, successfulOutcomes: 0 };
       for (const result of Object.values(task.callResults || {})) {
         if (!result?.status || result.status === 'Pending') continue;
