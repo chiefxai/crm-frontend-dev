@@ -1742,6 +1742,20 @@ Currently on question ${nextIndex} out of ${selectedTask.questions.length}. Next
           <IconButton icon={Plus} label="Assign Dialing Task" onClick={openCreateTaskModal} />
         ) : undefined
       }
+      toolbar={
+        // Only while a call is actually in flight for this campaign
+        // (autoDialStatus 'dialing', not merely autoDialEnabled — the
+        // task can be enabled but momentarily 'waiting'/'paused' between
+        // dials with no call actually happening) — pinned in the shared
+        // header's own toolbar slot (see PageHeaderBar.tsx) so it stays
+        // visible right below the page header regardless of how far the
+        // list below is scrolled, instead of scrolling away with it.
+        dialerMode === 'outbound' && selectedTask?.autoDialEnabled && selectedTask.autoDialStatus === 'dialing' ? (
+          <p className="text-[11px] text-emerald-600 dark:text-emerald-400 flex items-center gap-1.5">
+            🤖 Running on the server — this task keeps auto-dialing pending leads even if you close this page. Status: {selectedTask.autoDialStatus}.
+          </p>
+        ) : undefined
+      }
     >
       <div className="overflow-y-auto flex-1 px-8 pb-8 pt-6 space-y-6">
 
@@ -1865,25 +1879,22 @@ Currently on question ${nextIndex} out of ${selectedTask.questions.length}. Next
                 >
                   {showWorkflowDetailView ? 'Normal View' : 'Workflow View'}
                 </Button>
-              <Button
-                variant={selectedTask.autoDialEnabled ? 'danger' : 'primary'}
-                size="sm"
-                icon={PhoneCall}
-                disabled={serverAutoDialBusy || dialableNumbers.length === 0}
-                onClick={selectedTask.autoDialEnabled ? handleStopServerAutoDial : handleStartServerAutoDial}
-                title={selectedTask.autoDialEnabled
-                  ? 'Stops auto-dialing this task — hangs up the current call immediately'
-                  : 'Dials every pending lead in this list automatically, on the server — keeps going even if you close this tab or the app'}
-              >
-                {selectedTask.autoDialEnabled ? 'Stop Auto-Dial' : 'Start Campaign'}
-              </Button>
+              {selectedTask.status !== 'Completed' && (
+                <Button
+                  variant={selectedTask.autoDialEnabled ? 'danger' : 'primary'}
+                  size="sm"
+                  icon={PhoneCall}
+                  disabled={serverAutoDialBusy || dialableNumbers.length === 0}
+                  onClick={selectedTask.autoDialEnabled ? handleStopServerAutoDial : handleStartServerAutoDial}
+                  title={selectedTask.autoDialEnabled
+                    ? 'Stops auto-dialing this task — hangs up the current call immediately'
+                    : 'Dials every pending lead in this list automatically, on the server — keeps going even if you close this tab or the app'}
+                >
+                  {selectedTask.autoDialEnabled ? 'Stop Auto-Dial' : 'Start Campaign'}
+                </Button>
+              )}
               </div>
             </div>
-            {selectedTask.autoDialEnabled && (
-              <p className="text-[11px] text-emerald-600 dark:text-emerald-400 -mt-2">
-                🤖 Running on the server — this task keeps auto-dialing pending leads even if you close this page. Status: {selectedTask.autoDialStatus || 'dialing'}.
-              </p>
-            )}
 
             {/* List Queue Table — normal mode (Lead Contact/Value/Survey
                 Status/AI Sentiment/Survey Outcome) or, toggled, one column
