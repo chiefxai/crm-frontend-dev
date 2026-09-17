@@ -125,7 +125,12 @@ export default function WorkflowsView({ flows, setFlows }: WorkflowsViewProps) {
     };
     const jsonStr = jsonEditText ?? JSON.stringify(cleanJson, null, 2);
 
-    const applyJson = () => {
+    // Parses the JSON view's editable text back into a QuestionFlow. Pure
+    // (aside from setJsonError on failure) — callers decide what to do
+    // with the result, so the same parse logic backs both the common Save
+    // button (parse-then-persist in one click, when on the JSON view) and
+    // nothing else now that there's no separate "Apply JSON" step.
+    const parseJsonEdits = (): QuestionFlow | null => {
       try {
         const parsed = JSON.parse(jsonStr);
         const questions: WorkflowVariable[] = (parsed.questions ?? []).map((q: any, i: number) => ({
@@ -145,19 +150,18 @@ export default function WorkflowsView({ flows, setFlows }: WorkflowsViewProps) {
             })),
           })),
         }));
-        handleFlowChange({
+        setJsonError(null);
+        return {
           ...editingFlow,
           name: parsed.name || editingFlow.name,
           description: parsed.description || editingFlow.description,
           variables: questions,
           nodes: [],
           edges: [],
-        });
-        setJsonEditText(null);
-        setJsonError(null);
-        setEditorView('variables');
+        };
       } catch (e: any) {
         setJsonError(e.message);
+        return null;
       }
     };
 
@@ -173,10 +177,24 @@ export default function WorkflowsView({ flows, setFlows }: WorkflowsViewProps) {
     // ~800ms after the last change and gives no visible confirmation. This
     // flushes the current flow list immediately and shows a Saved state so
     // "Save" here is a real, immediate write, not just cosmetic.
+    //
+    // On the JSON view specifically, this ALSO parses and applies whatever
+    // is currently typed/pasted in the editable JSON box first — there's
+    // no separate "Apply JSON" step anymore, one Save both applies and
+    // persists. If the JSON doesn't parse, jsonError is set and nothing
+    // is saved.
     const handleSave = async () => {
+      let flowsToSave = flows;
+      if (editorView === 'json') {
+        const updated = parseJsonEdits();
+        if (!updated) return;
+        flowsToSave = flows.map(f => (f.id === updated.id ? updated : f));
+        handleFlowChange(updated);
+        setJsonEditText(null);
+      }
       setSaveStatus('saving');
       try {
-        const res = await apiFetch('/api/question-flows/sync', { method: 'POST', body: JSON.stringify(flows) });
+        const res = await apiFetch('/api/question-flows/sync', { method: 'POST', body: JSON.stringify(flowsToSave) });
         if (!res.ok) throw new Error();
         setSaveStatus('saved');
         setTimeout(() => setSaveStatus('idle'), 1500);
@@ -292,14 +310,7 @@ export default function WorkflowsView({ flows, setFlows }: WorkflowsViewProps) {
               <div className="flex items-center gap-2 px-5 py-3 border-b shrink-0" style={{ borderColor: 'var(--border)' }}>
                 <Braces className="h-4 w-4" style={{ color: '#d97706' }} />
                 <span className="text-xs font-bold" style={{ color: 'var(--text-primary)' }}>Workflow JSON</span>
-                <span className="text-[10px] px-2 py-0.5 rounded-full font-semibold" style={{ background: 'var(--bg-subtle)', color: 'var(--text-muted)' }}>editable · paste or type</span>
-                <button
-                  onClick={applyJson}
-                  className="ml-auto flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors"
-                  style={{ background: '#2563eb', color: '#ffffff' }}
-                >
-                  <Check className="h-3.5 w-3.5" /> Apply JSON
-                </button>
+                <span className="text-[10px] px-2 py-0.5 rounded-full font-semibold" style={{ background: 'var(--bg-subtle)', color: 'var(--text-muted)' }}>editable · paste or type · Save applies it</span>
               </div>
               {jsonError && (
                 <div className="px-5 py-2 text-xs font-mono shrink-0" style={{ background: '#450a0a', color: '#fca5a5' }}>
