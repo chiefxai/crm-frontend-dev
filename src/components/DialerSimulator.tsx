@@ -1388,21 +1388,21 @@ Currently on question ${nextIndex} out of ${selectedTask.questions.length}. Next
             <RefreshCw className="h-3.5 w-3.5 animate-spin" /> Checking for enquiries…
           </div>
         ) : tapeEnquiries.length > 0 ? (
-          <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 space-y-3">
-            <span className="text-[9px] font-mono text-amber-700 uppercase tracking-widest font-bold flex items-center gap-1.5">
+          <div className="bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/30 rounded-xl p-4 space-y-3">
+            <span className="text-[9px] font-mono text-amber-700 dark:text-amber-400 uppercase tracking-widest font-bold flex items-center gap-1.5">
               <MessageCircleQuestion className="h-3.5 w-3.5" />
               Enquiry Raised{tapeEnquiries.length > 1 ? `s (${tapeEnquiries.length})` : ''}
             </span>
             {tapeEnquiries.map((eq) => (
-              <div key={eq.id} className="flex items-start justify-between gap-3 bg-white/70 border border-amber-100 rounded-lg px-3 py-2">
+              <div key={eq.id} className="flex items-start justify-between gap-3 bg-white/70 dark:bg-black/20 border border-amber-100 dark:border-amber-500/20 rounded-lg px-3 py-2">
                 <p className="text-xs text-[var(--text-primary)] leading-relaxed flex-1">"{eq.queryText}"</p>
                 <span
                   className={`shrink-0 text-[9px] font-mono uppercase tracking-wider font-bold px-2 py-0.5 rounded-full ${
                     eq.status === 'new'
-                      ? 'bg-amber-200 text-amber-800'
+                      ? 'bg-amber-200 dark:bg-amber-500/20 text-amber-800 dark:text-amber-300'
                       : eq.status === 'contacted'
-                      ? 'bg-blue-200 text-blue-800'
-                      : 'bg-emerald-200 text-emerald-800'
+                      ? 'bg-blue-200 dark:bg-blue-500/20 text-blue-800 dark:text-blue-300'
+                      : 'bg-emerald-200 dark:bg-emerald-500/20 text-emerald-800 dark:text-emerald-300'
                   }`}
                 >
                   {eq.status}

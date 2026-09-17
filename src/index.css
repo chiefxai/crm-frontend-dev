@@ -193,6 +193,21 @@ table tfoot tr {
   border-color: var(--border) !important;
 }
 
+.dark .react-flow__controls-button {
+  background-color: var(--bg-surface) !important;
+  border-bottom-color: var(--border) !important;
+  color: var(--text-primary) !important;
+}
+.dark .react-flow__controls-button svg {
+  fill: var(--text-primary) !important;
+}
+.dark .react-flow__controls-button:hover {
+  background-color: var(--bg-subtle) !important;
+}
+.dark .react-flow__controls-button:disabled svg {
+  fill: var(--text-muted) !important;
+}
+
 .dark .react-flow__minimap {
   background-color: var(--bg-surface) !important;
 }
