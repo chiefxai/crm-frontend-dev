@@ -15,7 +15,7 @@ import {
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 
-import { Plus, Trash2, Save, CheckCircle2, HelpCircle, Zap, GitBranch, Square, Variable, ChevronRight, Info } from 'lucide-react';
+import { Plus, Trash2, HelpCircle, Zap, GitBranch, Square, Variable, ChevronRight, Info } from 'lucide-react';
 import { QuestionFlow, QuestionFlowNode, QuestionFlowEdge, WorkflowVariable } from './types';
 import { nodeTypes } from './components/FlowNodes';
 import NodeEditor from './components/NodeEditor';
@@ -185,7 +185,6 @@ export default function QuestionFlowBuilder({ flow, allFlows, onChange }: Props)
   const [rfNodes, setRfNodes, onNodesChange] = useNodesState(initialNodes);
   const [rfEdges, setRfEdges, onEdgesChange] = useEdgesState(initialEdges);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
-  const [saved, setSaved] = useState(false);
   const [varPanelOpen, setVarPanelOpen] = useState(false);
 
   const onChangeRef = useRef(onChange);
@@ -276,11 +275,6 @@ export default function QuestionFlowBuilder({ flow, allFlows, onChange }: Props)
     );
   };
 
-  const handleSave = () => {
-    setSaved(true);
-    setTimeout(() => setSaved(false), 2000);
-  };
-
   return (
     <div className="flex flex-col h-full">
       {/* Info bar */}
@@ -348,16 +342,6 @@ export default function QuestionFlowBuilder({ flow, allFlows, onChange }: Props)
               {(flow.variables ?? []).length}
             </span>
           )}
-        </button>
-
-        <button
-          onClick={handleSave}
-          className={`flex items-center gap-1.5 px-4 py-1.5 text-xs font-semibold rounded-lg transition-colors ${
-            saved ? 'bg-emerald-500 text-white' : 'bg-blue-600 text-white hover:bg-blue-700'
-          }`}
-        >
-          {saved ? <CheckCircle2 className="h-3.5 w-3.5" /> : <Save className="h-3.5 w-3.5" />}
-          {saved ? 'Saved!' : 'Save Flow'}
         </button>
       </div>
 
