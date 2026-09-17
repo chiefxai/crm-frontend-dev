@@ -117,6 +117,20 @@ function intentColor(intent: string): string {
   return INTENT_COLOR[intent] || '#7c3aed';
 }
 
+// Matches EnquiriesView.tsx's own STATUS_COLOR chip mapping (Badge colors
+// there translate to these same hues here for the donut).
+const ENQUIRY_STATUS_COLOR: Record<string, string> = {
+  'new': '#d97706',
+  'contacted': '#2563eb',
+  'resolved': '#059669',
+};
+function enquiryStatusColor(status: string): string {
+  return ENQUIRY_STATUS_COLOR[status] || '#94a3b8';
+}
+function enquiryStatusLabel(status: string): string {
+  return status.charAt(0).toUpperCase() + status.slice(1);
+}
+
 // ↑/↓ trend chip for a KPI card — compares this period's value against
 // the immediately preceding period of the same length. No previous-period
 // data (e.g. a brand-new org) reads as "—", not a misleading 0%/∞% swing.
@@ -485,6 +499,20 @@ export default function ReportsView({ callLogs, dialerTasks, leads, costPerMinut
     return Object.entries(buckets).map(([period, count]) => ({ period, count })).sort((a, b) => a.period.localeCompare(b.period));
   }, [filteredEnquiries]);
 
+  // Widget 7b: Enquiries by Status — new/contacted/resolved breakdown, so
+  // it's visible whether the team is actually keeping up with enquiries
+  // this period, not just how many came in (inquiryAnalysis above).
+  const enquiriesByStatus = useMemo(() => {
+    const counts: Record<string, number> = {};
+    for (const e of filteredEnquiries) {
+      const status = e.status || 'new';
+      counts[status] = (counts[status] || 0) + 1;
+    }
+    return Object.entries(counts)
+      .map(([status, value]) => ({ label: enquiryStatusLabel(status), value, color: enquiryStatusColor(status) }))
+      .sort((a, b) => b.value - a.value);
+  }, [filteredEnquiries]);
+
   // Widget 1: Call Volume Over Time (daily, inbound/outbound) and
   // Widget 8: Call Outcomes Over Time (daily, by intent) — same daily
   // bucketing pass over filteredCalls, two different breakdowns.
@@ -826,6 +854,26 @@ export default function ReportsView({ callLogs, dialerTasks, leads, costPerMinut
               </ResponsiveContainer>
             ) : <EmptyState heading="No inquiries in this period" />}
           </div>
+        </Widget>
+
+        {/* Row 4a-2: Enquiries by Status */}
+        <Widget colSpan={6} title="Enquiries by Status" subtitle="Are inbound enquiries actually getting worked, or just piling up?" icon={MessageCircleQuestion} accent="#2563eb" padding="md" hover>
+          {enquiriesByStatus.length > 0 ? (
+            <div className="flex flex-col items-center justify-center gap-5 overflow-y-auto" style={{ height: 300 }}>
+              <PieChart slices={enquiriesByStatus} size={180} />
+              <div className="w-full max-w-xs space-y-1.5">
+                {enquiriesByStatus.map(s => (
+                  <div key={s.label} className="flex items-center justify-between text-xs">
+                    <span className="flex items-center gap-1.5 text-slate-500">
+                      <span className="h-2 w-2 rounded-full shrink-0" style={{ backgroundColor: s.color }} />
+                      {s.label}
+                    </span>
+                    <span className="font-semibold text-slate-700">{s.value}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : <EmptyState heading="No enquiries in this period" />}
         </Widget>
 
         {/* Row 4b: Call Outcomes Over Time */}

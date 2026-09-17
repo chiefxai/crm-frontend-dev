@@ -10,6 +10,9 @@ import {
   BarChart3,
   Users,
   History,
+  Smile,
+  CalendarClock,
+  Phone,
 } from 'lucide-react';
 import {
   XAxis,
@@ -24,6 +27,7 @@ import {
   Line,
 } from 'recharts';
 import { apiFetch } from '../lib/api';
+import { formatPhone } from '../lib/phone';
 import { Lead, Loan, CallLog, OrganizationSettings } from '../types';
 import { COST_PER_MINUTE_INR_FALLBACK, formatInr, callCostInr } from '../lib/pricing';
 import PageShell from './ui/PageShell';
@@ -88,6 +92,16 @@ function intentColor(intent: string): string {
   return INTENT_COLOR[intent] || '#7c3aed';
 }
 
+const SENTIMENT_COLOR: Record<string, string> = {
+  'Positive': '#059669',
+  'Neutral': '#64748b',
+  'Negative': '#e11d48',
+  'Unknown': '#94a3b8',
+};
+function sentimentColor(sentiment: string): string {
+  return SENTIMENT_COLOR[sentiment] || '#7c3aed';
+}
+
 function formatDuration(totalSeconds: number): string {
   const m = Math.floor(totalSeconds / 60);
   const s = Math.floor(totalSeconds % 60);
@@ -129,6 +143,16 @@ export default function DashboardView({
 }: DashboardViewProps) {
   const [agentNames, setAgentNames] = useState<Record<string, string>>({});
   const [allEnquiries, setAllEnquiries] = useState<{ id: string; callId: string | null; createdAt: string }[]>([]);
+  interface ScheduledCallback {
+    id: string;
+    leadName: string;
+    callerNumber?: string;
+    kind?: 'callback' | 'not_answered';
+    callbackTime?: string;
+    callbackReason?: string;
+    nextRetryAt?: string;
+  }
+  const [scheduledCallbacks, setScheduledCallbacks] = useState<ScheduledCallback[]>([]);
 
   const loadExtras = () => {
     // Just for id -> name resolution (Agent Performance/Recent Calls) —
@@ -145,6 +169,13 @@ export default function DashboardView({
       .then(r => { if (!r.ok) throw new Error(); return r.json(); })
       .then((data: { rows?: typeof allEnquiries }) => setAllEnquiries(data.rows ?? []))
       .catch(err => console.error('Failed to load enquiries:', err));
+    // Not scoped by the global date filter — a callback's own time is
+    // always in the future regardless of when the original call happened,
+    // so filtering it by "calls in this period" would be meaningless.
+    apiFetch('/api/scheduled-callbacks')
+      .then(r => { if (!r.ok) throw new Error(); return r.json(); })
+      .then((data: ScheduledCallback[]) => setScheduledCallbacks(Array.isArray(data) ? data : []))
+      .catch(err => console.error('Failed to load scheduled callbacks:', err));
   };
   useEffect(loadExtras, []);
 
@@ -222,6 +253,21 @@ export default function DashboardView({
     }
     return Object.entries(counts)
       .map(([label, value]) => ({ label, value, color: intentColor(label) }))
+      .sort((a, b) => b.value - a.value);
+  }, [filteredCalls]);
+
+  // Widget 1b: Sentiment Breakdown — how calls actually FELT to the
+  // caller, distinct from Call Outcomes above (which plots the business
+  // result, `intent`). c.sentiment is set by the sentiment-analyzer system
+  // agent on every call but wasn't shown anywhere on this dashboard.
+  const sentimentBreakdown = useMemo(() => {
+    const counts: Record<string, number> = {};
+    for (const c of filteredCalls) {
+      const sentiment = c.sentiment || 'Unknown';
+      counts[sentiment] = (counts[sentiment] || 0) + 1;
+    }
+    return Object.entries(counts)
+      .map(([label, value]) => ({ label, value, color: sentimentColor(label) }))
       .sort((a, b) => b.value - a.value);
   }, [filteredCalls]);
 
@@ -329,6 +375,16 @@ export default function DashboardView({
     return rows.slice(0, 8);
   }, [tasksInPeriod, filteredEnquiries, callTaskIndex, agentNames, agentMetric]);
 
+  // Widget 6b: Scheduled Callbacks — soonest-first, capped to keep the
+  // widget compact; the full list already has its own dedicated page
+  // (Scheduled Callbacks in the sidebar) for anything beyond a quick glance.
+  const upcomingCallbacks = useMemo(
+    () => [...scheduledCallbacks]
+      .sort((a, b) => new Date(a.callbackTime || a.nextRetryAt || 0).getTime() - new Date(b.callbackTime || b.nextRetryAt || 0).getTime())
+      .slice(0, 6),
+    [scheduledCallbacks]
+  );
+
   // Widget 6: Recent Calls — most recent within the selected period.
   const recentCalls = useMemo(
     () => [...filteredCalls].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()).slice(0, 15),
@@ -435,6 +491,52 @@ export default function DashboardView({
             </ResponsiveContainer>
           ) : <EmptyState heading="No calls in this period" />}
         </div>
+      </Widget>
+
+      {/* ── Widget Row 1b: Sentiment Breakdown | Scheduled Callbacks ── */}
+      <Widget colSpan={6} title="Sentiment Breakdown" subtitle="How calls actually felt to the caller, this period." icon={Smile} accent="#059669" padding="md" hover>
+        {sentimentBreakdown.length > 0 ? (
+          <div className="flex flex-col items-center gap-4 mt-1">
+            <PieChart slices={sentimentBreakdown} size={150} />
+            <div className="w-full max-w-xs space-y-1.5">
+              {sentimentBreakdown.map(s => (
+                <div key={s.label} className="flex items-center justify-between text-xs">
+                  <span className="flex items-center gap-1.5 text-slate-500">
+                    <span className="h-2 w-2 rounded-full shrink-0" style={{ backgroundColor: s.color }} />
+                    {s.label}
+                  </span>
+                  <span className="font-semibold text-slate-700">{s.value}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        ) : <EmptyState heading="No calls in this period" />}
+      </Widget>
+
+      <Widget colSpan={6} title="Scheduled Callbacks" subtitle="Upcoming automatic redials — busy callers and no-answers." icon={CalendarClock} accent="#2563eb" padding="none" hover scrollable maxBodyHeight="280px">
+        {upcomingCallbacks.length > 0 ? (
+          <div className="divide-y divide-slate-100">
+            {upcomingCallbacks.map(cb => (
+              <div key={cb.id} className="flex items-center justify-between gap-3 px-4 py-3">
+                <div className="min-w-0 flex items-center gap-2.5">
+                  <div className="h-7 w-7 rounded-lg bg-blue-50 flex items-center justify-center shrink-0">
+                    <Phone className="h-3.5 w-3.5 text-blue-500" />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-xs font-semibold text-slate-800 truncate">{cb.leadName}</p>
+                    <p className="text-[10px] text-slate-400 truncate">
+                      {cb.callerNumber ? formatPhone(cb.callerNumber) : ''}
+                      {cb.kind === 'not_answered' ? ' · Not Answered' : cb.callbackReason ? ` · "${cb.callbackReason}"` : ''}
+                    </p>
+                  </div>
+                </div>
+                <span className="text-[10px] font-mono text-slate-500 shrink-0 whitespace-nowrap">
+                  {(cb.callbackTime || cb.nextRetryAt) ? new Date((cb.callbackTime || cb.nextRetryAt)!).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : '—'}
+                </span>
+              </div>
+            ))}
+          </div>
+        ) : <EmptyState heading="No callbacks scheduled" message="Calls where the caller asked for a redial, or that went unanswered, will show up here." />}
       </Widget>
 
       {/* ── Widget Row 2: Calls & Outcomes Over Time | Campaign Performance ── */}
