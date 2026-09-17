@@ -53,8 +53,12 @@ export default function ActionMenu({
     return () => document.removeEventListener('mousedown', onOutside);
   }, [open]);
 
+  // No fill/border on either variant — matches IconButton.tsx's identical
+  // treatment, so every page-header icon action (the "+" trigger here
+  // included) reads the same rather than 'primary' being a solid colored
+  // box next to everything else's plain icon.
   const triggerCls = triggerVariant === 'primary'
-    ? 'flex items-center justify-center h-9 w-9 rounded-xl bg-blue-600 hover:bg-blue-500 text-white shadow-md shadow-blue-600/10 transition-all cursor-pointer disabled:opacity-50'
+    ? 'flex items-center justify-center h-9 w-9 rounded-xl text-blue-600 dark:text-blue-400 hover:bg-[var(--bg-subtle)] transition-all cursor-pointer disabled:opacity-50'
     : 'flex items-center justify-center h-7 w-7 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors cursor-pointer disabled:opacity-50';
 
   return (
@@ -71,7 +75,7 @@ export default function ActionMenu({
         </button>
       </Tooltip>
       {open && (
-        <div className={`theme-dropdown absolute right-0 ${triggerVariant === 'primary' ? 'top-11' : 'top-8'} min-w-[180px] max-h-[60vh] overflow-x-hidden overflow-y-auto rounded-xl shadow-2xl border z-50 py-1.5`}>
+        <div className={`theme-dropdown absolute right-0 ${triggerVariant === 'primary' ? 'top-11' : 'top-8'} min-w-[180px] max-h-[60vh] overflow-x-hidden overflow-y-auto rounded-xl shadow-2xl border z-[250] py-1.5`}>
           {items.map(item => (
             <button
               key={item.key}

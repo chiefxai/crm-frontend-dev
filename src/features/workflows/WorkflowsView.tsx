@@ -23,11 +23,11 @@ import { QuestionFlow, WorkflowVariable } from './types';
 import QuestionFlowBuilder from './QuestionFlowBuilder';
 import WorkflowVariables from './components/WorkflowVariables';
 import PageShell from '../../components/ui/PageShell';
+import BreadcrumbTitle from '../../components/ui/BreadcrumbTitle';
 import Widget from '../../components/ui/Widget';
 import Modal from '../../components/ui/Modal';
 import IconButton from '../../components/ui/IconButton';
 import ActionMenu from '../../components/ui/ActionMenu';
-import Tooltip from '../../components/ui/Tooltip';
 import DataTable, { Column } from '../../components/ui/DataTable';
 import { apiFetch } from '../../lib/api';
 
@@ -258,37 +258,26 @@ export default function WorkflowsView({ flows, setFlows, openFlowId, onOpenFlow,
 
     return (
       <PageShell
-        title={editingFlow.name}
+        title={<BreadcrumbTitle group="Workflow Builder" page={editingFlow.name} />}
         subtitle={VIEW_SUBTITLE[editorView]}
         layout="fill"
         titleActions={
           <>
-            <Tooltip label={jsonCopied ? 'Copied!' : 'Copy JSON'} side="bottom">
-              <button
-                onClick={handleCopy}
-                className="flex items-center justify-center h-9 w-9 rounded-xl transition-colors"
-                style={{ background: 'var(--bg-subtle)', color: 'var(--text-secondary)', border: '1px solid var(--border)' }}
-                onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'var(--border)'; }}
-                onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'var(--bg-subtle)'; }}
-              >
-                {jsonCopied ? <Check className="h-4 w-4" /> : <ClipboardCopy className="h-4 w-4" />}
-              </button>
-            </Tooltip>
-            <Tooltip label={saveStatus === 'saving' ? 'Saving…' : saveStatus === 'saved' ? 'Saved' : 'Save'} side="bottom">
-              <button
-                onClick={handleSave}
-                disabled={saveStatus === 'saving'}
-                className="flex items-center justify-center h-9 w-9 rounded-xl transition-colors disabled:opacity-70"
-                style={saveStatus === 'saved'
-                  ? { background: '#059669', color: '#ffffff' }
-                  : { background: '#2563eb', color: '#ffffff' }
-                }
-              >
-                {saveStatus === 'saving' && <Loader2 className="h-4 w-4 animate-spin" />}
-                {saveStatus === 'saved' && <Check className="h-4 w-4" />}
-                {saveStatus === 'idle' && <Save className="h-4 w-4" />}
-              </button>
-            </Tooltip>
+            <IconButton
+              icon={jsonCopied ? Check : ClipboardCopy}
+              label={jsonCopied ? 'Copied!' : 'Copy JSON'}
+              variant="secondary"
+              onClick={handleCopy}
+            />
+            <IconButton
+              icon={saveStatus === 'saving' ? Loader2 : saveStatus === 'saved' ? Check : Save}
+              iconClassName={saveStatus === 'saving' ? 'animate-spin' : ''}
+              label={saveStatus === 'saving' ? 'Saving…' : saveStatus === 'saved' ? 'Saved' : 'Save'}
+              variant="primary"
+              className={saveStatus === 'saved' ? '!text-emerald-600 dark:!text-emerald-400' : ''}
+              disabled={saveStatus === 'saving'}
+              onClick={handleSave}
+            />
           </>
         }
         action={

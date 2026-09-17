@@ -31,6 +31,7 @@ import { formatPhone } from '../lib/phone';
 import { Lead, Loan, CallLog, OrganizationSettings } from '../types';
 import { COST_PER_MINUTE_INR_FALLBACK, formatInr, callCostInr } from '../lib/pricing';
 import PageShell from './ui/PageShell';
+import BreadcrumbTitle from './ui/BreadcrumbTitle';
 import Widget from './ui/Widget';
 import EmptyState from './ui/EmptyState';
 import KpiCard from './ui/KpiCard';
@@ -397,7 +398,7 @@ export default function DashboardView({
 
   return (
     <PageShell
-      title="Executive Dashboard"
+      title={<BreadcrumbTitle group="Dashboard" page="Executive Desk" />}
       subtitle="Call activity, engagement, and business outcomes — for the selected date range."
       onRefresh={loadExtras}
     >

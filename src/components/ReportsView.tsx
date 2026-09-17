@@ -3,6 +3,7 @@ import { apiFetch } from '../lib/api';
 import { PhoneOutgoing, PhoneIncoming, Clock, DollarSign, Activity, UserCheck, MessageCircleQuestion, BarChart3, Users, PieChart as PieChartIcon, FileText } from 'lucide-react';
 import { XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, BarChart, Bar, LineChart, Line, AreaChart, Area, Legend } from 'recharts';
 import PageShell from './ui/PageShell';
+import BreadcrumbTitle from './ui/BreadcrumbTitle';
 import Button from './ui/Button';
 import Widget from './ui/Widget';
 import PieChart from './ui/PieChart';
@@ -561,7 +562,7 @@ export default function ReportsView({ callLogs, dialerTasks, leads, costPerMinut
 
   return (
     <PageShell
-      title="Reports"
+      title={<BreadcrumbTitle group="Dashboard" page="Reports" />}
       subtitle="Calls, campaigns, agents, and cost — for the selected date range."
       action={
         <Button icon={FileText} onClick={() => setShowPreview(true)}>
