@@ -113,8 +113,8 @@ export default function PageShell({ title, subtitle, action, toolbar, children, 
     <div className={`flex flex-col h-full overflow-hidden ${className}`}>
       {/* ── Page header (only rendered here when there's no shared header slot) ── */}
       {renderOwnHeader && (
-        <div className="shrink-0 px-8 py-4 flex items-center justify-between gap-4 border-b border-slate-100 dark:border-[var(--border)] bg-white dark:bg-[var(--bg-surface)]">
-          <div className="min-w-0 flex items-center gap-1.5">
+        <div className="shrink-0 h-16 px-8 flex items-center justify-between gap-4 border-b border-slate-100 dark:border-[var(--border)] bg-white dark:bg-[var(--bg-surface)]">
+          <div className="min-w-0 flex items-center gap-1.5 shrink-0">
             <h1 className="text-lg font-semibold tracking-tight text-slate-900 dark:text-[var(--text-primary)] leading-snug truncate">
               {title}
             </h1>
@@ -128,7 +128,13 @@ export default function PageShell({ title, subtitle, action, toolbar, children, 
               </button>
             )}
           </div>
-          <div className="shrink-0 flex items-center gap-2">
+          {/* Fixed header height (h-16) keeps every page's header the same
+              size regardless of what's in the action slot — see
+              PageHeaderBar.tsx's identical comment (the shared header the
+              running app actually uses; this is only the standalone
+              fallback). overflow-x-auto lets a wide action row scroll
+              horizontally instead of wrapping and growing the header. */}
+          <div className="shrink-0 flex items-center gap-2 h-full overflow-x-auto overflow-y-hidden">
             {action && action}
           </div>
         </div>

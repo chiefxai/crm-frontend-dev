@@ -238,7 +238,7 @@ export default function WorkflowsView({ flows, setFlows, openFlowId, onOpenFlow,
         subtitle={VIEW_SUBTITLE[editorView]}
         layout="fill"
         action={
-          <div className="flex items-center gap-2 flex-wrap justify-end">
+          <div className="flex items-center gap-2 flex-nowrap justify-end">
             <button
               onClick={() => setEditingId(null)}
               className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors"
