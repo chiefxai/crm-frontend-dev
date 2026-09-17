@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useState } from 'react';
 
 export interface PageHeaderConfig {
-  title: string;
+  title: React.ReactNode;
   subtitle?: string;
   action?: React.ReactNode;
   toolbar?: React.ReactNode;

@@ -3,6 +3,7 @@ import { Clock, Loader2, Phone, MessageCircleQuestion, GitBranch, ArrowUpRight, 
 import { apiFetch } from '../lib/api';
 import { formatPhone } from '../lib/phone';
 import PageShell from './ui/PageShell';
+import BreadcrumbTitle from './ui/BreadcrumbTitle';
 import Widget from './ui/Widget';
 import EmptyState from './ui/EmptyState';
 import DataTable, { Column } from './ui/DataTable';
@@ -65,7 +66,7 @@ export default function ScheduledCallbacksView() {
 
   return (
     <PageShell
-      title="Campaign / Scheduled Callbacks"
+      title={<BreadcrumbTitle group="Campaign" page="Scheduled Callbacks" />}
       subtitle="Calls waiting on an automatic redial — either the caller asked to be called back, or nobody answered — with the reason and when it'll try again."
       onRefresh={() => load()}
       layout="fill"

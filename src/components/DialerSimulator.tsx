@@ -34,6 +34,7 @@ import {
 import { Lead, CallLog, VirtualNumber, TeamMember, ContactGroup, OrganizationSettings } from '../types';
 import { QuestionFlow } from '../features/workflows/types';
 import PageShell from './ui/PageShell';
+import BreadcrumbTitle from './ui/BreadcrumbTitle';
 import Widget from './ui/Widget';
 import Modal from './ui/Modal';
 import IconButton from './ui/IconButton';
@@ -1581,7 +1582,7 @@ Currently on question ${nextIndex} out of ${selectedTask.questions.length}. Next
 
   return (
     <PageShell
-      title={`Campaign / ${dialerMode === 'outbound' ? 'Outbound Campaigns' : 'Inbound Virtual Center'}`}
+      title={<BreadcrumbTitle group="Campaign" page={dialerMode === 'outbound' ? 'Outbound Campaigns' : 'Inbound Virtual Center'} />}
       subtitle="Configure automated workflows, initiate sequential campaigns, or trigger dynamic incoming calls to your virtual phone lines."
       layout="fill"
       action={

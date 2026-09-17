@@ -39,8 +39,9 @@ export function GridRow({ children, className = '' }: GridRowProps) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 interface PageShellProps {
-  /** Page title shown as the large H1 */
-  title: string;
+  /** Page title shown as the large H1 — a plain string, or JSX (e.g. a
+   * breadcrumb built with <BreadcrumbTitle>) for finer-grained styling. */
+  title: React.ReactNode;
   /** Short descriptive line under the title */
   subtitle?: string;
   /** Buttons / controls placed in the top-right of the header */

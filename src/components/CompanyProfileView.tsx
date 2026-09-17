@@ -23,6 +23,7 @@ import {
 import { OrganizationSettings } from '../types';
 import { motion } from 'motion/react';
 import PageShell from './ui/PageShell';
+import BreadcrumbTitle from './ui/BreadcrumbTitle';
 import Widget from './ui/Widget';
 
 interface CompanyProfileFieldConfig {
@@ -307,12 +308,12 @@ export default function CompanyProfileView({
 
   return (
     <PageShell
-      title={`Company Profile / ${
+      title={<BreadcrumbTitle group="Company Profile" page={
         activeSubTab === 'profile' ? 'Organization Profile'
         : activeSubTab === 'legal' ? 'Legal & Registration'
         : activeSubTab === 'channels' ? 'Communication Channels'
         : 'Compliance'
-      }`}
+      } />}
       subtitle={`Configure your organization identity, legal registrations, operating ${config.sectors.label.toLowerCase()}, and verify compliance criteria.`}
       layout="fill"
       action={

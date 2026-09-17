@@ -29,6 +29,7 @@ import { FEATURE_REGISTRY } from '../features/feature-flags/registry';
 import FlagGroupPicker from './ui/FlagGroupPicker';
 import IconButton from './ui/IconButton';
 import PageShell from './ui/PageShell';
+import BreadcrumbTitle from './ui/BreadcrumbTitle';
 import Widget from './ui/Widget';
 import Modal from './ui/Modal';
 import DataTable, { Column } from './ui/DataTable';
@@ -415,12 +416,12 @@ export default function SettingsView({
 
   return (
     <PageShell
-      title={`Administration / ${
+      title={<BreadcrumbTitle group="Administration" page={
         subTab === 'numbers' ? 'Virtual Numbers'
         : subTab === 'team' ? 'Staff & Teams'
         : subTab === 'billing' ? 'Billing & Usage'
         : 'API Keys'
-      }`}
+      } />}
       subtitle="Configure virtual telephone lines, distribute agent permissions, and manage security settings."
       onRefresh={handlePageRefresh}
     >
