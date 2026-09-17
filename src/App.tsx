@@ -809,6 +809,9 @@ export default function App() {
           <WorkflowsView
             flows={questionFlows}
             setFlows={setQuestionFlows}
+            openFlowId={activeSubTab}
+            onOpenFlow={(id) => navigate(`/${TAB_TO_SLUG.workflows}/${id}`)}
+            onCloseFlow={() => navigate(`/${TAB_TO_SLUG.workflows}`)}
           />
         );
       case 'dialer':

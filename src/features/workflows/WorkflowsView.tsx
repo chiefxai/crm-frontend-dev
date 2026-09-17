@@ -48,10 +48,27 @@ function createDefaultFlow(name: string): QuestionFlow {
 interface WorkflowsViewProps {
   flows: QuestionFlow[];
   setFlows: React.Dispatch<React.SetStateAction<QuestionFlow[]>>;
+  // Which flow's editor is open, driven by the URL (/workflow-builder/:id)
+  // rather than local component state — previously a plain useState, so
+  // refreshing the page while editing a workflow always bounced back to
+  // the list (state doesn't survive a reload; the URL does). Falls back
+  // to local state when no routing is wired up (e.g. rendered standalone
+  // in a test) so this component still works without these props.
+  openFlowId?: string;
+  onOpenFlow?: (id: string) => void;
+  onCloseFlow?: () => void;
 }
 
-export default function WorkflowsView({ flows, setFlows }: WorkflowsViewProps) {
-  const [editingId, setEditingId] = useState<string | null>(null);
+export default function WorkflowsView({ flows, setFlows, openFlowId, onOpenFlow, onCloseFlow }: WorkflowsViewProps) {
+  const [localEditingId, setLocalEditingId] = useState<string | null>(null);
+  const editingId = onOpenFlow ? (openFlowId || null) : localEditingId;
+  const setEditingId = (id: string | null) => {
+    if (id) {
+      if (onOpenFlow) onOpenFlow(id); else setLocalEditingId(id);
+    } else {
+      if (onCloseFlow) onCloseFlow(); else setLocalEditingId(null);
+    }
+  };
   const [editorView, setEditorView] = useState<'diagram' | 'variables' | 'json'>('diagram');
   const [jsonCopied, setJsonCopied] = useState(false);
   const [jsonEditText, setJsonEditText] = useState<string | null>(null);
