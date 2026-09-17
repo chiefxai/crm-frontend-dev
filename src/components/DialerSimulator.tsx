@@ -1779,7 +1779,7 @@ Currently on question ${nextIndex} out of ${selectedTask.questions.length}. Next
           colSpan={4}
           title="Today's Assigned lists"
           icon={FileSpreadsheet}
-          className="min-h-[650px]"
+          className="min-h-[60vh]"
           action={
             <Badge color="blue" className="font-mono">{tasks.length} Active</Badge>
           }
@@ -1787,7 +1787,7 @@ Currently on question ${nextIndex} out of ${selectedTask.questions.length}. Next
           <div className="space-y-4">
             <p className="text-xs text-[var(--text-muted)]">Select an active call-list scheduled for today to monitor agent progress.</p>
 
-            <div className="space-y-3 max-h-[650px] overflow-y-auto pr-1">
+            <div className="space-y-3 max-h-[60vh] overflow-y-auto pr-1">
               {tasks.map((task) => {
                 const isActive = task.id === selectedTaskId;
                 const completed = Object.keys(task.callResults).map(k => task.callResults[k]).filter((r) => r.status === 'Completed').length;
@@ -1839,7 +1839,7 @@ Currently on question ${nextIndex} out of ${selectedTask.questions.length}. Next
         </Widget>
 
         {/* Center Main Column: Selected Task Queue Workspace */}
-        <Widget colSpan={8} showHeader={false} className="min-h-[650px]">
+        <Widget colSpan={8} showHeader={false} className="min-h-[60vh]">
           {!selectedTask ? (
             <EmptyState
               icon={FileSpreadsheet}
