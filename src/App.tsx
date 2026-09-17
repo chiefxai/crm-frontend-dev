@@ -350,6 +350,11 @@ export default function App() {
   // Call Logs) silently showed the wrong, stale number. Fetched once
   // here and threaded down instead.
   const [costPerMinuteInr, setCostPerMinuteInr] = useState<number>(COST_PER_MINUTE_INR);
+  // Telephony (Vobiz/Twilio/PIOPIY) per-minute rate — same admin-configurable
+  // pattern as costPerMinuteInr above, backing the Billing & Usage page's
+  // "Phone Charges" figure, which the backend now actually accrues per call
+  // (previously always 0 — nothing wrote to organizations.phone_charges).
+  const [phoneCostPerMinute, setPhoneCostPerMinute] = useState<number>(8);
   // Non-lending orgs have no `leads` table rows at all — their real
   // contacts live as Industry Objects records instead. When set, `leads`
   // is populated from this object's records (mapped via
@@ -444,6 +449,7 @@ export default function App() {
       if (Array.isArray(resNumbers)) setVirtualNumbers(resNumbers);
       if (Array.isArray(resTeam)) setTeamMembers(resTeam);
       if (resBilling && typeof resBilling.costPerMinuteInr === 'number') setCostPerMinuteInr(resBilling.costPerMinuteInr);
+      if (resBilling && typeof resBilling.phoneCostPerMinute === 'number') setPhoneCostPerMinute(resBilling.phoneCostPerMinute);
       if (resOrg && Object.keys(resOrg).length > 0) setOrgSettings({ ...EMPTY_ORG_SETTINGS, ...resOrg });
       if (Array.isArray(resDialerTasks)) setDialerTasks(resDialerTasks);
       if (Array.isArray(resQuestionFlows) && resQuestionFlows.length > 0)
@@ -872,6 +878,7 @@ export default function App() {
             orgSettings={orgSettings}
             setOrgSettings={setOrgSettings}
             costPerMinuteInr={costPerMinuteInr}
+            phoneCostPerMinute={phoneCostPerMinute}
             activeSubTab={activeSubTab as 'numbers' | 'team' | 'billing' | 'api'}
             setActiveSubTab={setActiveSubTab}
             currentUserEmail={kcUser?.email}

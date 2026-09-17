@@ -41,6 +41,7 @@ interface SettingsViewProps {
   orgSettings: OrganizationSettings;
   setOrgSettings: React.Dispatch<React.SetStateAction<OrganizationSettings>>;
   costPerMinuteInr?: number;
+  phoneCostPerMinute?: number;
   activeSubTab?: 'numbers' | 'team' | 'billing' | 'api';
   setActiveSubTab?: (sub: string) => void;
   currentUserEmail?: string;
@@ -114,6 +115,7 @@ export default function SettingsView({
   orgSettings,
   setOrgSettings,
   costPerMinuteInr = COST_PER_MINUTE_INR_FALLBACK,
+  phoneCostPerMinute = 8,
   activeSubTab: activeSubTabProp,
   setActiveSubTab: setActiveSubTabProp,
   currentUserEmail,
@@ -1070,7 +1072,7 @@ export default function SettingsView({
                     <strong className="text-md text-slate-800 font-mono">{formatInr(orgSettings.aiMinutesUsed * costPerMinuteInr)}</strong>
                   </div>
                   <div className="bg-slate-50 p-4 rounded-xl text-center">
-                    <span className="text-[10px] text-slate-400 uppercase tracking-wider block">Phone Charges</span>
+                    <span className="text-[10px] text-slate-400 uppercase tracking-wider block">Phone Charges (${phoneCostPerMinute}/min)</span>
                     <strong className="text-md text-slate-800 font-mono">${orgSettings.phoneCharges.toFixed(2)}</strong>
                   </div>
                 </div>
