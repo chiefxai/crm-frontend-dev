@@ -350,7 +350,7 @@ export default function App() {
   // Call Logs) silently showed the wrong, stale number. Fetched once
   // here and threaded down instead.
   const [costPerMinuteInr, setCostPerMinuteInr] = useState<number>(COST_PER_MINUTE_INR);
-  // Telephony (Vobiz/Twilio/PIOPIY) per-minute rate — same admin-configurable
+  // Telephony (Vobiz) per-minute rate — same admin-configurable
   // pattern as costPerMinuteInr above, backing the Billing & Usage page's
   // "Phone Charges" figure, which the backend now actually accrues per call
   // (previously always 0 — nothing wrote to organizations.phone_charges).
@@ -384,7 +384,7 @@ export default function App() {
   // Live call notifications — set when a real inbound/outbound call is in
   // progress (from the org-scoped /api/logs-stream SSE connection below),
   // cleared when it completes. Not a simulation: this only fires for real
-  // Twilio/Vobiz call events from server.js/vobizProxy.js/twilioProxy.js.
+  // Vobiz call events from server.js/vobizProxy.js.
   const [liveCallBanner, setLiveCallBanner] = useState<{ message: string; startedAt: number } | null>(null);
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
 

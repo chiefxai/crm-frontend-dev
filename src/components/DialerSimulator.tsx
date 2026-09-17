@@ -195,7 +195,7 @@ function slugifyQuestion(question: string): string {
   return words.slice(0, 4).join('_') || 'answer';
 }
 
-// Builds the wire-format questions payload for POST /api/{twilio,vobiz,piopiy}/call
+// Builds the wire-format questions payload for POST /api/vobiz/call
 // — pairs each question with its label (falling back to the question text
 // itself when no label was set) and its declared data type, so the backend
 // can both attach the right label to the extracted answer AND format/
@@ -310,7 +310,7 @@ export default function DialerSimulator({
   const activeVirtualNumbers = virtualNumbers;
 
   // Real inbound call history — sourced from `callLogs` (populated from the
-  // backend's `call_logs` table, tagged `direction` by the Vobiz/Twilio
+  // backend's `call_logs` table, tagged `direction` by the Vobiz
   // webhooks themselves), not the fake simulator's `inboundCallLogs`.
   const realInboundCallLogs = callLogs.filter((log) => log.direction === 'inbound');
 
@@ -445,9 +445,7 @@ Real Tamil speakers do not say the "correct" written form of a word. They contra
 
   // Call simulator live states
   const [activeLead, setActiveLead] = useState<Lead | null>(null);
-  const [twilioCallSid, setTwilioCallSid] = useState<string | null>(null);
   const [vobizCallSid, setVobizCallSid] = useState<string | null>(null);
-  const [piopiyCallSid, setPiopiyCallSid] = useState<string | null>(null);
   const [callState, setCallState] = useState<'idle' | 'dialing' | 'connected' | 'completed'>('idle');
   const [duration, setDuration] = useState(0);
   const [transcript, setTranscript] = useState<{ speaker: 'AI' | 'Customer'; text: string; timestamp: string }[]>([]);
@@ -490,9 +488,9 @@ Real Tamil speakers do not say the "correct" written form of a word. They contra
   const cancelDialRequestedRef = useRef(false);
 
   // Outbound numbers this org has actually provisioned (Settings > Numbers)
-  // that can really place a call — Twilio, Vobiz, and PIOPIY are wired to
-  // real dialing; other provider labels are display-only for inbound routing.
-  const dialableNumbers = virtualNumbers.filter((n) => /twilio|vobiz|piopiy/i.test(n.provider || ''));
+  // that can really place a call — Vobiz is wired to real dialing; other
+  // provider labels are display-only for inbound routing.
+  const dialableNumbers = virtualNumbers.filter((n) => /vobiz/i.test(n.provider || ''));
   // Backend-persisted (orgSettings.defaultOutboundNumber, via
   // POST /api/settings/org) instead of plain component state — this used
   // to reset to the first dialable number on every page reload, even on
@@ -795,159 +793,12 @@ Real Tamil speakers do not say the "correct" written form of a word. They contra
   };
 
   const handleHangupVobizCall = async () => {
-    // This never actually hung up the real call — it only cleared local
-    // state and ran the local-only synthetic hangup (handleHangupCall with
-    // no args), so clicking "Disconnect Call" on a real Vobiz call left it
-    // running live on Vobiz's side (and Gemini still talking) with no
-    // reflection of that in the UI. Piopiy/Twilio's equivalents both
-    // actually call their provider's /hangup endpoint; this was the one
-    // missing it.
     if (vobizCallSid) {
       try {
         await apiFetch('/api/vobiz/hangup', { method: 'POST', body: JSON.stringify({ callSid: vobizCallSid }) });
       } catch (err) { console.error('Vobiz hangup failed:', err); }
     }
     setVobizCallSid(null);
-    handleHangupCall();
-  };
-
-  const handleInitiatePiopiyCall = async (lead: Lead) => {
-    if (callState === 'dialing' || callState === 'connected') return;
-    cancelDialRequestedRef.current = false;
-    setActiveLead(lead);
-    setCallState('dialing');
-    setDuration(0);
-    setTranscript([]);
-    setCurrentSentiment('Neutral');
-    setCurrentIntent('Unknown');
-    setActiveQuestionIndex(0);
-    setExtractedAnswers({});
-    setPlayingTapeId(null);
-    setIsTapePlaying(false);
-    try {
-      const assignedMember = selectedTask?.assignedTeamMemberId
-        ? teamMembers.find((m) => m.id === selectedTask.assignedTeamMemberId)
-        : undefined;
-      const res = await apiFetch('/api/piopiy/call', {
-        method: 'POST',
-        body: JSON.stringify({
-          phoneNumber: lead.phone,
-          questions: buildQuestionsPayload(selectedTask),
-          from: selectedOutboundNumber || undefined,
-          language: selectedTask?.language || undefined,
-          assignedContact: assignedMember ? { name: assignedMember.name, phone: assignedMember.phone } : undefined,
-          starhealthEnabled: !!selectedTask?.starhealthEnabled,
-          agentId: selectedTask?.assignedTeamMemberId || undefined,
-          // Lets the backend (callFinalizer.js) patch this task's
-          // callResults for this lead directly when the call finishes —
-          // what makes a "call me back later" callback correctly flip
-          // this row from "Callback Scheduled" to "Completed" once the
-          // automatic redial actually reaches them, even though that
-          // happens well after this tab may have moved on or closed.
-          taskId: selectedTask?.id || undefined,
-          leadId: lead.id,
-        })
-      });
-      const data = await res.json();
-      if (data.success && data.callSid) {
-        if (cancelDialRequestedRef.current) {
-          cancelDialRequestedRef.current = false;
-          setPiopiyCallSid(null);
-          setCallState('idle');
-          apiFetch('/api/piopiy/hangup', { method: 'POST', body: JSON.stringify({ callSid: data.callSid }) }).catch(() => {});
-          return;
-        }
-        setPiopiyCallSid(data.callSid);
-        setCallState('connected');
-        setTranscript([{ speaker: 'AI', text: `[Piopiy Call Started] Dialing ${lead.name} at ${lead.phone}...`, timestamp: new Date().toTimeString().split(' ')[0] }]);
-      } else {
-        throw new Error(data.error || 'Failed to initiate Piopiy call');
-      }
-    } catch (err: any) {
-      setCallState('idle');
-      alert(`Piopiy call failed: ${err.message}`);
-    }
-  };
-
-  const handleHangupPiopiyCall = async () => {
-    if (piopiyCallSid) {
-      try {
-        await apiFetch('/api/piopiy/hangup', { method: 'POST', body: JSON.stringify({ callSid: piopiyCallSid }) });
-      } catch (err) { console.error('Piopiy hangup failed:', err); }
-    }
-    setPiopiyCallSid(null);
-    handleHangupCall();
-  };
-
-  const handleInitiateTwilioCall = async (lead: Lead) => {
-    if (callState === 'dialing' || callState === 'connected') return;
-
-    cancelDialRequestedRef.current = false;
-    setActiveLead(lead);
-    setCallState('dialing');
-    setDuration(0);
-    setTranscript([]);
-    setCurrentSentiment('Neutral');
-    setCurrentIntent('Unknown');
-    setActiveQuestionIndex(0);
-    setExtractedAnswers({});
-    setPlayingTapeId(null);
-    setIsTapePlaying(false);
-
-    try {
-      const assignedMemberTwilio = selectedTask?.assignedTeamMemberId
-        ? teamMembers.find((m) => m.id === selectedTask.assignedTeamMemberId)
-        : undefined;
-      const res = await apiFetch('/api/twilio/call', {
-        method: 'POST',
-        body: JSON.stringify({
-          phoneNumber: lead.phone,
-          questions: buildQuestionsPayload(selectedTask),
-          from: selectedOutboundNumber || undefined,
-          language: selectedTask?.language || undefined,
-          assignedContact: assignedMemberTwilio ? { name: assignedMemberTwilio.name, phone: assignedMemberTwilio.phone } : undefined,
-          agentId: selectedTask?.assignedTeamMemberId || undefined,
-        })
-      });
-      const data = await res.json();
-      if (data.success && data.callSid) {
-        if (cancelDialRequestedRef.current) {
-          cancelDialRequestedRef.current = false;
-          setTwilioCallSid(null);
-          setCallState('idle');
-          apiFetch('/api/twilio/hangup', { method: 'POST', body: JSON.stringify({ callSid: data.callSid }) }).catch(() => {});
-          return;
-        }
-        setTwilioCallSid(data.callSid);
-        setCallState('connected');
-        setTranscript([
-          {
-            speaker: 'AI',
-            text: `[Twilio Call Started] Dialing ${lead.name} at ${lead.phone}...`,
-            timestamp: new Date().toTimeString().split(' ')[0]
-          }
-        ]);
-      } else {
-        throw new Error(data.error || 'Failed to initiate Twilio call');
-      }
-    } catch (err: any) {
-      setCallState('idle');
-      alert(`Twilio call failed: ${err.message}`);
-    }
-  };
-
-  const handleHangupTwilioCall = async () => {
-    if (!activeLead || !twilioCallSid) return;
-    try {
-      await fetch('/api/twilio/hangup', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ callSid: twilioCallSid })
-      });
-    } catch (err) {
-      console.error("Failed to hang up Twilio call:", err);
-    }
-    setTwilioCallSid(null);
     handleHangupCall();
   };
 
@@ -1039,7 +890,7 @@ Real Tamil speakers do not say the "correct" written form of a word. They contra
     // Save globally to call logs — but only when there's no real backend
     // record for this call already. When realCallLog is set (the real
     // "call_completed" SSE event fired — see the effect above), the
-    // backend's own vobizProxy.js/twilioProxy.js finalizeCall() already
+    // backend's own vobizProxy.js finalizeCall() already
     // saved the authoritative row (real id, real recording, correct
     // direction) the moment the call ended. Adding a second synthetic
     // entry here and syncing it via /api/call-logs/sync (a full
@@ -1287,11 +1138,7 @@ Currently on question ${nextIndex} out of ${selectedTask.questions.length}. Next
   }, [activeTapeCallId]);
 
   const dialLead = (lead: Lead) => {
-    const num = dialableNumbers.find((n) => n.number === selectedOutboundNumber);
-    const provider = num?.provider || '';
-    if (/vobiz/i.test(provider)) handleInitiateVobizCall(lead);
-    else if (/piopiy/i.test(provider)) handleInitiatePiopiyCall(lead);
-    else handleInitiateTwilioCall(lead);
+    handleInitiateVobizCall(lead);
   };
 
   const [serverAutoDialBusy, setServerAutoDialBusy] = useState(false);
@@ -1365,12 +1212,12 @@ Currently on question ${nextIndex} out of ${selectedTask.questions.length}. Next
   const processedCallLogIdRef = useRef<string | null>(null);
   useEffect(() => {
     if (callState !== 'connected' || !activeLead) return;
-    // Match by the exact provider call id (Vobiz CallUUID / Twilio CallSid /
-    // Piopiy call id) rather than by phone number — the backend now
-    // broadcasts this on every call_completed event (see callFinalizer.js),
-    // and it's the SAME id already sitting in vobizCallSid/twilioCallSid/
-    // piopiyCallSid the moment this call was placed, so there's no string
-    // formatting to get wrong. Phone-number matching was fundamentally
+    // Match by the exact provider call id (Vobiz CallUUID) rather than by
+    // phone number — the backend now broadcasts this on every
+    // call_completed event (see callFinalizer.js), and it's the SAME id
+    // already sitting in vobizCallSid the moment this call was placed, so
+    // there's no string formatting to get wrong. Phone-number matching was
+    // fundamentally
     // fragile: activeLead.phone and the callerNumber the provider reports
     // back can differ in country-code/leading formatting (e.g. lead stored
     // as "6384670687" but Vobiz reports "+916384670687"), so an exact
@@ -1380,7 +1227,7 @@ Currently on question ${nextIndex} out of ${selectedTask.questions.length}. Next
     // though the backend had already logged the call and broadcast
     // call_completed. Falls back to the old phone-based match only for log
     // rows that predate this field (no providerCallSid present).
-    const activeCallSid = vobizCallSid || twilioCallSid || piopiyCallSid || null;
+    const activeCallSid = vobizCallSid || null;
     const sanitize = (n: string) => (n || '').replace(/[\s\-\(\)\+]+/g, '').slice(-10);
     const targetPhone = sanitize(activeLead.phone);
     // Scan the most recent entries, not just callLogs[0] — a broadcast for
@@ -1418,7 +1265,7 @@ Currently on question ${nextIndex} out of ${selectedTask.questions.length}. Next
       callAnswered: match.callAnswered,
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [callLogs, callState, activeLead, vobizCallSid, twilioCallSid, piopiyCallSid]);
+  }, [callLogs, callState, activeLead, vobizCallSid]);
 
   // Call/recording detail — a SlideOver (docked side panel, see
   // ./ui/SlideOver) instead of the full-page takeover this used to be.

@@ -113,8 +113,8 @@ export interface CallLog {
   direction?: 'inbound' | 'outbound';
   answers?: Record<string, string>;
   createdAt: string;
-  // The telephony provider's own call id (Vobiz CallUUID / Twilio CallSid /
-  // Piopiy call id) for the call that produced this log — only present on
+  // The telephony provider's own call id (Vobiz CallUUID) for the call
+  // that produced this log — only present on
   // rows that arrived via the live call_completed SSE broadcast, not on
   // rows loaded from the call-logs API. Lets DialerSimulator.tsx match
   // "this is MY active call" by exact id instead of comparing phone
@@ -179,7 +179,7 @@ export interface Loan {
 export interface VirtualNumber {
   id: string;
   number: string;
-  provider: 'Twilio' | 'Vobiz.ai' | 'Telnyx' | 'Plivo' | 'SIP Trunk';
+  provider: 'Vobiz.ai' | 'Telnyx' | 'Plivo' | 'SIP Trunk';
   status: 'Active' | 'Inactive';
   friendlyName: string;
   routingUrl: string;

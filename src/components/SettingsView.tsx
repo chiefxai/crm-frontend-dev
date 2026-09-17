@@ -80,27 +80,11 @@ interface AiUsageSession {
 
 function ProviderBadge({ provider }: { provider: string }) {
   const p = (provider || '').toLowerCase();
-  if (p === 'twilio') {
-    return (
-      <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-bold bg-red-50 text-red-700 border border-red-200">
-        <svg viewBox="0 0 60 60" className="h-3 w-3 shrink-0" fill="none"><circle cx="30" cy="30" r="30" fill="#F22F46"/><circle cx="30" cy="18" r="5" fill="white"/><circle cx="30" cy="42" r="5" fill="white"/><circle cx="18" cy="30" r="5" fill="white"/><circle cx="42" cy="30" r="5" fill="white"/></svg>
-        Twilio
-      </span>
-    );
-  }
   if (p === 'vobiz.ai' || p === 'vobiz') {
     return (
       <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-bold bg-purple-50 text-purple-700 border border-purple-200">
         <span className="h-3 w-3 rounded bg-gradient-to-br from-purple-500 to-indigo-600 flex items-center justify-center text-white font-black text-[8px] shrink-0">V</span>
         Vobiz.ai
-      </span>
-    );
-  }
-  if (p === 'telecmi') {
-    return (
-      <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-bold bg-teal-50 text-teal-700 border border-teal-200">
-        <span className="h-3 w-3 rounded bg-gradient-to-br from-teal-500 to-cyan-600 flex items-center justify-center text-white font-black text-[8px] shrink-0">T</span>
-        TeleCMI
       </span>
     );
   }
@@ -169,16 +153,16 @@ export default function SettingsView({
   }, [subTab]);
 
 
-  // Per-org telephony credentials — lets this org use its own Twilio/Vobiz
+  // Per-org telephony credentials — lets this org use its own Vobiz
   // account for real outbound calls instead of the single shared account
   // configured in the server's .env. See services/channelsRoutes.js
-  // (POST /api/channels/twilio, /api/channels/vobiz) and how server.js's
-  // /api/twilio/call and /api/vobiz/call prefer these when connected.
-  // Connecting an account and registering its number as a dialable virtual
-  // line used to be two separate steps (connect credentials, then "Provision
-  // Virtual Call-center Line" for the same number) — combined into one
-  // action here since the common case is exactly one number per account.
-  const [connectProvider, setConnectProvider] = useState<'twilio' | 'vobiz' | 'telecmi'>('twilio');
+  // (POST /api/channels/vobiz) and how server.js's /api/vobiz/call prefers
+  // these when connected. Connecting an account and registering its number
+  // as a dialable virtual line used to be two separate steps (connect
+  // credentials, then "Provision Virtual Call-center Line" for the same
+  // number) — combined into one action here since the common case is
+  // exactly one number per account.
+  const [connectProvider, setConnectProvider] = useState<'vobiz'>('vobiz');
   const [connectedChannels, setConnectedChannels] = useState<{ type: string; externalId: string; config: any }[]>([]);
   const loadChannels = () => {
     apiFetch('/api/channels').then((r) => r.json()).then((list) => setConnectedChannels(Array.isArray(list) ? list : [])).catch(() => {});
@@ -190,7 +174,7 @@ export default function SettingsView({
   // Adds/updates the virtual-number entry for a just-connected number so it
   // shows up in the numbers list and the Voice Simulator's dial dropdown
   // without a separate "provision" step.
-  const upsertVirtualNumber = (number: string, friendlyName: string, provider: 'Twilio' | 'Vobiz.ai' | 'TeleCMI') => {
+  const upsertVirtualNumber = (number: string, friendlyName: string, provider: 'Vobiz.ai') => {
     const existing = virtualNumbers.find((n) => n.number === number);
     if (existing) {
       setVirtualNumbers(virtualNumbers.map((n) => n.number === number ? { ...n, friendlyName, provider, status: 'Active' } : n));
@@ -206,52 +190,6 @@ export default function SettingsView({
         routingUrl: 'https://api.chiefxai.com/voice/webhook-dynamic',
         incomingCallCount: 0, outgoingCallCount: 0
       }]);
-    }
-  };
-
-  const [twilioSid, setTwilioSid] = useState('');
-  const [twilioToken, setTwilioToken] = useState('');
-  const [twilioPhone, setTwilioPhone] = useState('');
-  const [twilioLabel, setTwilioLabel] = useState('');
-  const [savingTwilio, setSavingTwilio] = useState(false);
-  // Twilio (like Vobiz.ai/TeleCMI below) is one account with credentials
-  // that can own many phone numbers — the `channels` row holds that one
-  // set of credentials per org, `virtual_numbers` holds the (unbounded)
-  // list of numbers under it. Previously every "add a number" resubmit of
-  // this form went through POST /api/channels/twilio again, which
-  // silently overwrote the org's single channel row's number/credentials
-  // with whatever was just typed — so a second number looked added in the
-  // list, but the org's actual outbound-calling fallback credentials had
-  // effectively been reassigned out from under the first. Once the
-  // provider is already connected, just register the new number locally
-  // (persisted by the existing debounced numbers/sync — see
-  // db.replaceNumbers) without touching the channel/credentials at all.
-  const handleConnectTwilio = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!twilioPhone.trim()) return;
-    if (twilioChannel) {
-      upsertVirtualNumber(twilioPhone.trim(), twilioLabel.trim() || 'Twilio Line', 'Twilio');
-      setTwilioPhone(''); setTwilioLabel('');
-      return;
-    }
-    if (!twilioSid.trim() || !twilioToken.trim()) return;
-    setSavingTwilio(true);
-    try {
-      const res = await apiFetch('/api/channels/twilio', {
-        method: 'POST',
-        body: JSON.stringify({ accountSid: twilioSid.trim(), authToken: twilioToken.trim(), phoneNumber: twilioPhone.trim() })
-      });
-      if (res.ok) {
-        upsertVirtualNumber(twilioPhone.trim(), twilioLabel.trim() || 'Twilio Line', 'Twilio');
-        setTwilioSid(''); setTwilioToken(''); setTwilioPhone(''); setTwilioLabel('');
-        loadChannels();
-      } else {
-        alert((await res.json()).error || 'Failed to connect Twilio account');
-      }
-    } catch {
-      alert('Network error — check your connection.');
-    } finally {
-      setSavingTwilio(false);
     }
   };
 
@@ -289,48 +227,14 @@ export default function SettingsView({
     }
   };
 
-  const [telecmiAppId, setTelecmiAppId] = useState('');
-  const [telecmiSecret, setTelecmiSecret] = useState('');
-  const [telecmiPhone, setTelecmiPhone] = useState('');
-  const [telecmiLabel, setTelecmiLabel] = useState('');
-  const [savingTelecmi, setSavingTelecmi] = useState(false);
-  const handleConnectTelecmi = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!telecmiPhone.trim()) return;
-    if (telecmiChannel) {
-      upsertVirtualNumber(telecmiPhone.trim(), telecmiLabel.trim() || 'TeleCMI Line', 'TeleCMI');
-      setTelecmiPhone(''); setTelecmiLabel('');
-      return;
-    }
-    if (!telecmiAppId.trim() || !telecmiSecret.trim()) return;
-    setSavingTelecmi(true);
-    try {
-      const res = await apiFetch('/api/channels/piopiy', {
-        method: 'POST',
-        body: JSON.stringify({ appId: telecmiAppId.trim(), appSecret: telecmiSecret.trim(), phoneNumber: telecmiPhone.trim() })
-      });
-      if (res.ok) {
-        upsertVirtualNumber(telecmiPhone.trim(), telecmiLabel.trim() || 'TeleCMI Line', 'TeleCMI');
-        setTelecmiAppId(''); setTelecmiSecret(''); setTelecmiPhone(''); setTelecmiLabel('');
-        loadChannels();
-      } else {
-        alert((await res.json()).error || 'Failed to connect TeleCMI account');
-      }
-    } catch {
-      alert('Network error — check your connection.');
-    } finally {
-      setSavingTelecmi(false);
-    }
-  };
-
-  // Disconnects the org's own Twilio/Vobiz account — separate from
+  // Disconnects the org's own Vobiz account — separate from
   // deleting a virtual_numbers row (handleDeleteNumber above). Without
   // this, the actual credentials outbound calls fall back to
   // (channelsEngine.getChannel) stayed connected forever, so a "deleted"
   // number kept showing "Connected: <number>" on this card and kept being
   // used to place calls.
   const [disconnectingChannel, setDisconnectingChannel] = useState<string | null>(null);
-  const handleDisconnectChannel = async (type: 'twilio' | 'vobiz') => {
+  const handleDisconnectChannel = async (type: 'vobiz') => {
     setDisconnectingChannel(type);
     try {
       const res = await apiFetch(`/api/channels/${type}`, { method: 'DELETE' });
@@ -344,9 +248,7 @@ export default function SettingsView({
     }
   };
 
-  const twilioChannel = connectedChannels.find((c) => c.type === 'twilio');
   const vobizChannel = connectedChannels.find((c) => c.type === 'vobiz');
-  const telecmiChannel = connectedChannels.find((c) => c.type === 'piopiy');
 
   // Org-level allowed feature flags (set by super admin at org creation)
   const [orgAllowedFlags, setOrgAllowedFlags] = useState<string[]>([]);
@@ -539,7 +441,7 @@ export default function SettingsView({
                       <Phone className="h-5 w-5 text-indigo-400" />
                     </div>
                     <p className="text-sm font-medium text-slate-600">No virtual numbers yet</p>
-                    <p className="text-xs text-slate-400 mt-1 max-w-xs">Click "Add Provider" to connect your Twilio or Vobiz.ai account and provision your first virtual line.</p>
+                    <p className="text-xs text-slate-400 mt-1 max-w-xs">Click "Add Provider" to connect your Vobiz.ai account and provision your first virtual line.</p>
                   </div>
                 ) : (() => {
                   const columns: Column<VirtualNumber>[] = [
@@ -608,23 +510,8 @@ export default function SettingsView({
                     {/* Provider selector */}
                     <div>
                       <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-widest mb-2">Select Provider</p>
-                      <div className="grid grid-cols-3 gap-3">
+                      <div className="grid grid-cols-1 gap-3">
                         {([
-                          {
-                            id: 'twilio',
-                            label: 'Twilio',
-                            connected: !!twilioChannel,
-                            selectedBg: 'bg-red-50 border-red-400',
-                            logo: (
-                              <svg viewBox="0 0 60 60" className="h-8 w-8" fill="none" xmlns="http://www.w3.org/2000/svg">
-                                <circle cx="30" cy="30" r="30" fill="#F22F46"/>
-                                <circle cx="30" cy="18" r="5" fill="white"/>
-                                <circle cx="30" cy="42" r="5" fill="white"/>
-                                <circle cx="18" cy="30" r="5" fill="white"/>
-                                <circle cx="42" cy="30" r="5" fill="white"/>
-                              </svg>
-                            ),
-                          },
                           {
                             id: 'vobiz',
                             label: 'Vobiz.ai',
@@ -632,15 +519,6 @@ export default function SettingsView({
                             selectedBg: 'bg-purple-50 border-purple-400',
                             logo: (
                               <div className="h-8 w-8 rounded-xl bg-gradient-to-br from-purple-500 to-indigo-600 flex items-center justify-center text-white font-black text-base shadow-sm">V</div>
-                            ),
-                          },
-                          {
-                            id: 'telecmi',
-                            label: 'TeleCMI',
-                            connected: !!telecmiChannel,
-                            selectedBg: 'bg-teal-50 border-teal-400',
-                            logo: (
-                              <div className="h-8 w-8 rounded-xl bg-gradient-to-br from-teal-500 to-cyan-600 flex items-center justify-center text-white font-black text-base shadow-sm">T</div>
                             ),
                           },
                         ] as const).map(({ id, label, connected, selectedBg, logo }) => (
@@ -668,51 +546,6 @@ export default function SettingsView({
                     <div className="border-t border-slate-100" />
 
                     {/* Per-provider form */}
-                    {connectProvider === 'twilio' && (
-                      <form onSubmit={(e) => { handleConnectTwilio(e); setShowProviderForm(false); }} className="space-y-4">
-                        {twilioChannel && (
-                          <div className="flex items-center justify-between text-xs text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-xl px-4 py-2.5">
-                            <div className="flex items-center gap-2">
-                              <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
-                              <span>Active: <span className="font-semibold">{twilioChannel.externalId}</span></span>
-                            </div>
-                            <button type="button" onClick={() => handleDisconnectChannel('twilio')} disabled={disconnectingChannel === 'twilio'} className="text-rose-500 hover:text-rose-600 font-semibold text-xs disabled:opacity-50 cursor-pointer">
-                              {disconnectingChannel === 'twilio' ? 'Disconnecting…' : 'Disconnect'}
-                            </button>
-                          </div>
-                        )}
-                        <div className="space-y-3">
-                          {!twilioChannel && (
-                            <>
-                              <div>
-                                <label className="block text-xs font-semibold text-slate-600 mb-1.5">Account SID</label>
-                                <input type="text" value={twilioSid} onChange={(e) => setTwilioSid(e.target.value)} placeholder="ACxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx" className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-red-400 focus:border-transparent transition-all" />
-                              </div>
-                              <div>
-                                <label className="block text-xs font-semibold text-slate-600 mb-1.5">Auth Token</label>
-                                <input type="password" value={twilioToken} onChange={(e) => setTwilioToken(e.target.value)} placeholder="••••••••••••••••••••••••••••••••" className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-red-400 focus:border-transparent transition-all" />
-                              </div>
-                            </>
-                          )}
-                          <div className="grid grid-cols-2 gap-3">
-                            <div>
-                              <label className="block text-xs font-semibold text-slate-600 mb-1.5">Phone Number</label>
-                              <input type="text" value={twilioPhone} onChange={(e) => setTwilioPhone(e.target.value)} placeholder="+91XXXXXXXXXX" className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-red-400 focus:border-transparent transition-all" />
-                            </div>
-                            <div>
-                              <label className="block text-xs font-semibold text-slate-600 mb-1.5">Label <span className="text-slate-400 font-normal">(optional)</span></label>
-                              <input type="text" value={twilioLabel} onChange={(e) => setTwilioLabel(e.target.value)} placeholder="e.g. Sales Line" className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-red-400 focus:border-transparent transition-all" />
-                            </div>
-                          </div>
-                        </div>
-                        <div className="flex items-center justify-between pt-1">
-                          <p className="text-[11px] text-slate-400">{twilioChannel ? 'Open "Add Provider" again any time to add more Twilio numbers.' : 'You can add more numbers for this account later.'}</p>
-                          <button type="submit" disabled={savingTwilio} className="flex items-center gap-2 bg-red-500 hover:bg-red-600 disabled:opacity-60 text-white text-sm font-semibold rounded-xl px-6 py-2.5 transition-all cursor-pointer shadow-sm">
-                            {savingTwilio ? 'Connecting…' : twilioChannel ? 'Add Number' : 'Connect Twilio'}
-                          </button>
-                        </div>
-                      </form>
-                    )}
 
                     {connectProvider === 'vobiz' && (
                       <form onSubmit={(e) => { handleConnectVobiz(e); setShowProviderForm(false); }} className="space-y-4">
@@ -755,52 +588,6 @@ export default function SettingsView({
                           <p className="text-[11px] text-slate-400">{vobizChannel ? 'Open "Add Provider" again any time to add more Vobiz.ai numbers.' : 'You can add more numbers for this account later.'}</p>
                           <button type="submit" disabled={savingVobiz} className="flex items-center gap-2 bg-purple-600 hover:bg-purple-700 disabled:opacity-60 text-white text-sm font-semibold rounded-xl px-6 py-2.5 transition-all cursor-pointer shadow-sm">
                             {savingVobiz ? 'Connecting…' : vobizChannel ? 'Add Number' : 'Connect Vobiz.ai'}
-                          </button>
-                        </div>
-                      </form>
-                    )}
-
-                    {connectProvider === 'telecmi' && (
-                      <form onSubmit={(e) => { handleConnectTelecmi(e); setShowProviderForm(false); }} className="space-y-4">
-                        {telecmiChannel && (
-                          <div className="flex items-center justify-between text-xs text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-xl px-4 py-2.5">
-                            <div className="flex items-center gap-2">
-                              <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
-                              <span>Active: <span className="font-semibold">{telecmiChannel.externalId}</span></span>
-                            </div>
-                            <button type="button" onClick={() => handleDisconnectChannel('piopiy')} disabled={disconnectingChannel === 'piopiy'} className="text-rose-500 hover:text-rose-600 font-semibold text-xs disabled:opacity-50 cursor-pointer">
-                              {disconnectingChannel === 'piopiy' ? 'Disconnecting…' : 'Disconnect'}
-                            </button>
-                          </div>
-                        )}
-                        <div className="space-y-3">
-                          {!telecmiChannel && (
-                            <>
-                              <div>
-                                <label className="block text-xs font-semibold text-slate-600 mb-1.5">App ID</label>
-                                <input type="text" value={telecmiAppId} onChange={(e) => setTelecmiAppId(e.target.value)} placeholder="Your TeleCMI App ID" className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-teal-400 focus:border-transparent transition-all" />
-                              </div>
-                              <div>
-                                <label className="block text-xs font-semibold text-slate-600 mb-1.5">App Secret</label>
-                                <input type="password" value={telecmiSecret} onChange={(e) => setTelecmiSecret(e.target.value)} placeholder="••••••••••••••••••••••••••••••••" className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-teal-400 focus:border-transparent transition-all" />
-                              </div>
-                            </>
-                          )}
-                          <div className="grid grid-cols-2 gap-3">
-                            <div>
-                              <label className="block text-xs font-semibold text-slate-600 mb-1.5">Phone Number</label>
-                              <input type="text" value={telecmiPhone} onChange={(e) => setTelecmiPhone(e.target.value)} placeholder="+91XXXXXXXXXX" className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-teal-400 focus:border-transparent transition-all" />
-                            </div>
-                            <div>
-                              <label className="block text-xs font-semibold text-slate-600 mb-1.5">Label <span className="text-slate-400 font-normal">(optional)</span></label>
-                              <input type="text" value={telecmiLabel} onChange={(e) => setTelecmiLabel(e.target.value)} placeholder="e.g. TeleCMI Line" className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-teal-400 focus:border-transparent transition-all" />
-                            </div>
-                          </div>
-                        </div>
-                        <div className="flex items-center justify-between pt-1">
-                          <p className="text-[11px] text-slate-400">{telecmiChannel ? 'Open "Add Provider" again any time to add more TeleCMI numbers.' : 'You can add more numbers for this account later.'}</p>
-                          <button type="submit" disabled={savingTelecmi} className="flex items-center gap-2 bg-teal-600 hover:bg-teal-700 disabled:opacity-60 text-white text-sm font-semibold rounded-xl px-6 py-2.5 transition-all cursor-pointer shadow-sm">
-                            {savingTelecmi ? 'Connecting…' : telecmiChannel ? 'Add Number' : 'Connect TeleCMI'}
                           </button>
                         </div>
                       </form>

@@ -25,7 +25,7 @@ export default function OrgDetailPanel({ orgId, onClose, onChanged }: { orgId: s
   const [numbers, setNumbers] = useState<any[]>([]);
   const [numbersLoading, setNumbersLoading] = useState(false);
   const [addNumberForm, setAddNumberForm] = useState(false);
-  const [newNum, setNewNum] = useState({ number: '', friendlyName: '', provider: 'Twilio' });
+  const [newNum, setNewNum] = useState({ number: '', friendlyName: '', provider: 'Vobiz.ai' });
   const [numBusy, setNumBusy] = useState(false);
 
   const loadNumbers = () => {
@@ -47,7 +47,7 @@ export default function OrgDetailPanel({ orgId, onClose, onChanged }: { orgId: s
         body: JSON.stringify({ number: newNum.number.trim(), friendlyName: newNum.friendlyName.trim(), provider: newNum.provider, status: 'Active' }),
       });
       if (!res.ok) throw new Error((await res.json()).error || 'Failed');
-      setNewNum({ number: '', friendlyName: '', provider: 'Twilio' });
+      setNewNum({ number: '', friendlyName: '', provider: 'Vobiz.ai' });
       setAddNumberForm(false);
       loadNumbers();
     } catch { /* ignore */ } finally { setNumBusy(false); }
@@ -384,9 +384,7 @@ export default function OrgDetailPanel({ orgId, onClose, onChanged }: { orgId: s
                         onChange={e => setNewNum(f => ({ ...f, provider: e.target.value }))}
                         className="text-xs border border-slate-200 rounded-lg px-2 py-1.5"
                       >
-                        <option>Twilio</option>
                         <option>Vobiz.ai</option>
-                        <option>TeleCMI</option>
                       </select>
                     </div>
                     <input
