@@ -1743,17 +1743,22 @@ Currently on question ${nextIndex} out of ${selectedTask.questions.length}. Next
         ) : undefined
       }
       toolbar={
-        // Only while a call is actually in flight for this campaign
-        // (autoDialStatus 'dialing', not merely autoDialEnabled — the
-        // task can be enabled but momentarily 'waiting'/'paused' between
-        // dials with no call actually happening) — pinned in the shared
+        // Calling Telemetry — moved here from a static widget in the
+        // campaign list body. Only rendered while a call is actually in
+        // flight for this campaign (autoDialStatus 'dialing', not merely
+        // autoDialEnabled — the task can be enabled but momentarily
+        // 'waiting'/'paused' between dials with no call actually
+        // happening), so it's simply absent the rest of the time instead
+        // of showing an "OFF" state anywhere. Pinned in the shared
         // header's own toolbar slot (see PageHeaderBar.tsx) so it stays
         // visible right below the page header regardless of how far the
         // list below is scrolled, instead of scrolling away with it.
         dialerMode === 'outbound' && selectedTask?.autoDialEnabled && selectedTask.autoDialStatus === 'dialing' ? (
-          <p className="text-[11px] text-emerald-600 dark:text-emerald-400 flex items-center gap-1.5">
-            🤖 Running on the server — this task keeps auto-dialing pending leads even if you close this page. Status: {selectedTask.autoDialStatus}.
-          </p>
+          <div className="flex items-center gap-2 text-emerald-600 dark:text-emerald-400">
+            <span className="text-[9px] font-mono uppercase tracking-wider font-bold whitespace-nowrap">🤖 Calling Telemetry · LIVE</span>
+            <span className="text-xs font-bold whitespace-nowrap">Continuous Dialer Mode: ON</span>
+            <span className="text-[11px] truncate">Auto-dialing every pending lead in this list, one after another, on the server — keeps going even if you close this page. Hit "Stop Auto-Dial" to pause immediately.</span>
+          </div>
         ) : undefined
       }
     >
@@ -1829,21 +1834,6 @@ Currently on question ${nextIndex} out of ${selectedTask.questions.length}. Next
               })}
             </div>
 
-            {/* Quick Stats Bento widget */}
-            <div className="bg-slate-50 dark:bg-[var(--bg-subtle)] border border-slate-100 dark:border-[var(--border)] rounded-xl p-4 space-y-2 relative overflow-hidden">
-              <div className="absolute -right-8 -bottom-8 w-24 h-24 bg-blue-500/10 rounded-full blur-xl"></div>
-              <div className="relative z-10 space-y-1">
-                <span className={`text-[9px] font-mono uppercase tracking-wider font-bold ${selectedTask?.autoDialEnabled ? 'text-emerald-500' : 'text-[var(--text-muted)]'}`}>
-                  Calling Telemetry {selectedTask?.autoDialEnabled && '· LIVE'}
-                </span>
-                <p className="text-lg font-bold text-[var(--text-primary)]">Continuous Dialer Mode: {selectedTask?.autoDialEnabled ? 'ON' : 'OFF'}</p>
-                <p className="text-[10px] leading-normal text-[var(--text-muted)]">
-                  {selectedTask?.autoDialEnabled
-                    ? 'Auto-dialing every pending lead in the active list, one after another, on the server — keeps going even if you close this tab. Hit "Stop Auto-Dial" to pause immediately.'
-                    : 'AI parses voice audio stream, converts caller speech to text in real-time, matching questionnaire patterns instantly. Click "Start Campaign" to work through the whole list on the server without clicking Dial per lead.'}
-                </p>
-              </div>
-            </div>
           </div>
         </Widget>
 
