@@ -342,12 +342,21 @@ export default function CallLogsView({ callLogs, costPerMinuteInr, leads = [] }:
                       </tr>
                     </thead>
                     <tbody className="divide-y" style={{ borderColor: 'var(--border)' }}>
-                      {Object.entries(selectedAnswers).map(([q, a]) => (
-                        <tr key={q} className="hover:bg-[var(--bg-subtle)]">
-                          <td className="px-4 py-2.5" style={{ color: 'var(--text-secondary)' }}>{q}</td>
-                          <td className="px-4 py-2.5 font-semibold" style={{ color: 'var(--text-primary)' }}>{a || <span style={{ color: 'var(--text-muted)' }}>—</span>}</td>
-                        </tr>
-                      ))}
+                      {Object.entries(selectedAnswers).map(([q, a]) => {
+                        // Defensive: `a` should always be a plain string
+                        // (see callFinalizer.js's answers map), but a raw
+                        // {label, question, answer} object slipping through
+                        // here would otherwise crash the whole page with
+                        // React error #31 (objects aren't valid children)
+                        // instead of just showing this one row oddly.
+                        const display = typeof a === 'string' ? a : (a && typeof a === 'object' ? (a as any).answer ?? '' : String(a ?? ''));
+                        return (
+                          <tr key={q} className="hover:bg-[var(--bg-subtle)]">
+                            <td className="px-4 py-2.5" style={{ color: 'var(--text-secondary)' }}>{q}</td>
+                            <td className="px-4 py-2.5 font-semibold" style={{ color: 'var(--text-primary)' }}>{display || <span style={{ color: 'var(--text-muted)' }}>—</span>}</td>
+                          </tr>
+                        );
+                      })}
                     </tbody>
                   </table>
                 </div>
