@@ -204,13 +204,36 @@ export default function WorkflowsView({ flows, setFlows }: WorkflowsViewProps) {
       }
     };
 
+    // One dynamic line describing whichever view is currently showing —
+    // replaces the separate decorative header strip each view used to
+    // render internally (QuestionFlowBuilder's "Info bar", the JSON view's
+    // own "Workflow JSON" title bar), so that context lives in the single
+    // page subtitle instead of a stack of nested mini-headers.
+    const VIEW_SUBTITLE: Record<typeof editorView, string> = {
+      diagram: 'Diagram is auto-generated from Variables — drag nodes, add connections, or insert new nodes directly.',
+      variables: 'The AI asks these questions in order. Add branches for conditional follow-ups.',
+      json: 'Editable — paste or type. Save applies it.',
+    };
+
     return (
       <PageShell
         title={editingFlow.name}
-        subtitle="Design question nodes, conditional branches, and call routing logic."
+        subtitle={VIEW_SUBTITLE[editorView]}
         layout="fill"
         action={
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 flex-wrap justify-end">
+            <button
+              onClick={() => setEditingId(null)}
+              className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors"
+              style={{ background: 'var(--bg-subtle)', color: 'var(--text-secondary)', border: '1px solid var(--border)' }}
+              onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'var(--border)'; }}
+              onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'var(--bg-subtle)'; }}
+            >
+              <ArrowLeft className="h-3.5 w-3.5" /> All Workflows
+            </button>
+
+            <div className="w-px h-5 mx-1" style={{ background: 'var(--border)' }} />
+
             {/* View toggle */}
             <div className="flex items-center rounded-xl p-0.5 gap-0.5" style={{ background: 'var(--bg-subtle)', border: '1px solid var(--border)' }}>
               {VIEWS.map(({ id, label, icon: Icon }) => (
@@ -245,47 +268,34 @@ export default function WorkflowsView({ flows, setFlows }: WorkflowsViewProps) {
             {editingFlow.active && (
               <span className="text-[10px] font-bold bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full border border-emerald-200">ACTIVE</span>
             )}
-          </div>
-        }
-        toolbar={
-          <div className="flex items-center justify-between w-full">
+
+            <div className="w-px h-5 mx-1" style={{ background: 'var(--border)' }} />
+
+            {/* Common Copy + Save — identical across Diagram, Variables, and JSON */}
             <button
-              onClick={() => setEditingId(null)}
+              onClick={handleCopy}
               className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors"
               style={{ background: 'var(--bg-subtle)', color: 'var(--text-secondary)', border: '1px solid var(--border)' }}
               onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'var(--border)'; }}
               onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'var(--bg-subtle)'; }}
             >
-              <ArrowLeft className="h-3.5 w-3.5" /> All Workflows
+              {jsonCopied ? <Check className="h-3.5 w-3.5" /> : <ClipboardCopy className="h-3.5 w-3.5" />}
+              {jsonCopied ? 'Copied!' : 'Copy JSON'}
             </button>
-
-            {/* Common Copy + Save — identical across Diagram, Variables, and JSON */}
-            <div className="flex items-center gap-2">
-              <button
-                onClick={handleCopy}
-                className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors"
-                style={{ background: 'var(--bg-subtle)', color: 'var(--text-secondary)', border: '1px solid var(--border)' }}
-                onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'var(--border)'; }}
-                onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'var(--bg-subtle)'; }}
-              >
-                {jsonCopied ? <Check className="h-3.5 w-3.5" /> : <ClipboardCopy className="h-3.5 w-3.5" />}
-                {jsonCopied ? 'Copied!' : 'Copy JSON'}
-              </button>
-              <button
-                onClick={handleSave}
-                disabled={saveStatus === 'saving'}
-                className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors disabled:opacity-70"
-                style={saveStatus === 'saved'
-                  ? { background: '#059669', color: '#ffffff' }
-                  : { background: '#2563eb', color: '#ffffff' }
-                }
-              >
-                {saveStatus === 'saving' && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
-                {saveStatus === 'saved' && <Check className="h-3.5 w-3.5" />}
-                {saveStatus === 'idle' && <Save className="h-3.5 w-3.5" />}
-                {saveStatus === 'saving' ? 'Saving…' : saveStatus === 'saved' ? 'Saved' : 'Save'}
-              </button>
-            </div>
+            <button
+              onClick={handleSave}
+              disabled={saveStatus === 'saving'}
+              className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors disabled:opacity-70"
+              style={saveStatus === 'saved'
+                ? { background: '#059669', color: '#ffffff' }
+                : { background: '#2563eb', color: '#ffffff' }
+              }
+            >
+              {saveStatus === 'saving' && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+              {saveStatus === 'saved' && <Check className="h-3.5 w-3.5" />}
+              {saveStatus === 'idle' && <Save className="h-3.5 w-3.5" />}
+              {saveStatus === 'saving' ? 'Saving…' : saveStatus === 'saved' ? 'Saved' : 'Save'}
+            </button>
           </div>
         }
       >
@@ -307,11 +317,6 @@ export default function WorkflowsView({ flows, setFlows }: WorkflowsViewProps) {
           )}
           {editorView === 'json' && (
             <div className="h-full flex flex-col" style={{ background: 'var(--bg-surface)' }}>
-              <div className="flex items-center gap-2 px-5 py-3 border-b shrink-0" style={{ borderColor: 'var(--border)' }}>
-                <Braces className="h-4 w-4" style={{ color: '#d97706' }} />
-                <span className="text-xs font-bold" style={{ color: 'var(--text-primary)' }}>Workflow JSON</span>
-                <span className="text-[10px] px-2 py-0.5 rounded-full font-semibold" style={{ background: 'var(--bg-subtle)', color: 'var(--text-muted)' }}>editable · paste or type · Save applies it</span>
-              </div>
               {jsonError && (
                 <div className="px-5 py-2 text-xs font-mono shrink-0" style={{ background: '#450a0a', color: '#fca5a5' }}>
                   ⚠ {jsonError}

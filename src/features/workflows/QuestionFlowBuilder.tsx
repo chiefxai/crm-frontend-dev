@@ -15,7 +15,7 @@ import {
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 
-import { Plus, Trash2, HelpCircle, Zap, GitBranch, Square, Variable, ChevronRight, Info } from 'lucide-react';
+import { Plus, Trash2, HelpCircle, Zap, GitBranch, Square, Variable, ChevronRight } from 'lucide-react';
 import { QuestionFlow, QuestionFlowNode, QuestionFlowEdge, WorkflowVariable } from './types';
 import { nodeTypes } from './components/FlowNodes';
 import NodeEditor from './components/NodeEditor';
@@ -277,17 +277,6 @@ export default function QuestionFlowBuilder({ flow, allFlows, onChange }: Props)
 
   return (
     <div className="flex flex-col h-full">
-      {/* Info bar */}
-      <div
-        className="flex items-center gap-2 px-4 py-2 border-b shrink-0"
-        style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)' }}
-      >
-        <Info className="h-3.5 w-3.5 shrink-0" style={{ color: '#6366f1' }} />
-        <p className="text-xs flex-1" style={{ color: 'var(--text-muted)' }}>
-          Diagram is auto-generated from Variables. You can also edit it directly here — drag nodes, add connections, or insert new nodes.
-        </p>
-      </div>
-
       {/* Toolbar */}
       <div className="flex items-center gap-2 px-4 py-3 bg-white border-b border-slate-100 shrink-0 flex-wrap" style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)' }}>
         <span className="text-xs font-semibold" style={{ color: 'var(--text-muted)' }}>Add node:</span>
