@@ -62,6 +62,19 @@ function latestCallIdForLead(leadId: string, dialerTasks: CampaignTask[]): strin
   return withCallId[0]?.callResults?.[leadId]?.callId ?? null;
 }
 
+// The most recent campaign/workflow this lead was actually dialed as part
+// of — a lead can belong to more than one task over time (re-run
+// campaigns), so this picks the newest one by the task's own createdAt.
+// `task.name` is the real field (see the paired backend fix to
+// db.getScheduledCallbacks/Dashboard/Reports — dialer_tasks has no
+// separate "workflowName" column, only `name`).
+function latestCampaignForLead(leadId: string, dialerTasks: CampaignTask[]): string | null {
+  const candidates = [...dialerTasks]
+    .filter((t) => t.leadIds?.includes(leadId))
+    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  return candidates[0]?.name ?? null;
+}
+
 export default function LeadsView({ leads, setLeads, dialerTasks = [] }: LeadsViewProps) {
   const { stages } = usePipelineStages();
   const [advancingId, setAdvancingId] = React.useState<string | null>(null);
@@ -105,6 +118,7 @@ export default function LeadsView({ leads, setLeads, dialerTasks = [] }: LeadsVi
     { key: 'phone', label: 'Phone', getValue: (l) => formatPhone(l.phone) || l.phone },
     { key: 'email', label: 'Email', getValue: (l) => l.email },
     { key: 'source', label: 'Source', getValue: (l) => l.source },
+    { key: 'workflow', label: 'Workflow', getValue: (l) => latestCampaignForLead(l.id, dialerTasks) || '' },
     { key: 'stage', label: 'Stage', getValue: (l) => stageLabel(stages, l.pipelineStage) },
     { key: 'status', label: 'CRM Status', getValue: (l) => l.status },
     { key: 'score', label: 'AI Score', getValue: (l) => l.score },
@@ -130,6 +144,16 @@ export default function LeadsView({ leads, setLeads, dialerTasks = [] }: LeadsVi
       ),
     },
     { key: 'source', header: 'Source', cell: (l) => <span className="text-xs text-slate-500 dark:text-[var(--text-secondary)]">{l.source}</span> },
+    {
+      key: 'workflow',
+      header: 'Workflow',
+      cell: (l) => {
+        const name = latestCampaignForLead(l.id, dialerTasks);
+        return name
+          ? <span className="text-xs text-slate-500 dark:text-[var(--text-secondary)]">{name}</span>
+          : <span className="text-xs text-slate-300 dark:text-[var(--text-muted)]">—</span>;
+      },
+    },
     {
       key: 'stage',
       header: 'Stage',
