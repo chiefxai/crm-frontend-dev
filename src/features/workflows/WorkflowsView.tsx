@@ -7,7 +7,8 @@ import {
   ToggleRight,
   ToggleLeft,
   ChevronRight,
-  ArrowLeft,
+  ChevronDown,
+  Home,
   Copy,
   X,
   Network,
@@ -25,6 +26,8 @@ import PageShell from '../../components/ui/PageShell';
 import Widget from '../../components/ui/Widget';
 import Modal from '../../components/ui/Modal';
 import IconButton from '../../components/ui/IconButton';
+import ActionMenu from '../../components/ui/ActionMenu';
+import Tooltip from '../../components/ui/Tooltip';
 import DataTable, { Column } from '../../components/ui/DataTable';
 import { apiFetch } from '../../lib/api';
 
@@ -232,22 +235,65 @@ export default function WorkflowsView({ flows, setFlows, openFlowId, onOpenFlow,
       json: 'Editable — paste or type. Save applies it.',
     };
 
+    // Replaces the old "← All Workflows" text button — a small dropdown
+    // (the shared ActionMenu component) listing Home (close this flow,
+    // back to the list) plus every other workflow, so switching between
+    // flows no longer requires a trip back to the list first.
+    const switchFlowMenu = (
+      <ActionMenu
+        triggerIcon={ChevronDown}
+        triggerVariant="ghost"
+        tooltipLabel="Switch workflow"
+        items={[
+          { key: 'home', label: 'All Workflows', icon: Home, onClick: () => setEditingId(null) },
+          ...flows.map((f) => ({
+            key: f.id,
+            label: f.name,
+            icon: GitBranch,
+            onClick: () => setEditingId(f.id),
+          })),
+        ]}
+      />
+    );
+
     return (
       <PageShell
         title={editingFlow.name}
         subtitle={VIEW_SUBTITLE[editorView]}
         layout="fill"
+        titleActions={
+          <>
+            <Tooltip label={jsonCopied ? 'Copied!' : 'Copy JSON'} side="bottom">
+              <button
+                onClick={handleCopy}
+                className="flex items-center justify-center h-9 w-9 rounded-xl transition-colors"
+                style={{ background: 'var(--bg-subtle)', color: 'var(--text-secondary)', border: '1px solid var(--border)' }}
+                onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'var(--border)'; }}
+                onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'var(--bg-subtle)'; }}
+              >
+                {jsonCopied ? <Check className="h-4 w-4" /> : <ClipboardCopy className="h-4 w-4" />}
+              </button>
+            </Tooltip>
+            <Tooltip label={saveStatus === 'saving' ? 'Saving…' : saveStatus === 'saved' ? 'Saved' : 'Save'} side="bottom">
+              <button
+                onClick={handleSave}
+                disabled={saveStatus === 'saving'}
+                className="flex items-center justify-center h-9 w-9 rounded-xl transition-colors disabled:opacity-70"
+                style={saveStatus === 'saved'
+                  ? { background: '#059669', color: '#ffffff' }
+                  : { background: '#2563eb', color: '#ffffff' }
+                }
+              >
+                {saveStatus === 'saving' && <Loader2 className="h-4 w-4 animate-spin" />}
+                {saveStatus === 'saved' && <Check className="h-4 w-4" />}
+                {saveStatus === 'idle' && <Save className="h-4 w-4" />}
+              </button>
+            </Tooltip>
+          </>
+        }
         action={
           <div className="flex items-center gap-2 flex-nowrap justify-end">
-            <button
-              onClick={() => setEditingId(null)}
-              className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors"
-              style={{ background: 'var(--bg-subtle)', color: 'var(--text-secondary)', border: '1px solid var(--border)' }}
-              onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'var(--border)'; }}
-              onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'var(--bg-subtle)'; }}
-            >
-              <ArrowLeft className="h-3.5 w-3.5" /> All Workflows
-            </button>
+            {switchFlowMenu}
 
             <div className="w-px h-5 mx-1" style={{ background: 'var(--border)' }} />
 
@@ -285,34 +331,6 @@ export default function WorkflowsView({ flows, setFlows, openFlowId, onOpenFlow,
             {editingFlow.active && (
               <span className="text-[10px] font-bold bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full border border-emerald-200">ACTIVE</span>
             )}
-
-            <div className="w-px h-5 mx-1" style={{ background: 'var(--border)' }} />
-
-            {/* Common Copy + Save — identical across Diagram, Variables, and JSON */}
-            <button
-              onClick={handleCopy}
-              className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors"
-              style={{ background: 'var(--bg-subtle)', color: 'var(--text-secondary)', border: '1px solid var(--border)' }}
-              onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'var(--border)'; }}
-              onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'var(--bg-subtle)'; }}
-            >
-              {jsonCopied ? <Check className="h-3.5 w-3.5" /> : <ClipboardCopy className="h-3.5 w-3.5" />}
-              {jsonCopied ? 'Copied!' : 'Copy JSON'}
-            </button>
-            <button
-              onClick={handleSave}
-              disabled={saveStatus === 'saving'}
-              className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors disabled:opacity-70"
-              style={saveStatus === 'saved'
-                ? { background: '#059669', color: '#ffffff' }
-                : { background: '#2563eb', color: '#ffffff' }
-              }
-            >
-              {saveStatus === 'saving' && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
-              {saveStatus === 'saved' && <Check className="h-3.5 w-3.5" />}
-              {saveStatus === 'idle' && <Save className="h-3.5 w-3.5" />}
-              {saveStatus === 'saving' ? 'Saving…' : saveStatus === 'saved' ? 'Saved' : 'Save'}
-            </button>
           </div>
         }
       >

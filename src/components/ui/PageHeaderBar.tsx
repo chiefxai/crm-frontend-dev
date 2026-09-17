@@ -41,6 +41,7 @@ export default function PageHeaderBar() {
               <RefreshCw className={`h-4 w-4 ${spinning ? 'animate-spin' : ''}`} />
             </button>
           )}
+          {header.titleActions}
         </div>
         {/* Fixed header height (h-16) keeps every page's header the same
             size regardless of what's in the action slot — a page with no

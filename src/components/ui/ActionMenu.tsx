@@ -71,7 +71,7 @@ export default function ActionMenu({
         </button>
       </Tooltip>
       {open && (
-        <div className={`theme-dropdown absolute right-0 ${triggerVariant === 'primary' ? 'top-11' : 'top-8'} min-w-[180px] rounded-xl shadow-2xl border z-50 overflow-hidden py-1.5`}>
+        <div className={`theme-dropdown absolute right-0 ${triggerVariant === 'primary' ? 'top-11' : 'top-8'} min-w-[180px] max-h-[60vh] overflow-x-hidden overflow-y-auto rounded-xl shadow-2xl border z-50 py-1.5`}>
           {items.map(item => (
             <button
               key={item.key}

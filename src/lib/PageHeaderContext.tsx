@@ -3,6 +3,11 @@ import React, { createContext, useContext, useState } from 'react';
 export interface PageHeaderConfig {
   title: React.ReactNode;
   subtitle?: string;
+  /** Extra controls rendered right after the title/refresh icon, still in
+   * the left-hand title group — for per-page icon actions that should read
+   * as "belonging to this page" (e.g. Copy/Save) rather than sitting in
+   * the right-aligned `action` slot. */
+  titleActions?: React.ReactNode;
   action?: React.ReactNode;
   toolbar?: React.ReactNode;
   /** Reloads just this page's own data. Falls back to the app-wide refresh when omitted. */

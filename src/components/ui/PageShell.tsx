@@ -44,6 +44,11 @@ interface PageShellProps {
   title: React.ReactNode;
   /** Short descriptive line under the title */
   subtitle?: string;
+  /** Extra controls rendered right after the title/refresh icon, still in
+   * the left-hand title group — for per-page icon actions that should read
+   * as "belonging to this page" (e.g. Copy/Save) rather than sitting in
+   * the right-aligned `action` slot. */
+  titleActions?: React.ReactNode;
   /** Buttons / controls placed in the top-right of the header */
   action?: React.ReactNode;
   /** Secondary toolbar row (filters, tabs, search) rendered below the header */
@@ -61,7 +66,7 @@ interface PageShellProps {
   onRefresh?: () => void;
 }
 
-export default function PageShell({ title, subtitle, action, toolbar, children, className = '', layout = 'grid', onRefresh }: PageShellProps) {
+export default function PageShell({ title, subtitle, titleActions, action, toolbar, children, className = '', layout = 'grid', onRefresh }: PageShellProps) {
   const contextRefresh = useRefresh();
   const refresh = onRefresh ?? contextRefresh;
   const [spinning, setSpinning] = React.useState(false);
@@ -94,7 +99,7 @@ export default function PageShell({ title, subtitle, action, toolbar, children, 
   // flash blank on every first visit to a page in development.
   React.useEffect(() => {
     if (!pageHeaderCtx || !isActiveTab) return;
-    pageHeaderCtx.setHeader({ title, subtitle, action, toolbar, onRefresh: refresh });
+    pageHeaderCtx.setHeader({ title, subtitle, titleActions, action, toolbar, onRefresh: refresh });
     // Depend on pageHeaderCtx.setHeader specifically, NOT the pageHeaderCtx
     // object itself — setHeader is a stable useState setter, so this only
     // re-fires on a real prop change. Depending on the whole context object
@@ -106,7 +111,7 @@ export default function PageShell({ title, subtitle, action, toolbar, children, 
     // enough to saturate React's render queue and make the whole app
     // (including sidebar navigation elsewhere) stop responding.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pageHeaderCtx?.setHeader, isActiveTab, title, subtitle, action, toolbar, refresh]);
+  }, [pageHeaderCtx?.setHeader, isActiveTab, title, subtitle, titleActions, action, toolbar, refresh]);
 
   const renderOwnHeader = !pageHeaderCtx;
 
@@ -128,6 +133,7 @@ export default function PageShell({ title, subtitle, action, toolbar, children, 
                 <RefreshCw className={`h-4 w-4 ${spinning ? 'animate-spin' : ''}`} />
               </button>
             )}
+            {titleActions}
           </div>
           {/* Fixed header height (h-16) keeps every page's header the same
               size regardless of what's in the action slot — see
