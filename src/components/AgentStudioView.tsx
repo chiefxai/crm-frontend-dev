@@ -752,6 +752,9 @@ export default function AgentStudioView() {
               className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-xs font-mono text-slate-700 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-amber-400 focus:border-transparent transition-all resize-none"
               placeholder="Write the agent's system prompt here, or apply a preset above…"
             />
+            <p className="text-[10px] text-slate-400 mt-1.5">
+              The agent always introduces itself using the <strong className="font-semibold text-slate-500">Agent Name</strong> above, regardless of what's written here. Use <code className="bg-slate-100 px-1 py-0.5 rounded font-mono">{'{agentName}'}</code> anywhere in this prompt to also reference it inline.
+            </p>
           </div>
 
           <div className="border-t border-slate-100" />
