@@ -243,6 +243,7 @@ export default function WorkflowsView({ flows, setFlows, openFlowId, onOpenFlow,
       <ActionMenu
         triggerIcon={ChevronDown}
         triggerVariant="ghost"
+        align="left"
         tooltipLabel="Switch workflow"
         items={[
           { key: 'home', label: 'All Workflows', icon: Home, onClick: () => setEditingId(null) },
@@ -261,6 +262,7 @@ export default function WorkflowsView({ flows, setFlows, openFlowId, onOpenFlow,
         title={<BreadcrumbTitle group="Workflow Builder" page={editingFlow.name} />}
         subtitle={VIEW_SUBTITLE[editorView]}
         layout="fill"
+        titlePrefix={switchFlowMenu}
         titleActions={
           <>
             <IconButton
@@ -282,10 +284,6 @@ export default function WorkflowsView({ flows, setFlows, openFlowId, onOpenFlow,
         }
         action={
           <div className="flex items-center gap-2 flex-nowrap justify-end">
-            {switchFlowMenu}
-
-            <div className="w-px h-5 mx-1" style={{ background: 'var(--border)' }} />
-
             {/* View toggle */}
             <div className="flex items-center rounded-xl p-0.5 gap-0.5" style={{ background: 'var(--bg-subtle)', border: '1px solid var(--border)' }}>
               {VIEWS.map(({ id, label, icon: Icon }) => (

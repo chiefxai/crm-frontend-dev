@@ -3,6 +3,11 @@ import React, { createContext, useContext, useState } from 'react';
 export interface PageHeaderConfig {
   title: React.ReactNode;
   subtitle?: string;
+  /** Extra controls rendered BEFORE the title (e.g. a workflow switcher
+   * dropdown) — still in the left-hand title group, not clipped by the
+   * title's own truncate styling the way embedding it inside `title`
+   * itself would be. */
+  titlePrefix?: React.ReactNode;
   /** Extra controls rendered right after the title/refresh icon, still in
    * the left-hand title group — for per-page icon actions that should read
    * as "belonging to this page" (e.g. Copy/Save) rather than sitting in

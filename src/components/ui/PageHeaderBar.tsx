@@ -29,6 +29,7 @@ export default function PageHeaderBar() {
     <>
       <div className="shrink-0 h-16 px-8 flex items-center justify-between gap-4 border-b border-slate-100 dark:border-[var(--border)] bg-white dark:bg-[var(--bg-surface)]">
         <div className="min-w-0 flex items-center gap-1.5 shrink-0">
+          {header.titlePrefix}
           <h1 className="text-lg font-semibold tracking-tight text-slate-900 dark:text-[var(--text-primary)] leading-snug truncate">
             {header.title}
           </h1>
@@ -47,11 +48,13 @@ export default function PageHeaderBar() {
             size regardless of what's in the action slot — a page with no
             button and a page with several used to end up visibly
             different heights whenever action content wrapped onto a
-            second line. overflow-x-auto lets a wide action row (e.g. the
-            workflow editor's Back/view-toggle/Copy/Save group) scroll
-            horizontally within the fixed-height header instead of
-            wrapping and growing it. */}
-        <div className="shrink-0 flex items-center gap-2 h-full overflow-x-auto overflow-y-hidden">
+            second line. Deliberately no overflow-x/y here — any non-
+            visible overflow on this ancestor clips an absolutely
+            positioned dropdown (e.g. ActionMenu) opened from inside it,
+            regardless of the dropdown's own z-index; flex-nowrap on the
+            action content itself (see e.g. WorkflowsView.tsx) is what
+            keeps a wide row from wrapping and growing the header. */}
+        <div className="shrink-0 flex items-center gap-2 h-full">
           {header.action && header.action}
         </div>
       </div>

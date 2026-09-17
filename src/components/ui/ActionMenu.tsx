@@ -31,6 +31,11 @@ interface ActionMenuProps {
   disabled?: boolean;
   /** Shows a spinning loader in place of triggerIcon and disables the trigger. */
   loading?: boolean;
+  /** Which edge of the trigger the dropdown hangs from — 'right' (default)
+   * for a trigger docked at the right of its row (most header "+" menus),
+   * 'left' for one docked at the left (e.g. a title-area switcher), so the
+   * menu opens away from the nearest screen edge instead of off it. */
+  align?: 'left' | 'right';
 }
 
 export default function ActionMenu({
@@ -40,6 +45,7 @@ export default function ActionMenu({
   triggerVariant = 'primary',
   disabled = false,
   loading = false,
+  align = 'right',
 }: ActionMenuProps) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -75,7 +81,7 @@ export default function ActionMenu({
         </button>
       </Tooltip>
       {open && (
-        <div className={`theme-dropdown absolute right-0 ${triggerVariant === 'primary' ? 'top-11' : 'top-8'} min-w-[180px] max-h-[60vh] overflow-x-hidden overflow-y-auto rounded-xl shadow-2xl border z-[250] py-1.5`}>
+        <div className={`theme-dropdown absolute ${align === 'left' ? 'left-0' : 'right-0'} ${triggerVariant === 'primary' ? 'top-11' : 'top-8'} min-w-[180px] max-h-[60vh] overflow-x-hidden overflow-y-auto rounded-xl shadow-2xl border z-[250] py-1.5`}>
           {items.map(item => (
             <button
               key={item.key}
