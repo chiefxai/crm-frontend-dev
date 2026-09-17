@@ -17,7 +17,7 @@ interface IconButtonProps {
 
 export default function IconButton({ icon: Icon, label, onClick, variant = 'primary', side = 'bottom', className = '' }: IconButtonProps) {
   const variantCls = variant === 'primary'
-    ? 'bg-blue-600 hover:bg-blue-500 text-white shadow-md shadow-blue-600/10'
+    ? 'bg-[var(--bg-subtle)] hover:bg-[var(--border)] text-blue-600 dark:text-blue-400 border border-[var(--border)]'
     : 'border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 shadow-sm';
 
   return (

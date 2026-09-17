@@ -28,21 +28,21 @@ export default function PageHeaderBar() {
   return (
     <>
       <div className="shrink-0 px-8 py-4 flex items-center justify-between gap-4 border-b border-slate-100 dark:border-[var(--border)] bg-white dark:bg-[var(--bg-surface)]">
-        <div className="min-w-0">
+        <div className="min-w-0 flex items-center gap-1.5">
           <h1 className="text-lg font-semibold tracking-tight text-slate-900 dark:text-[var(--text-primary)] leading-snug truncate">
             {header.title}
           </h1>
-        </div>
-        <div className="shrink-0 flex items-center gap-2">
           {refresh && (
             <button
               onClick={handleRefresh}
               title="Refresh"
-              className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 dark:hover:bg-[var(--bg-subtle)] transition-colors"
+              className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 dark:hover:bg-[var(--bg-subtle)] transition-colors shrink-0"
             >
               <RefreshCw className={`h-4 w-4 ${spinning ? 'animate-spin' : ''}`} />
             </button>
           )}
+        </div>
+        <div className="shrink-0 flex items-center gap-2">
           {header.action && header.action}
         </div>
       </div>
