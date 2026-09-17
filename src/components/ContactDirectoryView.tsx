@@ -38,6 +38,11 @@ interface ContactDirectoryViewProps {
   setLeads: React.Dispatch<React.SetStateAction<Lead[]>>;
   industry?: string;
   callLogs?: CallLog[];
+  // Non-lending orgs store contacts as Industry Objects records, not rows
+  // in the lending `leads` table — this is that object type's key, needed
+  // to hit the right delete/update route (see App.tsx's own primaryObject
+  // state). Undefined for lending orgs.
+  primaryObjectKey?: string;
 }
 
 const NO_GROUP = '__no_group__';
@@ -46,7 +51,8 @@ export default function ContactDirectoryView({
   leads,
   setLeads,
   industry,
-  callLogs = []
+  callLogs = [],
+  primaryObjectKey
 }: ContactDirectoryViewProps) {
   // Loan-specific fields (employer/income/credit score/DTI) only make
   // sense for lending — every other industry's contacts are real Industry
@@ -211,7 +217,11 @@ export default function ContactDirectoryView({
     setFormGroupIds(prev => prev.includes(groupId) ? prev.filter(g => g !== groupId) : [...prev, groupId]);
   };
 
-  // Submit single/edited lead
+  // Submit single/edited lead. setLeads keeps the optimistic local update
+  // (and still feeds App.tsx's own leads-sync effect for the create case,
+  // or as a backstop), but an edit also fires its PATCH here directly
+  // instead of waiting on that effect, so the save is immediate and not
+  // silently dependent on the debounced diff ever detecting the change.
   const handleSaveContact = (e: React.FormEvent) => {
     e.preventDefault();
     if (!formName.trim() || !formPhone.trim() || !formEmail.trim()) {
@@ -221,9 +231,10 @@ export default function ContactDirectoryView({
 
     if (editingLead) {
       // Edit mode
+      let updatedLead: Lead | null = null;
       const updatedLeads = leads.map((l) => {
         if (l.id === editingLead.id) {
-          return {
+          updatedLead = {
             ...l,
             name: formName,
             phone: formPhone,
@@ -239,10 +250,24 @@ export default function ContactDirectoryView({
               debtToIncome: parseFloat(formDti) || 0.3
             }
           };
+          return updatedLead;
         }
         return l;
       });
       setLeads(updatedLeads);
+      // Non-lending orgs (primaryObjectKey set) are Industry Objects
+      // records with per-pack field names — App.tsx's own leads-sync
+      // effect already knows how to map a Lead back into that shape
+      // (leadToRecordPatch) and picks this edit up from the setLeads
+      // above, so only the lending case — a plain `leads` table row —
+      // is safe to PATCH directly here with the raw lead body.
+      if (updatedLead && !primaryObjectKey) {
+        apiFetch(`/api/leads/${editingLead.id}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(updatedLead)
+        }).catch((err) => console.error('Error saving contact:', err));
+      }
     } else {
       // Create mode — no group selected means "no group" (solo contact),
       // addable to one later from the edit modal.
@@ -271,10 +296,25 @@ export default function ContactDirectoryView({
     setIsAddModalOpen(false);
   };
 
-  // Delete lead
-  const handleDeleteContact = (id: string, name: string) => {
-    if (confirm(`Are you sure you want to delete ${name} from your contact directory?`)) {
-      setLeads(leads.filter((l) => l.id !== id));
+  // Delete lead. The App.tsx-level leads-sync effect only ever diffs
+  // leads that are still PRESENT in the array (create/update) — it never
+  // notices one going missing, so a removed contact was never actually
+  // deleted server-side. Call the real delete route directly, with an
+  // optimistic local removal rolled back if the request fails.
+  const handleDeleteContact = async (id: string, name: string) => {
+    if (!confirm(`Are you sure you want to delete ${name} from your contact directory?`)) return;
+    const previous = leads;
+    setLeads(leads.filter((l) => l.id !== id));
+    try {
+      const url = primaryObjectKey
+        ? `/api/objects/${primaryObjectKey}/records/${id}`
+        : `/api/leads/${id}`;
+      const res = await apiFetch(url, { method: 'DELETE' });
+      if (!res.ok) throw new Error(`Delete failed (${res.status})`);
+    } catch (err) {
+      console.error('Error deleting contact:', err);
+      alert('Failed to delete contact — restoring.');
+      setLeads(previous);
     }
   };
 

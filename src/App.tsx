@@ -791,6 +791,7 @@ export default function App() {
             setLeads={setLeads}
             industry={orgSettings.industry}
             callLogs={callLogs}
+            primaryObjectKey={primaryObject?.key}
           />
         );
       case 'call-logs':
