@@ -15,6 +15,8 @@ import {
   Braces,
   ClipboardCopy,
   Check,
+  Save,
+  Loader2,
 } from 'lucide-react';
 import { QuestionFlow, WorkflowVariable } from './types';
 import QuestionFlowBuilder from './QuestionFlowBuilder';
@@ -24,6 +26,7 @@ import Widget from '../../components/ui/Widget';
 import Modal from '../../components/ui/Modal';
 import IconButton from '../../components/ui/IconButton';
 import DataTable, { Column } from '../../components/ui/DataTable';
+import { apiFetch } from '../../lib/api';
 
 function uid(prefix: string) {
   return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
@@ -55,6 +58,7 @@ export default function WorkflowsView({ flows, setFlows }: WorkflowsViewProps) {
   const [jsonError, setJsonError] = useState<string | null>(null);
   const [newName, setNewName] = useState('');
   const [creating, setCreating] = useState(false);
+  const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved'>('idle');
 
   const editingFlow = flows.find(f => f.id === editingId);
 
@@ -100,6 +104,88 @@ export default function WorkflowsView({ flows, setFlows }: WorkflowsViewProps) {
       { id: 'json'      as const, label: 'JSON',       icon: Braces    },
     ];
 
+    // Hoisted out of the JSON-only view so the common Copy/Save toolbar
+    // below can use the same serialized workflow no matter which of the
+    // three views (diagram/variables/json) is currently showing.
+    const cleanVar = (v: WorkflowVariable): object => ({
+      name: v.name,
+      questionText: v.questionText,
+      dataType: v.dataType,
+      ...((v.branches ?? []).length > 0 ? {
+        branches: (v.branches ?? []).map(b => ({
+          condition: b.condition,
+          followUp: (b.variables ?? []).map(cleanVar)
+        }))
+      } : {})
+    });
+    const cleanJson = {
+      name: editingFlow.name,
+      ...(editingFlow.description ? { description: editingFlow.description } : {}),
+      questions: (editingFlow.variables ?? []).map(cleanVar)
+    };
+    const jsonStr = jsonEditText ?? JSON.stringify(cleanJson, null, 2);
+
+    const applyJson = () => {
+      try {
+        const parsed = JSON.parse(jsonStr);
+        const questions: WorkflowVariable[] = (parsed.questions ?? []).map((q: any, i: number) => ({
+          id: `v-import-${Date.now()}-${i}`,
+          name: q.name || `question_${i + 1}`,
+          questionText: q.questionText || q.question || '',
+          dataType: q.dataType || 'text',
+          branches: (q.branches ?? []).map((b: any, bi: number) => ({
+            id: `b-import-${Date.now()}-${i}-${bi}`,
+            condition: b.condition || '',
+            variables: (b.followUp ?? b.variables ?? []).map((fv: any, fi: number) => ({
+              id: `v-import-${Date.now()}-${i}-${bi}-${fi}`,
+              name: fv.name || `followup_${fi + 1}`,
+              questionText: fv.questionText || fv.question || '',
+              dataType: fv.dataType || 'text',
+              branches: [],
+            })),
+          })),
+        }));
+        handleFlowChange({
+          ...editingFlow,
+          name: parsed.name || editingFlow.name,
+          description: parsed.description || editingFlow.description,
+          variables: questions,
+          nodes: [],
+          edges: [],
+        });
+        setJsonEditText(null);
+        setJsonError(null);
+        setEditorView('variables');
+      } catch (e: any) {
+        setJsonError(e.message);
+      }
+    };
+
+    // Common to all three views: copies the workflow as JSON.
+    const handleCopy = () => {
+      navigator.clipboard.writeText(jsonStr);
+      setJsonCopied(true);
+      setTimeout(() => setJsonCopied(false), 2000);
+    };
+
+    // Common to all three views: workflow edits already auto-persist via
+    // App.tsx's debounced /api/question-flows/sync, but that sync waits
+    // ~800ms after the last change and gives no visible confirmation. This
+    // flushes the current flow list immediately and shows a Saved state so
+    // "Save" here is a real, immediate write, not just cosmetic.
+    const handleSave = async () => {
+      setSaveStatus('saving');
+      try {
+        const res = await apiFetch('/api/question-flows/sync', { method: 'POST', body: JSON.stringify(flows) });
+        if (!res.ok) throw new Error();
+        setSaveStatus('saved');
+        setTimeout(() => setSaveStatus('idle'), 1500);
+      } catch {
+        setSaveStatus('idle');
+        alert('Failed to save workflow.');
+      }
+    };
+
     return (
       <PageShell
         title={editingFlow.name}
@@ -141,6 +227,10 @@ export default function WorkflowsView({ flows, setFlows }: WorkflowsViewProps) {
             {editingFlow.active && (
               <span className="text-[10px] font-bold bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full border border-emerald-200">ACTIVE</span>
             )}
+          </div>
+        }
+        toolbar={
+          <div className="flex items-center justify-between w-full">
             <button
               onClick={() => setEditingId(null)}
               className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors"
@@ -150,6 +240,34 @@ export default function WorkflowsView({ flows, setFlows }: WorkflowsViewProps) {
             >
               <ArrowLeft className="h-3.5 w-3.5" /> All Workflows
             </button>
+
+            {/* Common Copy + Save — identical across Diagram, Variables, and JSON */}
+            <div className="flex items-center gap-2">
+              <button
+                onClick={handleCopy}
+                className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors"
+                style={{ background: 'var(--bg-subtle)', color: 'var(--text-secondary)', border: '1px solid var(--border)' }}
+                onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'var(--border)'; }}
+                onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'var(--bg-subtle)'; }}
+              >
+                {jsonCopied ? <Check className="h-3.5 w-3.5" /> : <ClipboardCopy className="h-3.5 w-3.5" />}
+                {jsonCopied ? 'Copied!' : 'Copy JSON'}
+              </button>
+              <button
+                onClick={handleSave}
+                disabled={saveStatus === 'saving'}
+                className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors disabled:opacity-70"
+                style={saveStatus === 'saved'
+                  ? { background: '#059669', color: '#ffffff' }
+                  : { background: '#2563eb', color: '#ffffff' }
+                }
+              >
+                {saveStatus === 'saving' && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                {saveStatus === 'saved' && <Check className="h-3.5 w-3.5" />}
+                {saveStatus === 'idle' && <Save className="h-3.5 w-3.5" />}
+                {saveStatus === 'saving' ? 'Saving…' : saveStatus === 'saved' ? 'Saved' : 'Save'}
+              </button>
+            </div>
           </div>
         }
       >
@@ -169,104 +287,36 @@ export default function WorkflowsView({ flows, setFlows }: WorkflowsViewProps) {
               }}
             />
           )}
-          {editorView === 'json' && (() => {
-            const cleanVar = (v: WorkflowVariable): object => ({
-              name: v.name,
-              questionText: v.questionText,
-              dataType: v.dataType,
-              ...((v.branches ?? []).length > 0 ? {
-                branches: (v.branches ?? []).map(b => ({
-                  condition: b.condition,
-                  followUp: (b.variables ?? []).map(cleanVar)
-                }))
-              } : {})
-            });
-            const cleanJson = {
-              name: editingFlow.name,
-              ...(editingFlow.description ? { description: editingFlow.description } : {}),
-              questions: (editingFlow.variables ?? []).map(cleanVar)
-            };
-            const jsonStr = jsonEditText ?? JSON.stringify(cleanJson, null, 2);
-
-            const applyJson = () => {
-              try {
-                const parsed = JSON.parse(jsonStr);
-                const questions: WorkflowVariable[] = (parsed.questions ?? []).map((q: any, i: number) => ({
-                  id: `v-import-${Date.now()}-${i}`,
-                  name: q.name || `question_${i + 1}`,
-                  questionText: q.questionText || q.question || '',
-                  dataType: q.dataType || 'text',
-                  branches: (q.branches ?? []).map((b: any, bi: number) => ({
-                    id: `b-import-${Date.now()}-${i}-${bi}`,
-                    condition: b.condition || '',
-                    variables: (b.followUp ?? b.variables ?? []).map((fv: any, fi: number) => ({
-                      id: `v-import-${Date.now()}-${i}-${bi}-${fi}`,
-                      name: fv.name || `followup_${fi + 1}`,
-                      questionText: fv.questionText || fv.question || '',
-                      dataType: fv.dataType || 'text',
-                      branches: [],
-                    })),
-                  })),
-                }));
-                handleFlowChange({
-                  ...editingFlow,
-                  name: parsed.name || editingFlow.name,
-                  description: parsed.description || editingFlow.description,
-                  variables: questions,
-                  nodes: [],
-                  edges: [],
-                });
-                setJsonEditText(null);
-                setJsonError(null);
-                setEditorView('variables');
-              } catch (e: any) {
-                setJsonError(e.message);
-              }
-            };
-
-            return (
-              <div className="h-full flex flex-col" style={{ background: '#0f172a' }}>
-                <div className="flex items-center justify-between px-5 py-3 border-b shrink-0" style={{ borderColor: '#1e293b' }}>
-                  <div className="flex items-center gap-2">
-                    <Braces className="h-4 w-4" style={{ color: '#f59e0b' }} />
-                    <span className="text-xs font-bold" style={{ color: '#f1f5f9' }}>Workflow JSON</span>
-                    <span className="text-[10px] px-2 py-0.5 rounded-full font-semibold" style={{ background: '#1e293b', color: '#64748b' }}>editable · paste or type</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <button
-                      onClick={() => { navigator.clipboard.writeText(jsonStr); setJsonCopied(true); setTimeout(() => setJsonCopied(false), 2000); }}
-                      className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors"
-                      style={{ background: jsonCopied ? '#064e3b' : '#1e293b', color: jsonCopied ? '#34d399' : '#94a3b8' }}
-                    >
-                      {jsonCopied ? <Check className="h-3.5 w-3.5" /> : <ClipboardCopy className="h-3.5 w-3.5" />}
-                      {jsonCopied ? 'Copied!' : 'Copy'}
-                    </button>
-                    <button
-                      onClick={applyJson}
-                      className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors"
-                      style={{ background: '#2563eb', color: '#ffffff' }}
-                    >
-                      <Check className="h-3.5 w-3.5" /> Apply JSON
-                    </button>
-                  </div>
-                </div>
-                {jsonError && (
-                  <div className="px-5 py-2 text-xs font-mono shrink-0" style={{ background: '#450a0a', color: '#fca5a5' }}>
-                    ⚠ {jsonError}
-                  </div>
-                )}
-                <div className="flex-1 overflow-hidden p-5">
-                  <textarea
-                    className="w-full h-full resize-none font-mono text-xs leading-relaxed outline-none border-0 bg-transparent"
-                    style={{ color: '#e2e8f0', caretColor: '#f59e0b' }}
-                    value={jsonStr}
-                    onChange={e => { setJsonEditText(e.target.value); setJsonError(null); }}
-                    spellCheck={false}
-                  />
-                </div>
+          {editorView === 'json' && (
+            <div className="h-full flex flex-col" style={{ background: 'var(--bg-surface)' }}>
+              <div className="flex items-center gap-2 px-5 py-3 border-b shrink-0" style={{ borderColor: 'var(--border)' }}>
+                <Braces className="h-4 w-4" style={{ color: '#d97706' }} />
+                <span className="text-xs font-bold" style={{ color: 'var(--text-primary)' }}>Workflow JSON</span>
+                <span className="text-[10px] px-2 py-0.5 rounded-full font-semibold" style={{ background: 'var(--bg-subtle)', color: 'var(--text-muted)' }}>editable · paste or type</span>
+                <button
+                  onClick={applyJson}
+                  className="ml-auto flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors"
+                  style={{ background: '#2563eb', color: '#ffffff' }}
+                >
+                  <Check className="h-3.5 w-3.5" /> Apply JSON
+                </button>
               </div>
-            );
-          })()}
+              {jsonError && (
+                <div className="px-5 py-2 text-xs font-mono shrink-0" style={{ background: '#450a0a', color: '#fca5a5' }}>
+                  ⚠ {jsonError}
+                </div>
+              )}
+              <div className="flex-1 overflow-hidden p-5">
+                <textarea
+                  className="w-full h-full resize-none font-mono text-xs leading-relaxed outline-none border-0 bg-transparent"
+                  style={{ color: 'var(--text-primary)', caretColor: '#d97706' }}
+                  value={jsonStr}
+                  onChange={e => { setJsonEditText(e.target.value); setJsonError(null); }}
+                  spellCheck={false}
+                />
+              </div>
+            </div>
+          )}
         </div>
       </PageShell>
     );
