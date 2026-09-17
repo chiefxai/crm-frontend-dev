@@ -1660,9 +1660,9 @@ Currently on question ${nextIndex} out of ${selectedTask.questions.length}. Next
                       <span className="text-xs font-bold text-[var(--text-primary)] line-clamp-1 flex-1">{task.name}</span>
                       <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded shrink-0 ${
                         task.status === 'Completed'
-                          ? 'bg-emerald-50 text-emerald-700'
+                          ? 'bg-emerald-700 text-emerald-50'
                           : task.status === 'In Progress'
-                          ? 'bg-blue-50 text-blue-700 animate-pulse'
+                          ? 'bg-blue-700 text-blue-50 animate-pulse'
                           : 'bg-[var(--bg-subtle)] text-[var(--text-secondary)]'
                       }`}>
                         {task.status}
@@ -2099,8 +2099,8 @@ Currently on question ${nextIndex} out of ${selectedTask.questions.length}. Next
                   >
                     <div className="flex justify-between items-start w-full gap-2">
                       <span className="text-xs font-bold text-[var(--text-primary)] font-mono">{vNum.number}</span>
-                      <span className="text-[8px] font-mono font-bold bg-emerald-50 text-emerald-700 px-1.5 py-0.5 rounded border border-emerald-200 flex items-center gap-1">
-                        <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                      <span className="text-[8px] font-mono font-bold bg-emerald-700 text-emerald-50 px-1.5 py-0.5 rounded flex items-center gap-1">
+                        <span className="h-1.5 w-1.5 rounded-full bg-emerald-300 animate-pulse"></span>
                         {vNum.status}
                       </span>
                     </div>
