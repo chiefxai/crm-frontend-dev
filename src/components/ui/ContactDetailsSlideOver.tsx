@@ -1,8 +1,9 @@
 import React from 'react';
-import { Phone, Mail, Tag, FileText, Calendar } from 'lucide-react';
+import { Phone, Mail, Tag, FileText, Calendar, Check } from 'lucide-react';
 import { Lead, PipelineStageLabel } from '../../types';
 import { formatPhone } from '../../lib/phone';
 import { stageLabel } from '../../lib/pipelineStages';
+import { apiFetch } from '../../lib/api';
 import SlideOver from './SlideOver';
 import Badge from './Badge';
 
@@ -16,13 +17,43 @@ interface ContactDetailsSlideOverProps {
   stages: PipelineStageLabel[];
   /** Page-specific action buttons (e.g. "Advance to Opportunity") rendered below the details. */
   actions?: React.ReactNode;
+  /**
+   * The lead's most recent call with extracted workflow answers, if any —
+   * pass the callId from that dialer task's callResults (same source
+   * DialerSimulator's "Workflow View" reads from). When set, this panel
+   * fetches and shows the same "Extracted Campaign Answers" the Active
+   * Campaign List's Workflow View shows for this lead, so Leads/Pipeline
+   * don't need to duplicate that fetch+render themselves.
+   */
+  callId?: string | null;
 }
+
+interface ExtractedAnswerRow { label: string; dataType?: string; answer: string }
 
 // Common right-sidebar contact detail view — shared by LeadsView and
 // PipelineView (and anywhere else that needs "click a row, see the full
 // contact" without duplicating this panel). Read-only: editing a contact
 // stays in Contact Directory, which already owns that flow.
-export default function ContactDetailsSlideOver({ lead, onClose, stages, actions }: ContactDetailsSlideOverProps) {
+export default function ContactDetailsSlideOver({ lead, onClose, stages, actions, callId }: ContactDetailsSlideOverProps) {
+  const [answerRows, setAnswerRows] = React.useState<ExtractedAnswerRow[]>([]);
+
+  React.useEffect(() => {
+    if (!callId) { setAnswerRows([]); return; }
+    let cancelled = false;
+    apiFetch(`/api/calls/${encodeURIComponent(callId)}/lead-responses`)
+      .then((r) => (r.ok ? r.json() : []))
+      .then((rows: { label?: string; question: string; answer: string; dataType?: string | null }[] | null) => {
+        if (cancelled) return;
+        setAnswerRows(
+          (rows || [])
+            .filter((row) => row.label && row.answer)
+            .map((row) => ({ label: row.label as string, dataType: row.dataType || undefined, answer: row.answer }))
+        );
+      })
+      .catch(() => { if (!cancelled) setAnswerRows([]); });
+    return () => { cancelled = true; };
+  }, [callId]);
+
   return (
     <SlideOver
       open={!!lead}
@@ -73,6 +104,34 @@ export default function ContactDetailsSlideOver({ lead, onClose, stages, actions
               <div className="rounded-xl p-3 border" style={{ background: 'var(--bg-subtle)', borderColor: 'var(--border)' }}>
                 <p className="text-[10px] font-bold uppercase tracking-widest mb-1" style={{ color: 'var(--text-muted)' }}>Monthly Income</p>
                 <p className="text-sm font-semibold text-slate-700">${(lead.financialInfo.monthlyIncome || 0).toLocaleString()}</p>
+              </div>
+            </div>
+          )}
+
+          {answerRows.length > 0 && (
+            <div>
+              <p className="text-[10px] font-bold uppercase tracking-widest mb-2 flex items-center gap-1.5" style={{ color: 'var(--text-muted)' }}>
+                <Check className="h-3 w-3 text-emerald-500" /> Extracted Campaign Answers
+              </p>
+              <div className="space-y-2">
+                {answerRows.map((row, i) => (
+                  <div key={i} className="p-2.5 rounded-xl border space-y-1.5" style={{ background: 'var(--bg-subtle)', borderColor: 'var(--border)' }}>
+                    <div className="flex items-center gap-2">
+                      <span className="font-mono text-xs font-bold" style={{ color: 'var(--text-primary)' }}>{row.label}</span>
+                      {row.dataType && (
+                        <span className="text-[9px] uppercase tracking-wide font-bold px-1.5 py-0.5 rounded border shrink-0" style={{ color: 'var(--text-muted)', borderColor: 'var(--border)' }}>
+                          {row.dataType}
+                        </span>
+                      )}
+                    </div>
+                    <div className="rounded-lg px-2.5 py-2 border" style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)' }}>
+                      <div className="text-emerald-600 flex items-start gap-1.5 text-xs">
+                        <span className="text-emerald-500 font-bold shrink-0">✓</span>
+                        <p style={{ color: 'var(--text-primary)' }}>{row.answer}</p>
+                      </div>
+                    </div>
+                  </div>
+                ))}
               </div>
             </div>
           )}

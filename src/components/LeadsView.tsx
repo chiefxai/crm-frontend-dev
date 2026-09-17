@@ -38,12 +38,28 @@ interface CampaignTask {
   name: string;
   leadIds: string[];
   createdAt: string;
+  // Present on the real dialerTasks rows App.tsx passes down (typed
+  // loosely as any[] there) — only the callId is needed here, to fetch
+  // the same "Extracted Campaign Answers" the Active Campaign List's own
+  // Workflow View shows for this lead.
+  callResults?: { [leadId: string]: { callId?: string } };
 }
 
 interface LeadsViewProps {
   leads: Lead[];
   setLeads: React.Dispatch<React.SetStateAction<Lead[]>>;
   dialerTasks?: CampaignTask[];
+}
+
+// The most recent call (by owning task's createdAt) that has a callId for
+// this lead, across every campaign it's ever been part of — same data
+// DialerSimulator's Workflow View reads from, just not scoped to one
+// selected task here since Leads has no single "selected campaign".
+function latestCallIdForLead(leadId: string, dialerTasks: CampaignTask[]): string | null {
+  const withCallId = [...dialerTasks]
+    .filter((t) => t.callResults?.[leadId]?.callId)
+    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  return withCallId[0]?.callResults?.[leadId]?.callId ?? null;
 }
 
 export default function LeadsView({ leads, setLeads, dialerTasks = [] }: LeadsViewProps) {
@@ -208,6 +224,7 @@ export default function LeadsView({ leads, setLeads, dialerTasks = [] }: LeadsVi
         lead={selectedLead}
         onClose={() => setSelectedLead(null)}
         stages={stages}
+        callId={selectedLead ? latestCallIdForLead(selectedLead.id, dialerTasks) : null}
         actions={selectedLead && (
           <div className="flex items-center gap-2">
             <button
