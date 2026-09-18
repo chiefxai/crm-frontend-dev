@@ -498,35 +498,40 @@ export default function AgentStudioView() {
                       ))}
                     </div>
 
-                    {/* Inbound + Outbound number badges */}
-                    <div className="mt-auto grid grid-cols-2 gap-1.5">
-                      {agent.assignedNumber ? (
-                        <div className="flex items-center gap-1.5 px-2 py-1.5 bg-emerald-50 border border-emerald-200 rounded-lg min-w-0">
-                          <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse shrink-0" />
-                          <div className="min-w-0">
-                            <p className="text-[8px] font-semibold text-emerald-500 uppercase tracking-wider leading-tight">In</p>
-                            <p className="text-[11px] font-bold text-emerald-700 truncate leading-tight">{agent.assignedNumber.number}</p>
+                    {/* Number badge — an agent is either Inbound or Outbound
+                        (see Call Type), never both, so show only the one
+                        number that's actually relevant to it. */}
+                    <div className="mt-auto">
+                      {agent.callType === 'OUTBOUND' ? (
+                        agent.outboundNumber ? (
+                          <div className="flex items-center gap-1.5 px-2 py-1.5 bg-violet-50 border border-violet-200 rounded-lg min-w-0">
+                            <Zap className="h-3 w-3 text-violet-500 shrink-0" />
+                            <div className="min-w-0">
+                              <p className="text-[8px] font-semibold text-violet-500 uppercase tracking-wider leading-tight">Outbound</p>
+                              <p className="text-[11px] font-bold text-violet-700 truncate leading-tight">{agent.outboundNumber.number}</p>
+                            </div>
                           </div>
-                        </div>
-                      ) : (
-                        <div className="flex items-center gap-1.5 px-2 py-1.5 bg-slate-50 border border-dashed border-slate-300 rounded-lg min-w-0">
-                          <PhoneOff className="h-3 w-3 text-slate-400 shrink-0" />
-                          <p className="text-[10px] text-slate-400 truncate">No inbound</p>
-                        </div>
-                      )}
-                      {agent.outboundNumber ? (
-                        <div className="flex items-center gap-1.5 px-2 py-1.5 bg-violet-50 border border-violet-200 rounded-lg min-w-0">
-                          <Zap className="h-3 w-3 text-violet-500 shrink-0" />
-                          <div className="min-w-0">
-                            <p className="text-[8px] font-semibold text-violet-500 uppercase tracking-wider leading-tight">Out</p>
-                            <p className="text-[11px] font-bold text-violet-700 truncate leading-tight">{agent.outboundNumber.number}</p>
+                        ) : (
+                          <div className="flex items-center gap-1.5 px-2 py-1.5 bg-slate-50 border border-dashed border-slate-300 rounded-lg min-w-0">
+                            <Zap className="h-3 w-3 text-slate-400 shrink-0" />
+                            <p className="text-[10px] text-slate-400 truncate">Outbound · org default</p>
                           </div>
-                        </div>
+                        )
                       ) : (
-                        <div className="flex items-center gap-1.5 px-2 py-1.5 bg-slate-50 border border-dashed border-slate-300 rounded-lg min-w-0">
-                          <Zap className="h-3 w-3 text-slate-400 shrink-0" />
-                          <p className="text-[10px] text-slate-400 truncate">Org default</p>
-                        </div>
+                        agent.assignedNumber ? (
+                          <div className="flex items-center gap-1.5 px-2 py-1.5 bg-emerald-50 border border-emerald-200 rounded-lg min-w-0">
+                            <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse shrink-0" />
+                            <div className="min-w-0">
+                              <p className="text-[8px] font-semibold text-emerald-500 uppercase tracking-wider leading-tight">Inbound</p>
+                              <p className="text-[11px] font-bold text-emerald-700 truncate leading-tight">{agent.assignedNumber.number}</p>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="flex items-center gap-1.5 px-2 py-1.5 bg-slate-50 border border-dashed border-slate-300 rounded-lg min-w-0">
+                            <PhoneOff className="h-3 w-3 text-slate-400 shrink-0" />
+                            <p className="text-[10px] text-slate-400 truncate">Inbound · no number</p>
+                          </div>
+                        )
                       )}
                     </div>
                   </div>
