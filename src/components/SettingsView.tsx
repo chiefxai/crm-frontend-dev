@@ -43,6 +43,11 @@ interface SettingsViewProps {
   setOrgSettings: React.Dispatch<React.SetStateAction<OrganizationSettings>>;
   costPerMinuteInr?: number;
   phoneCostPerMinute?: number;
+  // Platform-set (super admin "Cost" page) AI-token cost and call-provider
+  // rate for this org's current billing period. Null when not yet priced.
+  aiTokenCost?: { providerLabel: string; ratePer1kTokens: number; taxPercent: number; baseCost: number; taxAmount: number; totalCost: number } | null;
+  aiTokenUsage?: { totalTokens: number; totalInputTokens: number; totalOutputTokens: number; callCount: number } | null;
+  callProviderRate?: { key: string; label: string; rateUnit: 'minute' | 'hour'; rateAmount: number; taxPercent: number } | null;
   activeSubTab?: 'numbers' | 'team' | 'billing' | 'api';
   setActiveSubTab?: (sub: string) => void;
   currentUserEmail?: string;
@@ -101,6 +106,9 @@ export default function SettingsView({
   setOrgSettings,
   costPerMinuteInr = COST_PER_MINUTE_INR_FALLBACK,
   phoneCostPerMinute = 8,
+  aiTokenCost = null,
+  aiTokenUsage = null,
+  callProviderRate = null,
   activeSubTab: activeSubTabProp,
   setActiveSubTab: setActiveSubTabProp,
   currentUserEmail,
@@ -869,11 +877,38 @@ export default function SettingsView({
                     <strong className="text-md text-slate-800 font-mono">{formatInr(orgSettings.aiMinutesUsed * costPerMinuteInr)}</strong>
                   </div>
                   <div className="bg-slate-50 p-4 rounded-xl text-center">
-                    <span className="text-[10px] text-slate-400 uppercase tracking-wider block">Phone Charges ({currencySymbol()}{phoneCostPerMinute}/min)</span>
+                    <span className="text-[10px] text-slate-400 uppercase tracking-wider block">
+                      {callProviderRate
+                        ? `${callProviderRate.label} Charges (${currencySymbol()}${callProviderRate.rateAmount}/${callProviderRate.rateUnit}${callProviderRate.taxPercent ? ` +${callProviderRate.taxPercent}% tax` : ''})`
+                        : `Phone Charges (${currencySymbol()}${phoneCostPerMinute}/min)`}
+                    </span>
                     <strong className="text-md text-slate-800 font-mono">{formatCurrency(orgSettings.phoneCharges)}</strong>
                   </div>
                 </div>
               </Widget>
+
+              {aiTokenCost && (
+                <Widget title="AI Token Cost This Period" icon={CreditCard} accent="#6366f1" padding="md">
+                  <div className="grid grid-cols-3 gap-4 pt-2">
+                    <div className="bg-slate-50 p-4 rounded-xl text-center">
+                      <span className="text-[10px] text-slate-400 uppercase tracking-wider block">Tokens Used</span>
+                      <strong className="text-md text-slate-800 font-mono">{(aiTokenUsage?.totalTokens ?? 0).toLocaleString()}</strong>
+                    </div>
+                    <div className="bg-slate-50 p-4 rounded-xl text-center">
+                      <span className="text-[10px] text-slate-400 uppercase tracking-wider block">
+                        {aiTokenCost.providerLabel} Rate (₹{aiTokenCost.ratePer1kTokens}/1k tokens)
+                      </span>
+                      <strong className="text-md text-slate-800 font-mono">{formatInr(aiTokenCost.baseCost)}</strong>
+                    </div>
+                    <div className="bg-slate-50 p-4 rounded-xl text-center">
+                      <span className="text-[10px] text-slate-400 uppercase tracking-wider block">
+                        Total {aiTokenCost.taxPercent ? `(incl. ${aiTokenCost.taxPercent}% tax)` : ''}
+                      </span>
+                      <strong className="text-md text-slate-800 font-mono">{formatInr(aiTokenCost.totalCost)}</strong>
+                    </div>
+                  </div>
+                </Widget>
+              )}
 
               {/* Gemini Live model usage & cost — see
                   docs/ai-usage-tracking.md. Every figure here is an

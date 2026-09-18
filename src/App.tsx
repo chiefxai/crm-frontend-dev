@@ -355,6 +355,14 @@ export default function App() {
   // "Phone Charges" figure, which the backend now actually accrues per call
   // (previously always 0 — nothing wrote to organizations.phone_charges).
   const [phoneCostPerMinute, setPhoneCostPerMinute] = useState<number>(8);
+  // AI token cost + call-provider rate/tax for the current billing period,
+  // computed server-side from the super admin's Cost page rates (see
+  // billingEngine.js's getBillingInfo). Null fields mean "not priced yet"
+  // (no admin-set rate for that provider) rather than "free" — Billing &
+  // Usage should only show a cost line once these are non-null.
+  const [aiTokenCost, setAiTokenCost] = useState<{ providerLabel: string; ratePer1kTokens: number; taxPercent: number; baseCost: number; taxAmount: number; totalCost: number } | null>(null);
+  const [aiTokenUsage, setAiTokenUsage] = useState<{ totalTokens: number; totalInputTokens: number; totalOutputTokens: number; callCount: number } | null>(null);
+  const [callProviderRate, setCallProviderRate] = useState<{ key: string; label: string; rateUnit: 'minute' | 'hour'; rateAmount: number; taxPercent: number } | null>(null);
   // Non-lending orgs have no `leads` table rows at all — their real
   // contacts live as Industry Objects records instead. When set, `leads`
   // is populated from this object's records (mapped via
@@ -450,6 +458,9 @@ export default function App() {
       if (Array.isArray(resTeam)) setTeamMembers(resTeam);
       if (resBilling && typeof resBilling.costPerMinuteInr === 'number') setCostPerMinuteInr(resBilling.costPerMinuteInr);
       if (resBilling && typeof resBilling.phoneCostPerMinute === 'number') setPhoneCostPerMinute(resBilling.phoneCostPerMinute);
+      if (resBilling && resBilling.aiTokenCost) setAiTokenCost(resBilling.aiTokenCost);
+      if (resBilling && resBilling.aiTokenUsage) setAiTokenUsage(resBilling.aiTokenUsage);
+      if (resBilling && resBilling.callProvider) setCallProviderRate(resBilling.callProvider);
       if (resOrg && Object.keys(resOrg).length > 0) setOrgSettings({ ...EMPTY_ORG_SETTINGS, ...resOrg });
       if (Array.isArray(resDialerTasks)) setDialerTasks(resDialerTasks);
       if (Array.isArray(resQuestionFlows) && resQuestionFlows.length > 0)
@@ -882,6 +893,9 @@ export default function App() {
             setOrgSettings={setOrgSettings}
             costPerMinuteInr={costPerMinuteInr}
             phoneCostPerMinute={phoneCostPerMinute}
+            aiTokenCost={aiTokenCost}
+            aiTokenUsage={aiTokenUsage}
+            callProviderRate={callProviderRate}
             activeSubTab={activeSubTab as 'numbers' | 'team' | 'billing' | 'api'}
             setActiveSubTab={setActiveSubTab}
             currentUserEmail={kcUser?.email}

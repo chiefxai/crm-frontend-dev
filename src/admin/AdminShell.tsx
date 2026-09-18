@@ -1,5 +1,5 @@
 import React from 'react';
-import { Globe2, LayoutDashboard, Building2, Users, PhoneCall, ScrollText, LogOut, Settings } from 'lucide-react';
+import { Globe2, LayoutDashboard, Building2, Users, PhoneCall, ScrollText, LogOut, Settings, IndianRupee } from 'lucide-react';
 import { Routes, Route, NavLink, Navigate, useNavigate } from 'react-router-dom';
 import OverviewPage from './OverviewPage';
 import OrganizationsPage from './OrganizationsPage';
@@ -7,6 +7,7 @@ import UsersPage from './UsersPage';
 import CallsPage from './CallsPage';
 import ActivityPage from './ActivityPage';
 import SettingsPage from './SettingsPage';
+import CostPage from './CostPage';
 
 const NAV: { path: string; label: string; icon: React.ElementType }[] = [
   { path: 'overview',       label: 'Overview',           icon: LayoutDashboard },
@@ -14,6 +15,7 @@ const NAV: { path: string; label: string; icon: React.ElementType }[] = [
   { path: 'users',          label: 'Users',              icon: Users },
   { path: 'calls',          label: 'Calls & Recordings', icon: PhoneCall },
   { path: 'activity',       label: 'Activity',           icon: ScrollText },
+  { path: 'cost',           label: 'Cost',               icon: IndianRupee },
   { path: 'settings',       label: 'Pricing & Features', icon: Settings },
 ];
 
@@ -64,6 +66,7 @@ export default function AdminShell({ email, onLogout }: { email: string; onLogou
           <Route path="users"         element={<PageWrap title="Users"><UsersPage /></PageWrap>} />
           <Route path="calls"         element={<PageWrap title="Calls & Recordings"><CallsPage /></PageWrap>} />
           <Route path="activity"      element={<PageWrap title="Activity"><ActivityPage /></PageWrap>} />
+          <Route path="cost"          element={<PageWrap title="Cost"><CostPage /></PageWrap>} />
           <Route path="settings"      element={<PageWrap title="Pricing & Features"><SettingsPage /></PageWrap>} />
           <Route path="*"             element={<Navigate to="overview" replace />} />
         </Routes>
