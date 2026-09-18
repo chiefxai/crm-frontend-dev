@@ -778,7 +778,19 @@ export default function AgentStudioView() {
                 <label className="block text-[10px] font-semibold text-slate-500 dark:text-[var(--text-muted)] mb-1.5">Call Type</label>
                 <select
                   value={form.callType ?? 'INBOUND'}
-                  onChange={e => setForm(f => ({ ...f, callType: e.target.value as 'INBOUND' | 'OUTBOUND' }))}
+                  onChange={e => {
+                    const nextCallType = e.target.value as 'INBOUND' | 'OUTBOUND';
+                    // An agent's prompt is now direction-specific (see the two
+                    // master prompts), so a single agent shouldn't be assigned
+                    // both an inbound and an outbound number at once — clear
+                    // whichever number no longer matches the selected direction.
+                    setForm(f => ({
+                      ...f,
+                      callType: nextCallType,
+                      assignedNumber: nextCallType === 'OUTBOUND' ? null : f.assignedNumber,
+                      outboundNumber: nextCallType === 'INBOUND' ? null : f.outboundNumber,
+                    }));
+                  }}
                   className="w-full bg-slate-50 dark:bg-[var(--bg-subtle)] border border-slate-200 dark:border-[var(--border)] rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:border-transparent transition-all"
                 >
                   {CALL_TYPES.map(c => <option key={c.value} value={c.value}>{c.label}</option>)}
@@ -890,9 +902,13 @@ export default function AgentStudioView() {
             </p>
           </div>
 
+          {form.callType !== 'OUTBOUND' && (
+          <>
           <div className="border-t border-slate-100 dark:border-[var(--border)]" />
 
-          {/* Inbound Number — exclusive (one number → one agent) */}
+          {/* Inbound Number — exclusive (one number → one agent). Hidden
+              when Call Type is Outbound: the generated prompt assumes one
+              direction per agent, so it shouldn't also answer inbound calls. */}
           <div>
             <div className="flex items-center gap-2 mb-1">
               <Phone className="h-4 w-4 text-emerald-500" />
@@ -959,10 +975,15 @@ export default function AgentStudioView() {
               </div>
             )}
           </div>
+          </>
+          )}
 
+          {form.callType !== 'INBOUND' && (
+          <>
           <div className="border-t border-slate-100 dark:border-[var(--border)]" />
 
-          {/* Outbound Number — shared (many agents can use the same number) */}
+          {/* Outbound Number — shared (many agents can use the same number).
+              Hidden when Call Type is Inbound, for the same reason as above. */}
           <div>
             <div className="flex items-center gap-2 mb-1">
               <Zap className="h-4 w-4 text-violet-500" />
@@ -1026,6 +1047,8 @@ export default function AgentStudioView() {
               </div>
             )}
           </div>
+          </>
+          )}
 
           <div className="border-t border-slate-100 dark:border-[var(--border)]" />
 
