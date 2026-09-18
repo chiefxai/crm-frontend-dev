@@ -367,7 +367,7 @@ export default function App() {
   // separately for reference (may differ from what older sessions above
   // were actually billed at, if the rate changed mid-period).
   const [aiTokenCost, setAiTokenCost] = useState<{ baseCost: number; taxAmount: number; totalCost: number; pricedSessionCount: number; sessionCount: number } | null>(null);
-  const [aiTokenCurrentRate, setAiTokenCurrentRate] = useState<{ key: string; label: string; ratePer1kTokens: number; taxPercent: number } | null>(null);
+  const [aiTokenCurrentRate, setAiTokenCurrentRate] = useState<{ key: string; label: string; ratePer1kTokens: number; tokenUnit: number; taxPercent: number } | null>(null);
   const [aiTokenUsage, setAiTokenUsage] = useState<{ totalTokens: number; totalInputTokens: number; totalOutputTokens: number; callCount: number } | null>(null);
   const [callProviderRate, setCallProviderRate] = useState<{ key: string; label: string; rateUnit: 'minute' | 'hour'; rateAmount: number; taxPercent: number } | null>(null);
   // False when this org connected its own Vobiz account (Settings >

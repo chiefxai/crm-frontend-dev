@@ -12,10 +12,20 @@ type CostProvider = {
   // call kind
   rateUnit?: 'minute' | 'hour';
   rateAmount?: number;
-  // ai kind
+  // ai kind — ratePer1kTokens is "the rate, quoted per tokenUnit tokens"
+  // (name kept for backward compat; tokenUnit itself is configurable now,
+  // not fixed at 1,000).
   ratePer1kTokens?: number;
+  tokenUnit?: number;
   updatedAt?: string;
 };
+
+const TOKEN_UNIT_OPTIONS: { value: number; label: string }[] = [
+  { value: 1, label: 'token' },
+  { value: 100, label: '100 tokens' },
+  { value: 1000, label: '1,000 tokens' },
+  { value: 1000000, label: '1,000,000 tokens' },
+];
 
 // A permanent cost snapshot taken right before an org was deleted — see
 // backend platform/admin.js's deleteOrganization + db.archiveOrgCost.
@@ -41,7 +51,7 @@ type CostArchiveEntry = {
 function emptyDraft(kind: 'call' | 'ai'): Omit<CostProvider, 'key'> & { key: string } {
   return kind === 'call'
     ? { key: '', kind: 'call', label: '', active: true, taxPercent: 0, rateUnit: 'minute', rateAmount: 0 }
-    : { key: '', kind: 'ai', label: '', active: true, taxPercent: 0, ratePer1kTokens: 0 };
+    : { key: '', kind: 'ai', label: '', active: true, taxPercent: 0, ratePer1kTokens: 0, tokenUnit: 1000 };
 }
 
 export default function CostPage() {
@@ -331,14 +341,25 @@ function ProviderSection({
                 </Field>
               </>
             ) : (
-              <Field label="Rate per 1k tokens (INR)">
-                <input
-                  type="number" min="0" step="0.01"
-                  value={p.ratePer1kTokens ?? 0}
-                  onChange={(e) => onChange(p.key, { ratePer1kTokens: Number(e.target.value) })}
-                  className="w-32 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-amber-500"
-                />
-              </Field>
+              <>
+                <Field label="Rate (INR)">
+                  <input
+                    type="number" min="0" step="0.0001"
+                    value={p.ratePer1kTokens ?? 0}
+                    onChange={(e) => onChange(p.key, { ratePer1kTokens: Number(e.target.value) })}
+                    className="w-28 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-amber-500"
+                  />
+                </Field>
+                <Field label="Per">
+                  <select
+                    value={p.tokenUnit ?? 1000}
+                    onChange={(e) => onChange(p.key, { tokenUnit: Number(e.target.value) })}
+                    className="bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-amber-500"
+                  >
+                    {TOKEN_UNIT_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+                  </select>
+                </Field>
+              </>
             )}
 
             <Field label="Tax %">
@@ -421,14 +442,25 @@ function ProviderSection({
                 </Field>
               </>
             ) : (
-              <Field label="Rate per 1k tokens (INR)">
-                <input
-                  type="number" min="0" step="0.01"
-                  value={draft.ratePer1kTokens ?? 0}
-                  onChange={(e) => setDraft({ ...draft, ratePer1kTokens: Number(e.target.value) })}
-                  className="w-32 bg-white border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-amber-500"
-                />
-              </Field>
+              <>
+                <Field label="Rate (INR)">
+                  <input
+                    type="number" min="0" step="0.0001"
+                    value={draft.ratePer1kTokens ?? 0}
+                    onChange={(e) => setDraft({ ...draft, ratePer1kTokens: Number(e.target.value) })}
+                    className="w-28 bg-white border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-amber-500"
+                  />
+                </Field>
+                <Field label="Per">
+                  <select
+                    value={draft.tokenUnit ?? 1000}
+                    onChange={(e) => setDraft({ ...draft, tokenUnit: Number(e.target.value) })}
+                    className="bg-white border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-amber-500"
+                  >
+                    {TOKEN_UNIT_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+                  </select>
+                </Field>
+              </>
             )}
             <Field label="Tax %">
               <input

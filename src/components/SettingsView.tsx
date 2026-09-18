@@ -50,7 +50,7 @@ interface SettingsViewProps {
   // is today's configured rate, shown separately for reference. Null when
   // not yet priced.
   aiTokenCost?: { baseCost: number; taxAmount: number; totalCost: number; pricedSessionCount: number; sessionCount: number } | null;
-  aiTokenCurrentRate?: { key: string; label: string; ratePer1kTokens: number; taxPercent: number } | null;
+  aiTokenCurrentRate?: { key: string; label: string; ratePer1kTokens: number; tokenUnit: number; taxPercent: number } | null;
   aiTokenUsage?: { totalTokens: number; totalInputTokens: number; totalOutputTokens: number; callCount: number } | null;
   callProviderRate?: { key: string; label: string; rateUnit: 'minute' | 'hour'; rateAmount: number; taxPercent: number } | null;
   // False when this org connected its own Vobiz account (Settings >
@@ -913,7 +913,7 @@ export default function SettingsView({
                     </div>
                     <div className="bg-slate-50 p-4 rounded-xl text-center">
                       <span className="text-[10px] text-slate-400 uppercase tracking-wider block">
-                        {aiTokenCurrentRate ? `${aiTokenCurrentRate.label} Rate (₹${aiTokenCurrentRate.ratePer1kTokens}/1k tokens)` : 'Rate before tax'}
+                        {aiTokenCurrentRate ? `${aiTokenCurrentRate.label} Rate (₹${aiTokenCurrentRate.ratePer1kTokens}/${aiTokenCurrentRate.tokenUnit.toLocaleString()} tokens)` : 'Rate before tax'}
                       </span>
                       <strong className="text-md text-slate-800 font-mono">{formatInr(aiTokenCost.baseCost)}</strong>
                     </div>
