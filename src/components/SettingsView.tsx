@@ -24,7 +24,7 @@ import {
 import { apiFetch } from '../lib/api';
 import { useRefresh } from '../lib/RefreshContext';
 import { VirtualNumber, TeamMember, OrganizationSettings, UserRole } from '../types';
-import { COST_PER_MINUTE_INR_FALLBACK, formatInr } from '../lib/pricing';
+import { COST_PER_MINUTE_INR_FALLBACK, formatInr, formatCurrency, currencySymbol } from '../lib/pricing';
 import { FEATURE_REGISTRY } from '../features/feature-flags/registry';
 import FlagGroupPicker from './ui/FlagGroupPicker';
 import IconButton from './ui/IconButton';
@@ -869,8 +869,8 @@ export default function SettingsView({
                     <strong className="text-md text-slate-800 font-mono">{formatInr(orgSettings.aiMinutesUsed * costPerMinuteInr)}</strong>
                   </div>
                   <div className="bg-slate-50 p-4 rounded-xl text-center">
-                    <span className="text-[10px] text-slate-400 uppercase tracking-wider block">Phone Charges (${phoneCostPerMinute}/min)</span>
-                    <strong className="text-md text-slate-800 font-mono">${orgSettings.phoneCharges.toFixed(2)}</strong>
+                    <span className="text-[10px] text-slate-400 uppercase tracking-wider block">Phone Charges ({currencySymbol()}{phoneCostPerMinute}/min)</span>
+                    <strong className="text-md text-slate-800 font-mono">{formatCurrency(orgSettings.phoneCharges)}</strong>
                   </div>
                 </div>
               </Widget>
@@ -906,8 +906,8 @@ export default function SettingsView({
                     <strong className="text-md text-slate-800 font-mono">{(aiUsageSummary?.totalTokens ?? 0).toLocaleString()}</strong>
                   </div>
                   <div className="bg-slate-50 p-4 rounded-xl text-center">
-                    <span className="text-[10px] text-slate-400 uppercase tracking-wider block">Est. Cost ({aiUsageSummary?.currency || 'USD'})</span>
-                    <strong className="text-md text-slate-800 font-mono">${(aiUsageSummary?.totalCost ?? 0).toFixed(4)}</strong>
+                    <span className="text-[10px] text-slate-400 uppercase tracking-wider block">Est. Cost ({currencySymbol()})</span>
+                    <strong className="text-md text-slate-800 font-mono">{formatCurrency(aiUsageSummary?.totalCost ?? 0, { decimals: 4 })}</strong>
                   </div>
                   <div className="bg-slate-50 p-4 rounded-xl text-center">
                     <span className="text-[10px] text-slate-400 uppercase tracking-wider block">Failed Sessions</span>
@@ -927,7 +927,7 @@ export default function SettingsView({
                               guessing at a name. */}
                           <span className="font-mono text-slate-600" title={row.adminId || undefined}>{row.adminId ? `${row.adminId.slice(0, 8)}…` : 'Unknown'}</span>
                           <span className="text-slate-400">{row.sessionCount} sessions · {row.totalTokens.toLocaleString()} tokens</span>
-                          <span className="font-mono font-bold text-slate-700">${row.totalCost.toFixed(4)}</span>
+                          <span className="font-mono font-bold text-slate-700">{formatCurrency(row.totalCost, { decimals: 4 })}</span>
                         </div>
                       ))}
                     </div>
@@ -957,7 +957,7 @@ export default function SettingsView({
                           )
                         },
                         { key: 'tokens', header: 'Tokens (in/out)', align: 'right', cell: (s: AiUsageSession) => <span className="font-mono text-xs text-slate-600">{s.inputTokens.toLocaleString()} / {s.outputTokens.toLocaleString()}</span> },
-                        { key: 'cost', header: 'Est. Cost', align: 'right', cell: (s: AiUsageSession) => <span className="font-mono text-xs font-bold text-slate-700">${s.totalCost.toFixed(4)}</span> },
+                        { key: 'cost', header: 'Est. Cost', align: 'right', cell: (s: AiUsageSession) => <span className="font-mono text-xs font-bold text-slate-700">{formatCurrency(s.totalCost, { decimals: 4 })}</span> },
                         { key: 'duration', header: 'Duration', align: 'right', cell: (s: AiUsageSession) => <span className="font-mono text-xs text-slate-500">{s.durationSeconds != null ? `${Math.round(s.durationSeconds)}s` : '—'}</span> },
                         { key: 'started', header: 'Started', align: 'right', cell: (s: AiUsageSession) => <span className="text-[9px] text-slate-400 font-mono">{new Date(s.sessionStartedAt).toLocaleString()}</span> },
                       ]}
