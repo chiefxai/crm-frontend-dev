@@ -41,3 +41,21 @@ export function formatCurrency(amount: number, opts?: { currency?: CurrencyCode;
   const decimals = opts?.decimals ?? 2;
   return `${currencySymbol(currency)}${amount.toFixed(decimals)}`;
 }
+
+// ── Cross-currency conversion (static rate, no live FX feed yet) ────────
+// Gemini Live's own usage/cost tracking (src/ai/geminiUsageTracker.js) is
+// always billed and reported in USD — that's Google's real invoice
+// currency, not something this app controls. Showing that number with a
+// ₹ symbol slapped on it would be wrong (same value, wrong currency);
+// showing $ next to it would be inconsistent with the rest of Billing &
+// Usage, which is INR. So it needs an actual conversion, not just a
+// symbol swap. No live exchange-rate API is wired up yet, so this is a
+// static approximate rate — the one thing to update once one is.
+export const USD_TO_INR_RATE = 83;
+
+export function convertToDisplayCurrency(amount: number, sourceCurrency: string): number {
+  const from = sourceCurrency.toUpperCase();
+  if (from === DISPLAY_CURRENCY) return amount;
+  if (from === 'USD' && DISPLAY_CURRENCY === 'INR') return amount * USD_TO_INR_RATE;
+  return amount;
+}
