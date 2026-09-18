@@ -1,4 +1,4 @@
-export type QuestionNodeType = 'start' | 'question' | 'condition' | 'action' | 'end';
+export type QuestionNodeType = 'start' | 'question' | 'end';
 
 export interface QuestionOption {
   id: string;
@@ -17,9 +17,6 @@ export interface QuestionFlowNode {
   /** Field name under which the answer is stored */
   answerFieldName?: string;
   options?: QuestionOption[];
-  actionType?: 'tag_lead' | 'assign_agent' | 'send_sms' | 'schedule_callback' | 'close_lead';
-  actionValue?: string;
-  condition?: { field: string; operator: 'eq' | 'contains' | 'gte' | 'lte'; value: string };
   position: { x: number; y: number };
 }
 

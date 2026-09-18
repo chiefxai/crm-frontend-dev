@@ -1,6 +1,6 @@
 import React from 'react';
 import { Handle, Position, NodeProps } from '@xyflow/react';
-import { HelpCircle, Play, Square, Zap, GitBranch } from 'lucide-react';
+import { HelpCircle, Play, Square } from 'lucide-react';
 import { QuestionFlowNode, QuestionOption } from '../types';
 
 type NodeData = QuestionFlowNode & { selected?: boolean };
@@ -74,56 +74,6 @@ export function QuestionNode({ data }: NodeProps) {
   );
 }
 
-export function ConditionNode({ data }: NodeProps) {
-  const d = data as NodeData;
-  return (
-    <div className="bg-white border border-amber-200 rounded-2xl shadow-sm min-w-[220px]">
-      <Handle type="target" position={Position.Top} style={{ ...handleStyle, background: '#f59e0b' }} />
-      <div className="p-4">
-        <div className="flex items-center gap-2 mb-1">
-          <GitBranch className="h-4 w-4 text-amber-500 shrink-0" />
-          <span className="text-[11px] font-bold text-amber-500 uppercase tracking-wider">Condition</span>
-        </div>
-        <p className="text-sm font-semibold text-slate-800">{d.label}</p>
-        {d.condition && (
-          <p className="text-xs text-slate-500 mt-1 font-mono">
-            {d.condition.field} {d.condition.operator} "{d.condition.value}"
-          </p>
-        )}
-      </div>
-      <Handle type="source" position={Position.Bottom} id="true" style={{ ...handleStyle, left: '30%', background: '#10b981' }} />
-      <Handle type="source" position={Position.Bottom} id="false" style={{ ...handleStyle, left: '70%', background: '#f43f5e' }} />
-    </div>
-  );
-}
-
-export function ActionNode({ data }: NodeProps) {
-  const d = data as NodeData;
-  const actionColors: Record<string, string> = {
-    tag_lead: 'violet',
-    assign_agent: 'blue',
-    send_sms: 'teal',
-    schedule_callback: 'amber',
-    close_lead: 'rose',
-  };
-  const color = actionColors[d.actionType || ''] || 'slate';
-
-  return (
-    <div className={`bg-white border border-${color}-200 rounded-2xl shadow-sm min-w-[200px]`}>
-      <Handle type="target" position={Position.Top} style={handleStyle} />
-      <div className="p-4">
-        <div className="flex items-center gap-2 mb-1">
-          <Zap className={`h-4 w-4 text-${color}-500 shrink-0`} />
-          <span className={`text-[11px] font-bold text-${color}-500 uppercase tracking-wider`}>Action</span>
-        </div>
-        <p className="text-sm font-semibold text-slate-800">{d.label}</p>
-        {d.actionValue && <p className="text-xs text-slate-500 mt-0.5">{d.actionValue}</p>}
-      </div>
-      <Handle type="source" position={Position.Bottom} style={handleStyle} />
-    </div>
-  );
-}
-
 export function EndNode({ data }: NodeProps) {
   return (
     <div className="bg-slate-700 text-white rounded-2xl px-5 py-3 shadow-lg min-w-[140px] text-center">
@@ -139,7 +89,5 @@ export function EndNode({ data }: NodeProps) {
 export const nodeTypes = {
   start: StartNode,
   question: QuestionNode,
-  condition: ConditionNode,
-  action: ActionNode,
   end: EndNode,
 };

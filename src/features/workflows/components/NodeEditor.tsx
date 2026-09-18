@@ -173,66 +173,6 @@ export default function NodeEditor({ node, allNodes, onChange, onClose }: NodeEd
           </div>
         )}
 
-        {/* Action config */}
-        {local.type === 'action' && (
-          <>
-            <div>
-              <label className="text-xs font-semibold text-slate-600 block mb-1">Action Type</label>
-              <select
-                className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none"
-                value={local.actionType || ''}
-                onChange={e => setField('actionType', e.target.value as any)}
-              >
-                <option value="">Select…</option>
-                <option value="tag_lead">Tag Lead</option>
-                <option value="assign_agent">Assign Agent</option>
-                <option value="send_sms">Send SMS</option>
-                <option value="schedule_callback">Schedule Callback</option>
-                <option value="close_lead">Close Lead</option>
-              </select>
-            </div>
-            <div>
-              <label className="text-xs font-semibold text-slate-600 block mb-1">Value / Note</label>
-              <input
-                className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                value={local.actionValue || ''}
-                onChange={e => setField('actionValue', e.target.value)}
-                placeholder="e.g. tag name, agent name…"
-              />
-            </div>
-          </>
-        )}
-
-        {/* Condition config */}
-        {local.type === 'condition' && (
-          <div>
-            <label className="text-xs font-semibold text-slate-600 block mb-2">Condition</label>
-            <div className="space-y-2">
-              <input
-                className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none"
-                placeholder="Field (e.g. score)"
-                value={local.condition?.field || ''}
-                onChange={e => setField('condition', { ...local.condition, field: e.target.value } as any)}
-              />
-              <select
-                className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none"
-                value={local.condition?.operator || 'eq'}
-                onChange={e => setField('condition', { ...local.condition, operator: e.target.value as any } as any)}
-              >
-                <option value="eq">equals</option>
-                <option value="contains">contains</option>
-                <option value="gte">≥</option>
-                <option value="lte">≤</option>
-              </select>
-              <input
-                className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none"
-                placeholder="Value"
-                value={local.condition?.value || ''}
-                onChange={e => setField('condition', { ...local.condition, value: e.target.value } as any)}
-              />
-            </div>
-          </div>
-        )}
       </div>
 
       <div className="px-5 py-4 border-t border-slate-100">
