@@ -406,12 +406,12 @@ export default function LeadManagementView({
                       <span
                         className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold ${
                           lead.status === 'Qualified'
-                            ? 'bg-emerald-50 text-emerald-700 border border-emerald-100'
+                            ? 'bg-emerald-700 text-emerald-50'
                             : lead.status === 'In Progress'
-                            ? 'bg-indigo-50 text-indigo-700 border border-indigo-100'
+                            ? 'bg-indigo-700 text-indigo-50'
                             : lead.status === 'New'
-                            ? 'bg-amber-50 text-amber-700 border border-amber-100'
-                            : 'bg-rose-50 text-rose-700 border border-rose-100'
+                            ? 'bg-amber-600 text-amber-50'
+                            : 'bg-rose-700 text-rose-50'
                         }`}
                       >
                         {lead.status}

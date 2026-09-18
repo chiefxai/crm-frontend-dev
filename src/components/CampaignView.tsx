@@ -175,12 +175,12 @@ export default function CampaignView({
                         <span
                           className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold ${
                             camp.status === 'Running'
-                              ? 'bg-emerald-50 text-emerald-700 animate-pulse'
+                              ? 'bg-emerald-700 text-emerald-50 animate-pulse'
                               : camp.status === 'Completed'
-                              ? 'bg-blue-50 text-blue-700'
+                              ? 'bg-blue-700 text-blue-50'
                               : camp.status === 'Paused'
-                              ? 'bg-amber-50 text-amber-700'
-                              : 'bg-slate-100 text-slate-600'
+                              ? 'bg-amber-600 text-amber-50'
+                              : 'bg-slate-600 text-slate-50'
                           }`}
                         >
                           {camp.status}
