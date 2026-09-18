@@ -39,6 +39,10 @@ interface Agent {
   speed: number;
   friendliness: number;
   language: string;
+  industry?: string | null;
+  dialect?: string | null;
+  businessContext?: string | null;
+  callType?: 'INBOUND' | 'OUTBOUND';
   assignedNumber?: VirtualNumber | null;   // inbound (exclusive)
   outboundNumber?: VirtualNumber | null;   // outbound (shared)
   outboundNumberId?: string | null;
@@ -71,7 +75,26 @@ interface SystemAgent {
 type SaveStatus = 'idle' | 'saving' | 'saved' | 'error';
 
 const VOICES = ['Arjun', 'Priya', 'Dev', 'Kavya'];
-const PRESETS = ['Tanglish', 'Support', 'Sales'];
+const PRESETS = ['Support', 'Sales'];
+
+// Mirrors backend's INDUSTRY_ROLES keys (src/config/agentConfig.js) — kept
+// as a plain label map here since the backend doesn't expose that list via
+// an endpoint; the {{industry}} value itself is free text sent as-is.
+const INDUSTRIES: { value: string; label: string }[] = [
+  { value: 'lending', label: 'Lending' },
+  { value: 'real_estate', label: 'Real Estate' },
+  { value: 'healthcare', label: 'Healthcare' },
+  { value: 'education', label: 'Schools / Education' },
+  { value: 'ecommerce', label: 'E-commerce' },
+  { value: 'automotive', label: 'Automotive' },
+  { value: 'field_services', label: 'Field Services' },
+  { value: 'it_sales', label: 'IT Sales / Recruitment' },
+];
+
+const CALL_TYPES: { value: 'INBOUND' | 'OUTBOUND'; label: string }[] = [
+  { value: 'INBOUND', label: 'Inbound' },
+  { value: 'OUTBOUND', label: 'Outbound' },
+];
 
 function Slider({ label, value, onChange }: { label: string; value: number; onChange: (v: number) => void }) {
   return (
@@ -100,7 +123,11 @@ function emptyForm(): Omit<Agent, 'id'> {
     emotion: 78,
     speed: 52,
     friendliness: 82,
-    language: 'en', // kept for API compatibility, not shown in form
+    language: 'English',
+    industry: 'lending',
+    dialect: '',
+    businessContext: '',
+    callType: 'INBOUND',
     assignedNumber: null,
     outboundNumber: null,
     knowledgeBaseMode: 'all',
@@ -126,22 +153,26 @@ export default function AgentStudioView() {
   const [saveStatus, setSaveStatus] = useState<SaveStatus>('idle');
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [applyingPreset, setApplyingPreset] = useState<string | null>(null);
+  const [dialectsByLanguage, setDialectsByLanguage] = useState<Record<string, { dialect: string }[]>>({});
+  const [generatingPrompt, setGeneratingPrompt] = useState(false);
 
   const savedRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const loadData = async (showSpinner = false) => {
     if (showSpinner) setLoading(true);
     try {
-      const [agentsRes, systemAgentsRes, numsRes, docsRes] = await Promise.all([
+      const [agentsRes, systemAgentsRes, numsRes, docsRes, promptConfigRes] = await Promise.all([
         apiFetch('/api/agents').then(r => r.json()),
         apiFetch('/api/agents/system').then(r => r.json()).catch(() => []),
         apiFetch('/api/settings/numbers').then(r => r.json()),
         apiFetch('/api/knowledge/documents').then(r => r.json()).catch(() => []),
+        apiFetch('/api/agents/prompt-config').then(r => r.json()).catch(() => null),
       ]);
       setAgents(Array.isArray(agentsRes) ? agentsRes : []);
       setSystemAgents(Array.isArray(systemAgentsRes) ? systemAgentsRes : []);
       setNumbers(Array.isArray(numsRes) ? numsRes : []);
       setKnowledgeDocs(Array.isArray(docsRes) ? docsRes : []);
+      if (promptConfigRes?.dialectsByLanguage) setDialectsByLanguage(promptConfigRes.dialectsByLanguage);
     } catch { /* silent */ }
     finally { if (showSpinner) setLoading(false); }
   };
@@ -167,7 +198,11 @@ export default function AgentStudioView() {
       emotion: agent.emotion,
       speed: agent.speed,
       friendliness: agent.friendliness,
-      language: agent.language,
+      language: agent.language || 'English',
+      industry: agent.industry ?? 'lending',
+      dialect: agent.dialect ?? '',
+      businessContext: agent.businessContext ?? '',
+      callType: agent.callType ?? 'INBOUND',
       assignedNumber: agent.assignedNumber ?? null,
       outboundNumber: agent.outboundNumber ?? null,
       knowledgeBaseMode: agent.knowledgeBaseMode ?? 'all',
@@ -192,6 +227,7 @@ export default function AgentStudioView() {
             name: form.name, systemPrompt: form.systemPrompt,
             activeVoice: form.activeVoice, emotion: form.emotion,
             speed: form.speed, friendliness: form.friendliness, language: form.language,
+            industry: form.industry, dialect: form.dialect, businessContext: form.businessContext, callType: form.callType,
             knowledgeBaseMode: form.knowledgeBaseMode, knowledgeBaseDocumentIds: form.knowledgeBaseDocumentIds,
           }),
         });
@@ -204,6 +240,7 @@ export default function AgentStudioView() {
             name: form.name, systemPrompt: form.systemPrompt,
             activeVoice: form.activeVoice, emotion: form.emotion,
             speed: form.speed, friendliness: form.friendliness, language: form.language,
+            industry: form.industry, dialect: form.dialect, businessContext: form.businessContext, callType: form.callType,
             knowledgeBaseMode: form.knowledgeBaseMode, knowledgeBaseDocumentIds: form.knowledgeBaseDocumentIds,
           }),
         });
@@ -267,6 +304,30 @@ export default function AgentStudioView() {
       alert(err.message || 'Failed to update agent status');
     } finally {
       setTogglingId(null);
+    }
+  };
+
+  const handleGeneratePrompt = async () => {
+    setGeneratingPrompt(true);
+    try {
+      const res = await apiFetch('/api/agents/generate-prompt', {
+        method: 'POST',
+        body: JSON.stringify({
+          agentName: form.name,
+          industry: INDUSTRIES.find(i => i.value === form.industry)?.label || form.industry,
+          language: form.language,
+          dialect: form.dialect,
+          businessContext: form.businessContext,
+          callType: form.callType,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to generate prompt');
+      setForm(f => ({ ...f, systemPrompt: data.prompt }));
+    } catch (err: any) {
+      alert(err.message || 'Failed to generate prompt');
+    } finally {
+      setGeneratingPrompt(false);
     }
   };
 
@@ -694,6 +755,91 @@ export default function AgentStudioView() {
 
           <div className="border-t border-slate-100 dark:border-[var(--border)]" />
 
+          {/* Voice-agent prompt configuration: industry, language, dialect,
+              call type, business context — assembled into the two master
+              prompts (INBOUND/OUTBOUND) via /api/agents/generate-prompt. */}
+          <div>
+            <div className="flex items-center gap-2 mb-3">
+              <Bot className="h-4 w-4 text-indigo-500" />
+              <p className="text-xs font-semibold text-slate-700 dark:text-[var(--text-primary)] uppercase tracking-widest">Agent Configuration</p>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-[10px] font-semibold text-slate-500 dark:text-[var(--text-muted)] mb-1.5">Industry</label>
+                <select
+                  value={form.industry ?? ''}
+                  onChange={e => setForm(f => ({ ...f, industry: e.target.value }))}
+                  className="w-full bg-slate-50 dark:bg-[var(--bg-subtle)] border border-slate-200 dark:border-[var(--border)] rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:border-transparent transition-all"
+                >
+                  {INDUSTRIES.map(i => <option key={i.value} value={i.value}>{i.label}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="block text-[10px] font-semibold text-slate-500 dark:text-[var(--text-muted)] mb-1.5">Call Type</label>
+                <select
+                  value={form.callType ?? 'INBOUND'}
+                  onChange={e => setForm(f => ({ ...f, callType: e.target.value as 'INBOUND' | 'OUTBOUND' }))}
+                  className="w-full bg-slate-50 dark:bg-[var(--bg-subtle)] border border-slate-200 dark:border-[var(--border)] rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:border-transparent transition-all"
+                >
+                  {CALL_TYPES.map(c => <option key={c.value} value={c.value}>{c.label}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="block text-[10px] font-semibold text-slate-500 dark:text-[var(--text-muted)] mb-1.5">Language</label>
+                <select
+                  value={form.language}
+                  onChange={e => {
+                    const nextLanguage = e.target.value;
+                    const validDialects = (dialectsByLanguage[nextLanguage] || []).map(d => d.dialect);
+                    setForm(f => ({ ...f, language: nextLanguage, dialect: validDialects[0] || '' }));
+                  }}
+                  className="w-full bg-slate-50 dark:bg-[var(--bg-subtle)] border border-slate-200 dark:border-[var(--border)] rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:border-transparent transition-all"
+                >
+                  {Object.keys(dialectsByLanguage).length === 0
+                    ? <option value={form.language}>{form.language}</option>
+                    : Object.keys(dialectsByLanguage).map(lang => <option key={lang} value={lang}>{lang}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="block text-[10px] font-semibold text-slate-500 dark:text-[var(--text-muted)] mb-1.5">Dialect</label>
+                <select
+                  value={form.dialect ?? ''}
+                  onChange={e => setForm(f => ({ ...f, dialect: e.target.value }))}
+                  className="w-full bg-slate-50 dark:bg-[var(--bg-subtle)] border border-slate-200 dark:border-[var(--border)] rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:border-transparent transition-all"
+                >
+                  <option value="">Standard / none</option>
+                  {(dialectsByLanguage[form.language] || []).map(d => (
+                    <option key={d.dialect} value={d.dialect}>{d.dialect}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+            <div className="mt-4">
+              <label className="block text-[10px] font-semibold text-slate-500 dark:text-[var(--text-muted)] mb-1.5">Business Context</label>
+              <textarea
+                value={form.businessContext ?? ''}
+                onChange={e => setForm(f => ({ ...f, businessContext: e.target.value }))}
+                rows={4}
+                placeholder="Services, products, business hours, policies, eligibility rules, escalation process, callback rules, compliance rules — only what's written here is available to the agent on a call."
+                className="w-full bg-slate-50 dark:bg-[var(--bg-subtle)] border border-slate-200 dark:border-[var(--border)] rounded-xl px-4 py-3 text-xs text-slate-700 dark:text-[var(--text-primary)] placeholder:text-slate-400 dark:placeholder:text-[var(--text-muted)] focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:border-transparent transition-all resize-none"
+              />
+            </div>
+            <button
+              type="button"
+              onClick={handleGeneratePrompt}
+              disabled={generatingPrompt}
+              className="mt-3 inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg border border-indigo-200 dark:border-indigo-500/40 bg-indigo-50 dark:bg-indigo-900/20 text-indigo-700 dark:text-indigo-300 hover:bg-indigo-100 dark:hover:bg-indigo-900/30 disabled:opacity-50 cursor-pointer transition-colors"
+            >
+              {generatingPrompt ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
+              Generate Prompt
+            </button>
+            <p className="text-[10px] text-slate-400 dark:text-[var(--text-muted)] mt-1.5">
+              Builds the system prompt below from the master inbound/outbound template using the settings above — review it before saving.
+            </p>
+          </div>
+
+          <div className="border-t border-slate-100 dark:border-[var(--border)]" />
+
           {/* Delivery sliders */}
           <div>
             <div className="flex items-center gap-2 mb-3">
@@ -740,7 +886,7 @@ export default function AgentStudioView() {
               placeholder="Write the agent's system prompt here, or apply a preset above…"
             />
             <p className="text-[10px] text-slate-400 dark:text-[var(--text-muted)] mt-1.5">
-              The agent always introduces itself using the <strong className="font-semibold text-slate-500 dark:text-[var(--text-secondary)]">Agent Name</strong> above, regardless of what's written here. Use <code className="bg-slate-100 dark:bg-[var(--bg-subtle)] px-1 py-0.5 rounded font-mono">{'{agentName}'}</code> anywhere in this prompt to also reference it inline.
+              The agent always introduces itself using the <strong className="font-semibold text-slate-500 dark:text-[var(--text-secondary)]">Agent Name</strong> above, regardless of what's written here. Use <strong className="font-semibold text-slate-500 dark:text-[var(--text-secondary)]">Generate Prompt</strong> above to rebuild this from the Agent Configuration settings, or edit it directly.
             </p>
           </div>
 
