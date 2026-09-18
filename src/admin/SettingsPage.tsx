@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
-import { Loader2, Save, ToggleLeft, ToggleRight } from 'lucide-react';
+import { Loader2, Save, ToggleLeft, ToggleRight, Zap, ListChecks } from 'lucide-react';
 import { apiFetch } from '../lib/api';
+import Widget from '../components/ui/Widget';
 
 type FeatureFlag = {
   key: string;
@@ -76,16 +77,28 @@ export default function SettingsPage() {
     return <div className="flex items-center justify-center py-16 text-slate-400"><Loader2 className="h-5 w-5 animate-spin mr-2" /> Loading…</div>;
   }
 
+  const enabledCount = flags.filter((f) => f.enabled).length;
+
   return (
-    <div className="space-y-8 max-w-3xl">
-      <section className="bg-white border border-slate-200 rounded-2xl p-6">
-        <h2 className="text-sm font-bold text-slate-800 mb-1">Voice call pricing</h2>
-        <p className="text-xs text-slate-500 mb-4">
-          Applies platform-wide to every org's billing calculation immediately — no redeploy needed.
-        </p>
+    <div className="grid grid-cols-12 gap-4">
+      <Widget colSpan={3} icon={Zap} accent="#f59e0b" padding="md">
+        <span className="text-xs font-medium text-slate-500 dark:text-[var(--text-secondary)]">Cost per minute</span>
+        <div className="text-2xl font-semibold text-slate-900 dark:text-[var(--text-primary)] mt-1">₹{costPerMinuteInr || 0}</div>
+      </Widget>
+      <Widget colSpan={3} icon={ListChecks} accent="#1baf7a" padding="md">
+        <span className="text-xs font-medium text-slate-500 dark:text-[var(--text-secondary)]">Features enabled</span>
+        <div className="text-2xl font-semibold text-slate-900 dark:text-[var(--text-primary)] mt-1">{enabledCount} / {flags.length}</div>
+      </Widget>
+
+      <Widget
+        colSpan={12}
+        title="Voice call pricing"
+        subtitle="Applies platform-wide to every org's billing calculation immediately — no redeploy needed."
+        padding="md"
+      >
         <form onSubmit={savePricing} className="flex items-end gap-3">
           <div>
-            <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wide mb-1">
+            <label className="block text-[10px] font-bold text-slate-400 dark:text-[var(--text-muted)] uppercase tracking-wide mb-1">
               Cost per minute (INR)
             </label>
             <input
@@ -94,7 +107,7 @@ export default function SettingsPage() {
               step="0.01"
               value={costPerMinuteInr}
               onChange={(e) => setCostPerMinuteInr(e.target.value)}
-              className="w-40 bg-white border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-amber-500"
+              className="w-40 bg-slate-50 dark:bg-[var(--bg-subtle)] border border-slate-200 dark:border-[var(--border)] rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-amber-500"
             />
           </div>
           <button
@@ -107,20 +120,23 @@ export default function SettingsPage() {
           </button>
           {priceSaved && <span className="text-xs text-emerald-600 font-medium">Saved</span>}
         </form>
-      </section>
-
-      <section className="bg-white border border-slate-200 rounded-2xl p-6">
-        <h2 className="text-sm font-bold text-slate-800 mb-1">Feature flags</h2>
-        <p className="text-xs text-slate-500 mb-4">
-          Turning a feature off takes effect on the AI's next call — it stops offering that
-          capability entirely instead of just hiding a button.
+        <p className="text-[10px] text-slate-400 dark:text-[var(--text-muted)] mt-3">
+          For per-provider call/AI rates and tax, see the <strong className="font-semibold text-slate-500 dark:text-[var(--text-secondary)]">Cost</strong> page.
         </p>
-        <div className="divide-y divide-slate-100">
+      </Widget>
+
+      <Widget
+        colSpan={12}
+        title="Feature flags"
+        subtitle="Turning a feature off takes effect on the AI's next call — it stops offering that capability entirely instead of just hiding a button."
+        padding="md"
+      >
+        <div className="divide-y divide-slate-100 dark:divide-[var(--border)]">
           {flags.map((flag) => (
             <div key={flag.key} className="flex items-center justify-between py-3">
               <div className="pr-4">
-                <div className="text-sm font-medium text-slate-700">{flag.label}</div>
-                <div className="text-xs text-slate-400 mt-0.5">{flag.description}</div>
+                <div className="text-sm font-medium text-slate-700 dark:text-[var(--text-primary)]">{flag.label}</div>
+                <div className="text-xs text-slate-400 dark:text-[var(--text-muted)] mt-0.5">{flag.description}</div>
               </div>
               <button
                 onClick={() => toggleFlag(flag)}
@@ -136,9 +152,9 @@ export default function SettingsPage() {
               </button>
             </div>
           ))}
-          {flags.length === 0 && <div className="py-8 text-center text-slate-400 text-xs">No feature flags configured.</div>}
+          {flags.length === 0 && <div className="py-8 text-center text-slate-400 dark:text-[var(--text-muted)] text-xs">No feature flags configured.</div>}
         </div>
-      </section>
+      </Widget>
     </div>
   );
 }
