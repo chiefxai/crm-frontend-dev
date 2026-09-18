@@ -75,21 +75,11 @@ interface SystemAgent {
 type SaveStatus = 'idle' | 'saving' | 'saved' | 'error';
 
 const VOICES = ['Arjun', 'Priya', 'Dev', 'Kavya'];
-const PRESETS = ['Support', 'Sales'];
 
-// Mirrors backend's INDUSTRY_ROLES keys (src/config/agentConfig.js) — kept
-// as a plain label map here since the backend doesn't expose that list via
-// an endpoint; the {{industry}} value itself is free text sent as-is.
-const INDUSTRIES: { value: string; label: string }[] = [
-  { value: 'lending', label: 'Lending' },
-  { value: 'real_estate', label: 'Real Estate' },
-  { value: 'healthcare', label: 'Healthcare' },
-  { value: 'education', label: 'Schools / Education' },
-  { value: 'ecommerce', label: 'E-commerce' },
-  { value: 'automotive', label: 'Automotive' },
-  { value: 'field_services', label: 'Field Services' },
-  { value: 'it_sales', label: 'IT Sales / Recruitment' },
-];
+interface IndustryOption {
+  key: string;
+  label: string;
+}
 
 const CALL_TYPES: { value: 'INBOUND' | 'OUTBOUND'; label: string }[] = [
   { value: 'INBOUND', label: 'Inbound' },
@@ -115,7 +105,7 @@ function Slider({ label, value, onChange }: { label: string; value: number; onCh
   );
 }
 
-function emptyForm(): Omit<Agent, 'id'> {
+function emptyForm(defaultIndustry = ''): Omit<Agent, 'id'> {
   return {
     name: '',
     systemPrompt: '',
@@ -124,7 +114,7 @@ function emptyForm(): Omit<Agent, 'id'> {
     speed: 52,
     friendliness: 82,
     language: 'English',
-    industry: 'lending',
+    industry: defaultIndustry,
     dialect: '',
     businessContext: '',
     callType: 'INBOUND',
@@ -152,27 +142,32 @@ export default function AgentStudioView() {
   const [form, setForm] = useState<Omit<Agent, 'id'>>(emptyForm());
   const [saveStatus, setSaveStatus] = useState<SaveStatus>('idle');
   const [deletingId, setDeletingId] = useState<string | null>(null);
-  const [applyingPreset, setApplyingPreset] = useState<string | null>(null);
   const [dialectsByLanguage, setDialectsByLanguage] = useState<Record<string, { dialect: string }[]>>({});
   const [generatingPrompt, setGeneratingPrompt] = useState(false);
+  const [industries, setIndustries] = useState<IndustryOption[]>([]);
+  const [orgIndustry, setOrgIndustry] = useState('');
 
   const savedRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const loadData = async (showSpinner = false) => {
     if (showSpinner) setLoading(true);
     try {
-      const [agentsRes, systemAgentsRes, numsRes, docsRes, promptConfigRes] = await Promise.all([
+      const [agentsRes, systemAgentsRes, numsRes, docsRes, promptConfigRes, industriesRes, orgRes] = await Promise.all([
         apiFetch('/api/agents').then(r => r.json()),
         apiFetch('/api/agents/system').then(r => r.json()).catch(() => []),
         apiFetch('/api/settings/numbers').then(r => r.json()),
         apiFetch('/api/knowledge/documents').then(r => r.json()).catch(() => []),
         apiFetch('/api/agents/prompt-config').then(r => r.json()).catch(() => null),
+        apiFetch('/api/auth/industries').then(r => r.json()).catch(() => []),
+        apiFetch('/api/settings/org').then(r => r.json()).catch(() => null),
       ]);
       setAgents(Array.isArray(agentsRes) ? agentsRes : []);
       setSystemAgents(Array.isArray(systemAgentsRes) ? systemAgentsRes : []);
       setNumbers(Array.isArray(numsRes) ? numsRes : []);
       setKnowledgeDocs(Array.isArray(docsRes) ? docsRes : []);
       if (promptConfigRes?.dialectsByLanguage) setDialectsByLanguage(promptConfigRes.dialectsByLanguage);
+      setIndustries(Array.isArray(industriesRes) ? industriesRes : []);
+      if (orgRes?.industry) setOrgIndustry(orgRes.industry);
     } catch { /* silent */ }
     finally { if (showSpinner) setLoading(false); }
   };
@@ -184,7 +179,7 @@ export default function AgentStudioView() {
     numbers.filter(n => !getAgentId(n) || getAgentId(n) === editingId);
 
   const openCreate = () => {
-    setForm(emptyForm());
+    setForm(emptyForm(orgIndustry));
     setCreating(true);
     setEditingAgent(null);
     setSaveStatus('idle');
@@ -199,7 +194,7 @@ export default function AgentStudioView() {
       speed: agent.speed,
       friendliness: agent.friendliness,
       language: agent.language || 'English',
-      industry: agent.industry ?? 'lending',
+      industry: agent.industry ?? orgIndustry,
       dialect: agent.dialect ?? '',
       businessContext: agent.businessContext ?? '',
       callType: agent.callType ?? 'INBOUND',
@@ -314,7 +309,7 @@ export default function AgentStudioView() {
         method: 'POST',
         body: JSON.stringify({
           agentName: form.name,
-          industry: INDUSTRIES.find(i => i.value === form.industry)?.label || form.industry,
+          industry: industries.find(i => i.key === form.industry)?.label || form.industry,
           language: form.language,
           dialect: form.dialect,
           businessContext: form.businessContext,
@@ -329,20 +324,6 @@ export default function AgentStudioView() {
     } finally {
       setGeneratingPrompt(false);
     }
-  };
-
-  const handleApplyPreset = async (presetName: string) => {
-    setApplyingPreset(presetName);
-    try {
-      const res = await apiFetch('/api/config/preset', {
-        method: 'POST',
-        body: JSON.stringify({ name: presetName }),
-      });
-      if (res.ok) {
-        const data = await res.json();
-        setForm(f => ({ ...f, systemPrompt: data.systemPrompt ?? f.systemPrompt }));
-      }
-    } finally { setApplyingPreset(null); }
   };
 
   const handleSaveSystemPrompt = async () => {
@@ -771,7 +752,9 @@ export default function AgentStudioView() {
                   onChange={e => setForm(f => ({ ...f, industry: e.target.value }))}
                   className="w-full bg-slate-50 dark:bg-[var(--bg-subtle)] border border-slate-200 dark:border-[var(--border)] rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:border-transparent transition-all"
                 >
-                  {INDUSTRIES.map(i => <option key={i.value} value={i.value}>{i.label}</option>)}
+                  {industries.length === 0
+                    ? <option value={form.industry ?? ''}>{form.industry || 'Loading…'}</option>
+                    : industries.map(i => <option key={i.key} value={i.key}>{i.label}</option>)}
                 </select>
               </div>
               <div>
@@ -869,33 +852,16 @@ export default function AgentStudioView() {
 
           {/* System Prompt */}
           <div>
-            <div className="flex items-center justify-between mb-3">
-              <div className="flex items-center gap-2">
-                <Sparkles className="h-4 w-4 text-amber-500" />
-                <p className="text-xs font-semibold text-slate-700 dark:text-[var(--text-primary)] uppercase tracking-widest">System Prompt</p>
-              </div>
-              {/* Presets */}
-              <div className="flex items-center gap-1.5">
-                <span className="text-[10px] text-slate-400 dark:text-[var(--text-muted)] mr-1">Presets:</span>
-                {PRESETS.map(p => (
-                  <button
-                    key={p}
-                    type="button"
-                    onClick={() => handleApplyPreset(p)}
-                    disabled={applyingPreset !== null}
-                    className="text-[10px] font-semibold px-2.5 py-1 rounded-lg border border-slate-200 dark:border-[var(--border)] bg-white dark:bg-[var(--bg-surface)] text-slate-600 dark:text-[var(--text-secondary)] hover:bg-amber-50 dark:hover:bg-amber-900/20 hover:border-amber-300 dark:hover:border-amber-500/40 hover:text-amber-700 dark:hover:text-amber-300 disabled:opacity-50 cursor-pointer transition-colors"
-                  >
-                    {applyingPreset === p ? '…' : p}
-                  </button>
-                ))}
-              </div>
+            <div className="flex items-center gap-2 mb-3">
+              <Sparkles className="h-4 w-4 text-amber-500" />
+              <p className="text-xs font-semibold text-slate-700 dark:text-[var(--text-primary)] uppercase tracking-widest">System Prompt</p>
             </div>
             <textarea
               value={form.systemPrompt}
               onChange={e => setForm(f => ({ ...f, systemPrompt: e.target.value }))}
               rows={5}
               className="w-full bg-slate-50 dark:bg-[var(--bg-subtle)] border border-slate-200 dark:border-[var(--border)] rounded-xl px-4 py-3 text-xs font-mono text-slate-700 dark:text-[var(--text-primary)] placeholder:text-slate-400 dark:placeholder:text-[var(--text-muted)] focus:outline-none focus:ring-2 focus:ring-amber-400 focus:border-transparent transition-all resize-none"
-              placeholder="Write the agent's system prompt here, or apply a preset above…"
+              placeholder="Write the agent's system prompt here, or use Generate Prompt above…"
             />
             <p className="text-[10px] text-slate-400 dark:text-[var(--text-muted)] mt-1.5">
               The agent always introduces itself using the <strong className="font-semibold text-slate-500 dark:text-[var(--text-secondary)]">Agent Name</strong> above, regardless of what's written here. Use <strong className="font-semibold text-slate-500 dark:text-[var(--text-secondary)]">Generate Prompt</strong> above to rebuild this from the Agent Configuration settings, or edit it directly.
