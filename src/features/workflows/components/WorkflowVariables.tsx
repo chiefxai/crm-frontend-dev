@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Plus, Trash2, ChevronDown, ChevronUp, GitBranch, ArrowDown, MessageSquare } from 'lucide-react';
+import { Plus, Trash2, ChevronDown, ChevronUp, GitBranch, ArrowDown, MessageSquare, Save, Workflow } from 'lucide-react';
 import { WorkflowVariable, WorkflowBranch, VariableDataType } from '../types';
 
 function uid() {
@@ -12,7 +12,7 @@ const ANSWER_TYPES: { value: VariableDataType; label: string; icon: string }[] =
   { value: 'string',  label: 'Text',   icon: 'T' },
   { value: 'number',  label: 'Number', icon: '#' },
   { value: 'boolean', label: 'Yes/No', icon: '?' },
-  { value: 'date',    label: 'Date',   icon: '📅' },
+  { value: 'date',    label: 'Date',   icon: 'D' },
 ];
 
 function AnswerTypeChips({ value, onChange }: { value: VariableDataType; onChange: (v: VariableDataType) => void }) {
@@ -221,7 +221,7 @@ function QuestionCard({ variable: v, index, onChange, onDelete }: QuestionCardPr
         {/* Main question text — hero field */}
         <div>
           <label className="text-[11px] font-semibold mb-1.5 block" style={{ color: 'var(--text-muted)' }}>
-            💬 What should the AI say / ask?
+            What should the AI say / ask?
           </label>
           <textarea
             rows={2}
@@ -409,13 +409,17 @@ export default function WorkflowVariables({ variables, onChange }: WorkflowVaria
         </div>
         <div className="p-4 space-y-5 overflow-y-auto flex-1">
           <div className="space-y-1.5">
-            <p className="text-[11px] font-bold" style={{ color: '#6366f1' }}>💬 Questions</p>
+            <p className="flex items-center gap-1.5 text-[11px] font-bold" style={{ color: '#6366f1' }}>
+              <MessageSquare className="h-3.5 w-3.5" /> Questions
+            </p>
             <p className="text-[11px] leading-relaxed" style={{ color: 'var(--text-muted)' }}>
               Each step is a question the AI asks the caller. They are asked one by one in order.
             </p>
           </div>
           <div className="space-y-1.5">
-            <p className="text-[11px] font-bold" style={{ color: '#d97706' }}>🔀 Branches</p>
+            <p className="flex items-center gap-1.5 text-[11px] font-bold" style={{ color: '#d97706' }}>
+              <GitBranch className="h-3.5 w-3.5" /> Branches
+            </p>
             <p className="text-[11px] leading-relaxed" style={{ color: 'var(--text-muted)' }}>
               Add a branch to ask different follow-up questions depending on what the caller says.
             </p>
@@ -427,13 +431,17 @@ export default function WorkflowVariables({ variables, onChange }: WorkflowVaria
             </div>
           </div>
           <div className="space-y-1.5">
-            <p className="text-[11px] font-bold" style={{ color: '#059669' }}>💾 Save answer</p>
+            <p className="flex items-center gap-1.5 text-[11px] font-bold" style={{ color: '#059669' }}>
+              <Save className="h-3.5 w-3.5" /> Save answer
+            </p>
             <p className="text-[11px] leading-relaxed" style={{ color: 'var(--text-muted)' }}>
               Give each answer a field name (like <code className="font-mono text-[10px] px-1 rounded" style={{ background: 'var(--bg-subtle)' }}>customer_name</code>) so the AI can reference it later.
             </p>
           </div>
           <div className="space-y-1.5">
-            <p className="text-[11px] font-bold" style={{ color: 'var(--text-secondary)' }}>📊 Diagram tab</p>
+            <p className="flex items-center gap-1.5 text-[11px] font-bold" style={{ color: 'var(--text-secondary)' }}>
+              <Workflow className="h-3.5 w-3.5" /> Diagram tab
+            </p>
             <p className="text-[11px] leading-relaxed" style={{ color: 'var(--text-muted)' }}>
               Switch to the Diagram tab to see a visual flowchart of this conversation — and edit it directly if needed.
             </p>

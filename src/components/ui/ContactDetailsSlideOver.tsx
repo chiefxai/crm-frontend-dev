@@ -126,7 +126,7 @@ export default function ContactDetailsSlideOver({ lead, onClose, stages, actions
                     </div>
                     <div className="rounded-lg px-2.5 py-2 border" style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)' }}>
                       <div className="text-emerald-600 flex items-start gap-1.5 text-xs">
-                        <span className="text-emerald-500 font-bold shrink-0">✓</span>
+                        <Check className="h-3.5 w-3.5 text-emerald-500 shrink-0" />
                         <p style={{ color: 'var(--text-primary)' }}>{row.answer}</p>
                       </div>
                     </div>

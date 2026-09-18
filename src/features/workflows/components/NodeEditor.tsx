@@ -6,8 +6,8 @@ const ANSWER_TYPES: { value: VariableDataType; label: string; icon: string }[] =
   { value: 'string',  label: 'Text',   icon: 'T' },
   { value: 'number',  label: 'Number', icon: '#' },
   { value: 'boolean', label: 'Yes/No', icon: '?' },
-  { value: 'date',    label: 'Date',   icon: '📅' },
-  { value: 'array',   label: 'List',   icon: '☰' },
+  { value: 'date',    label: 'Date',   icon: 'D' },
+  { value: 'array',   label: 'List',   icon: 'L' },
 ];
 
 interface NodeEditorProps {

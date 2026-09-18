@@ -50,8 +50,8 @@ export default function ThemeToggle() {
               {opt.icon}
               {opt.label}
               {opt.mode === 'system' && (
-                <span className="ml-auto text-[9px] text-slate-400 font-mono">
-                  ({resolved === 'dark' ? '🌙' : '☀️'})
+                <span className="ml-auto text-slate-400">
+                  {resolved === 'dark' ? <Moon className="h-3 w-3" /> : <Sun className="h-3 w-3" />}
                 </span>
               )}
             </button>

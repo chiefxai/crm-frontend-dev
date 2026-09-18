@@ -417,7 +417,9 @@ export default function Sidebar({
       {/* Org Badge */}
       {!collapsed && (
         <div className="px-6 py-3 flex items-center justify-between" style={{ background: 'var(--bg-subtle)', borderBottom: '1px solid var(--border)' }}>
-          <span className="text-xs font-semibold text-blue-700 truncate max-w-[150px]">🏢 {organizationName}</span>
+          <span className="flex items-center gap-1.5 text-xs font-semibold text-blue-700 truncate max-w-[150px]">
+            <Building2 className="h-3.5 w-3.5 shrink-0" /> {organizationName}
+          </span>
           <div className="flex items-center space-x-1">
             <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
             <span className="text-[9px] font-mono text-emerald-600 uppercase tracking-wider">Live</span>

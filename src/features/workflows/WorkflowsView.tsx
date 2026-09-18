@@ -18,6 +18,7 @@ import {
   Check,
   Save,
   Loader2,
+  AlertTriangle,
 } from 'lucide-react';
 import { QuestionFlow, WorkflowVariable } from './types';
 import QuestionFlowBuilder from './QuestionFlowBuilder';
@@ -340,8 +341,8 @@ export default function WorkflowsView({ flows, setFlows, openFlowId, onOpenFlow,
           {editorView === 'json' && (
             <div className="h-full flex flex-col" style={{ background: 'var(--bg-surface)' }}>
               {jsonError && (
-                <div className="px-5 py-2 text-xs font-mono shrink-0" style={{ background: '#450a0a', color: '#fca5a5' }}>
-                  ⚠ {jsonError}
+                <div className="flex items-center gap-1.5 px-5 py-2 text-xs font-mono shrink-0" style={{ background: '#450a0a', color: '#fca5a5' }}>
+                  <AlertTriangle className="h-3.5 w-3.5 shrink-0" /> {jsonError}
                 </div>
               )}
               <div className="flex-1 overflow-hidden p-5">

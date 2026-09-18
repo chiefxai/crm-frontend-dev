@@ -29,7 +29,9 @@ import {
   History,
   PhoneForwarded,
   MessageCircleQuestion,
-  GitBranch
+  GitBranch,
+  Bot,
+  User,
 } from 'lucide-react';
 import { Lead, CallLog, VirtualNumber, TeamMember, ContactGroup, OrganizationSettings } from '../types';
 import { QuestionFlow } from '../features/workflows/types';
@@ -1295,8 +1297,8 @@ Currently on question ${nextIndex} out of ${selectedTask.questions.length}. Next
       : `Caller: ${inboundLog?.leadName} • Recorded ${inboundLog ? new Date(inboundLog.createdAt).toLocaleString() : ''}`;
 
     const filename = isOutbound && activeTapeLead
-      ? `📼 ${activeTapeLead.name.toUpperCase()}_recording.wav`
-      : `📼 ${String(inboundLog?.leadName).toUpperCase()}_inbound_recording.wav`;
+      ? `${activeTapeLead.name.toUpperCase()}_recording.wav`
+      : `${String(inboundLog?.leadName).toUpperCase()}_inbound_recording.wav`;
 
     tapeDetailContent = (
       <div className="space-y-5 font-sans text-[var(--text-primary)]">
@@ -1464,12 +1466,15 @@ Currently on question ${nextIndex} out of ${selectedTask.questions.length}. Next
               activeTapeResult.transcript.map((line: any, idx: number) => {
                 const isAI = line.speaker === 'AI';
                 const speakerLabel = isAI
-                  ? `🤖 AI ${agentDisplayName}`
-                  : `👤 ${isOutbound && activeTapeLead ? activeTapeLead.name : inboundLog?.leadName}`;
+                  ? `AI ${agentDisplayName}`
+                  : `${isOutbound && activeTapeLead ? activeTapeLead.name : inboundLog?.leadName}`;
                 return (
                   <div key={idx} className="flex flex-col" style={{ alignItems: isAI ? 'flex-start' : 'flex-end' }}>
                     <div className="flex items-center space-x-1.5 mb-1.5 text-[9px] text-[var(--text-muted)] font-mono">
-                      <span className="font-bold" style={{ color: 'var(--text-secondary)' }}>{speakerLabel}</span>
+                      <span className="flex items-center gap-1 font-bold" style={{ color: 'var(--text-secondary)' }}>
+                        {isAI ? <Bot className="h-3 w-3" /> : <User className="h-3 w-3" />}
+                        {speakerLabel}
+                      </span>
                       <span>•</span>
                       <span>{line.timestamp}</span>
                     </div>
@@ -1543,7 +1548,7 @@ Currently on question ${nextIndex} out of ${selectedTask.questions.length}. Next
                   </div>
                   <div className="bg-[var(--bg-surface)] border border-[var(--border)]/80 rounded-lg px-3 py-2.5 font-sans text-xs shadow-sm">
                     <div className="text-emerald-600 flex items-start gap-2">
-                      <span className="text-emerald-500 font-bold shrink-0 text-sm">✓</span>
+                      <Check className="h-4 w-4 text-emerald-500 shrink-0" />
                       <p className="text-[var(--text-primary)] leading-relaxed">{row.answer}</p>
                     </div>
                   </div>
@@ -1603,7 +1608,9 @@ Currently on question ${nextIndex} out of ${selectedTask.questions.length}. Next
         // list below is scrolled, instead of scrolling away with it.
         dialerMode === 'outbound' && selectedTask?.autoDialEnabled && selectedTask.autoDialStatus === 'dialing' ? (
           <div className="flex items-center gap-2 text-emerald-600 dark:text-emerald-400">
-            <span className="text-[9px] font-mono uppercase tracking-wider font-bold whitespace-nowrap">🤖 Calling Telemetry · LIVE</span>
+            <span className="flex items-center gap-1 text-[9px] font-mono uppercase tracking-wider font-bold whitespace-nowrap">
+              <Bot className="h-3 w-3" /> Calling Telemetry · LIVE
+            </span>
             <span className="text-xs font-bold whitespace-nowrap">Continuous Dialer Mode: ON</span>
             <span className="text-[11px] truncate">Auto-dialing every pending lead in this list, one after another, on the server — keeps going even if you close this page. Hit "Stop Auto-Dial" to pause immediately.</span>
           </div>
@@ -2026,9 +2033,9 @@ Currently on question ${nextIndex} out of ${selectedTask.questions.length}. Next
                       setCustomerUtterance(suggestion);
                       handleSendUtterance(suggestion);
                     }}
-                    className="text-[10px] bg-slate-100 dark:bg-[var(--bg-subtle)] hover:bg-blue-600 hover:text-white text-[var(--text-secondary)] border border-slate-200 dark:border-[var(--border)] rounded px-2.5 py-1 transition-all cursor-pointer"
+                    className="flex items-center gap-1 text-[10px] bg-slate-100 dark:bg-[var(--bg-subtle)] hover:bg-blue-600 hover:text-white text-[var(--text-secondary)] border border-slate-200 dark:border-[var(--border)] rounded px-2.5 py-1 transition-all cursor-pointer"
                   >
-                    🎤 Say: "{suggestion}"
+                    <Mic className="h-2.5 w-2.5" /> Say: "{suggestion}"
                   </button>
                 ))}
               </div>

@@ -251,7 +251,7 @@ export default function CompanyProfileView({
       }, delay);
     };
 
-    addLog('🔍 Establishing secure connection to NMLS (National Multistate Licensing System)...', 200);
+    addLog('Establishing secure connection to NMLS (National Multistate Licensing System)...', 200);
     addLog(`Verify Business Registration Name: "${formData.name}" against federal database...`, 800);
     addLog(`Checking EIN Tax Identification: "${formData.taxId}"...`, 1400);
     addLog(`Checking NMLS Registry License: "${formData.nmlsId}"...`, 2000);
@@ -361,7 +361,7 @@ export default function CompanyProfileView({
             <span className="text-sm font-semibold text-slate-800 truncate block max-w-[160px]">{formData.name || 'Not Configured'}</span>
           </div>
           <div className="h-10 w-10 bg-blue-50 rounded-xl flex items-center justify-center text-blue-600 font-bold">
-            🏢
+            <Building2 className="h-5 w-5" />
           </div>
         </div>
 

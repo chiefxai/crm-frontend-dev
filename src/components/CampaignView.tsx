@@ -125,8 +125,8 @@ export default function CampaignView({
       const isSuccess = updatedCampObj.successfulCalls > selectedCampaign.successfulCalls;
       const dialLog = `AI outbound dialer dispatched call. ${
         isSuccess
-          ? '🎉 Customer connected! AI analyzed INTENT as "Interested" and successfully routed lead.'
-          : '⚠️ Dial unanswered. Customer busy/voicemail. Re-queued.'
+          ? 'Customer connected! AI analyzed INTENT as "Interested" and successfully routed lead.'
+          : 'Dial unanswered. Customer busy/voicemail. Re-queued.'
       }`;
       setLogs((prev) => [dialLog, ...prev]);
     }
