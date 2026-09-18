@@ -137,21 +137,26 @@ function BranchBlock({ branch, index, onChange, onDelete }: BranchBlockProps) {
 
       {/* Follow-up questions inside branch */}
       {open && (
-        <div className="p-3 space-y-2" style={{ background: '#fffdf0' }}>
+        <div className="p-3" style={{ background: '#fffdf0' }}>
           {branch.variables.length === 0 ? (
             <p className="text-xs text-center py-2" style={{ color: '#d97706' }}>
               No follow-up questions yet. Add one below.
             </p>
           ) : (
-            branch.variables.map((v, idx) => (
-              <FollowUpCard
-                key={v.id}
-                variable={v}
-                index={idx + 1}
-                onChange={u => updateFollowUp(idx, u)}
-                onDelete={() => removeFollowUp(idx)}
-              />
-            ))
+            <div className="relative" style={{ paddingLeft: 18 }}>
+              <div className="absolute top-0 bottom-4 w-px" style={{ left: 6, background: '#fcd34d' }} />
+              {branch.variables.map((v, idx) => (
+                <div key={v.id} className="relative" style={{ marginBottom: 8 }}>
+                  <div className="absolute w-3 h-px" style={{ left: -12, top: 18, background: '#fcd34d' }} />
+                  <FollowUpCard
+                    variable={v}
+                    index={idx + 1}
+                    onChange={u => updateFollowUp(idx, u)}
+                    onDelete={() => removeFollowUp(idx)}
+                  />
+                </div>
+              ))}
+            </div>
           )}
           <button
             onClick={addFollowUp}
@@ -262,15 +267,18 @@ function QuestionCard({ variable: v, index, onChange, onDelete }: QuestionCardPr
               {branchesOpen ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
             </button>
             {branchesOpen && (
-              <div className="space-y-2">
+              <div className="relative" style={{ paddingLeft: 20 }}>
+                <div className="absolute top-0 bottom-4 w-px" style={{ left: 7, background: 'var(--border)' }} />
                 {(v.branches ?? []).map((b, idx) => (
-                  <BranchBlock
-                    key={b.id}
-                    branch={b}
-                    index={idx + 1}
-                    onChange={u => updateBranch(idx, u)}
-                    onDelete={() => removeBranch(idx)}
-                  />
+                  <div key={b.id} className="relative" style={{ marginBottom: 10 }}>
+                    <div className="absolute w-3.5 h-px" style={{ left: -13, top: 20, background: 'var(--border)' }} />
+                    <BranchBlock
+                      branch={b}
+                      index={idx + 1}
+                      onChange={u => updateBranch(idx, u)}
+                      onDelete={() => removeBranch(idx)}
+                    />
+                  </div>
                 ))}
               </div>
             )}
