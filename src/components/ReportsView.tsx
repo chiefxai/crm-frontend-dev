@@ -560,6 +560,23 @@ export default function ReportsView({ callLogs, dialerTasks, leads, costPerMinut
   const successfulOutcomesInPeriod = filteredCalls.filter(c => isSuccessfulOutcome(c.intent)).length;
   const costPerSuccessfulOutcome = successfulOutcomesInPeriod > 0 ? periodSummary.totalCost / successfulOutcomesInPeriod : 0;
 
+  // Widget 11: Call Activity by Hour of Day — which hours actually see
+  // call volume in this period, so staffing/dialer-window decisions have
+  // real data behind them instead of a guess. Pairs with Cost Analysis
+  // above to fill out the last widget row (previously left half-empty
+  // with an odd widget count).
+  const callsByHour = useMemo(() => {
+    const buckets = Array.from({ length: 24 }, (_, hour) => ({ hour, label: `${hour}:00`, count: 0 }));
+    for (const c of filteredCalls) {
+      buckets[new Date(c.createdAt).getHours()].count++;
+    }
+    return buckets;
+  }, [filteredCalls]);
+  const peakHour = useMemo(
+    () => callsByHour.reduce((best, b) => (b.count > best.count ? b : best), callsByHour[0]),
+    [callsByHour]
+  );
+
   return (
     <PageShell
       title={<BreadcrumbTitle group="Dashboard" page="Reports" />}
@@ -652,7 +669,7 @@ export default function ReportsView({ callLogs, dialerTasks, leads, costPerMinut
         />
 
         {/* ══════════════════════════════════════════════════════════════
-            REPORTS WIDGETS — 10 widgets, 2 per row, all reading from
+            REPORTS WIDGETS — 12 widgets, 2 per row, all reading from
             filteredCalls/filteredEnquiries/tasksInPeriod above, so every
             one of them already respects the global date filter.
             ══════════════════════════════════════════════════════════════ */}
@@ -967,6 +984,28 @@ export default function ReportsView({ callLogs, dialerTasks, leads, costPerMinut
             ) : <EmptyState heading="No calls in this period" />}
           </div>
           <p className="text-[10px] text-slate-400 mt-2">AI/token and telephony cost aren't broken out per call in the current data — only the totals above are shown.</p>
+        </Widget>
+
+        {/* Row 5c: Call Activity by Hour of Day */}
+        <Widget colSpan={6} title="Call Activity by Hour of Day" subtitle="When calls actually happen — useful for dialer/staffing windows." icon={Clock} accent="#2563eb" padding="md" hover bodyOverflow="hidden">
+          {filteredCalls.length > 0 && (
+            <p className="text-xs text-slate-500 mb-1">
+              Peak hour: <strong className="text-slate-700">{peakHour.label}</strong> ({peakHour.count} call{peakHour.count === 1 ? '' : 's'})
+            </p>
+          )}
+          <div className="h-56 w-full mt-1">
+            {filteredCalls.length > 0 ? (
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={callsByHour} margin={{ top: 8, right: 8, left: -20, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                  <XAxis dataKey="label" stroke="#94a3b8" fontSize={10} tickLine={false} interval={2} />
+                  <YAxis stroke="#94a3b8" fontSize={11} tickLine={false} axisLine={false} allowDecimals={false} />
+                  <RechartsTooltip {...CHART_TOOLTIP} />
+                  <Bar dataKey="count" name="Calls" fill="#2563eb" radius={[4, 4, 0, 0]} barSize={10} />
+                </BarChart>
+              </ResponsiveContainer>
+            ) : <EmptyState heading="No calls in this period" />}
+          </div>
         </Widget>
 
         {/* Row 6: Campaign Details — full width. One row per lead in the
