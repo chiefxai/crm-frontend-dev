@@ -18,7 +18,6 @@ import {
   Check,
   Save,
   Loader2,
-  AlertTriangle,
 } from 'lucide-react';
 import { QuestionFlow, WorkflowVariable } from './types';
 import QuestionFlowBuilder from './QuestionFlowBuilder';
@@ -99,7 +98,6 @@ export default function WorkflowsView({ flows, setFlows, openFlowId, onOpenFlow,
   const [editorView, setEditorView] = useState<'diagram' | 'variables' | 'json'>('diagram');
   const [jsonCopied, setJsonCopied] = useState(false);
   const [jsonEditText, setJsonEditText] = useState<string | null>(null);
-  const [jsonError, setJsonError] = useState<string | null>(null);
   const [newName, setNewName] = useState('');
   const [creating, setCreating] = useState(false);
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved'>('idle');
@@ -194,7 +192,6 @@ export default function WorkflowsView({ flows, setFlows, openFlowId, onOpenFlow,
             })),
           })),
         }));
-        setJsonError(null);
         return {
           ...editingFlow,
           name: parsed.name || editingFlow.name,
@@ -205,7 +202,6 @@ export default function WorkflowsView({ flows, setFlows, openFlowId, onOpenFlow,
         };
       } catch (e: any) {
         const readable = humanizeJsonError(e.message || 'Malformed JSON', jsonStr);
-        setJsonError(readable);
         showToast(readable, 'error');
         return null;
       }
@@ -227,7 +223,7 @@ export default function WorkflowsView({ flows, setFlows, openFlowId, onOpenFlow,
     // On the JSON view specifically, this ALSO parses and applies whatever
     // is currently typed/pasted in the editable JSON box first — there's
     // no separate "Apply JSON" step anymore, one Save both applies and
-    // persists. If the JSON doesn't parse, jsonError is set and nothing
+    // persists. If the JSON doesn't parse, a toast is shown and nothing
     // is saved.
     const handleSave = async () => {
       let flowsToSave = flows;
@@ -368,11 +364,6 @@ export default function WorkflowsView({ flows, setFlows, openFlowId, onOpenFlow,
           )}
           {editorView === 'json' && (
             <div className="h-full flex flex-col" style={{ background: 'var(--bg-surface)' }}>
-              {jsonError && (
-                <div className="flex items-center gap-1.5 px-5 py-2 text-xs font-mono shrink-0" style={{ background: '#450a0a', color: '#fca5a5' }}>
-                  <AlertTriangle className="h-3.5 w-3.5 shrink-0" /> {jsonError}
-                </div>
-              )}
               <div className="flex-1 overflow-hidden p-5">
                 <textarea
                   className="w-full h-full resize-none font-mono text-xs leading-relaxed outline-none border-0 bg-transparent"
