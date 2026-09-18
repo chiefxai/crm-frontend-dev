@@ -7,6 +7,7 @@ import ProtectedRoute from './features/auth/ProtectedRoute.tsx';
 import { KeycloakProvider, useAuth } from './features/auth/KeycloakProvider.tsx';
 import { FeatureFlagProvider } from './features/feature-flags/FeatureFlagContext.tsx';
 import { ThemeProvider } from './shared/theme/ThemeContext.tsx';
+import { ToastProvider } from './shared/toast/ToastContext.tsx';
 import { Globe2, LogOut } from 'lucide-react';
 import './index.css';
 
@@ -57,6 +58,7 @@ window.fetch = (input, init) => {
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <ThemeProvider>
+      <ToastProvider>
       <BrowserRouter>
         <Routes>
           <Route
@@ -104,6 +106,7 @@ createRoot(document.getElementById('root')!).render(
           />
         </Routes>
       </BrowserRouter>
+      </ToastProvider>
     </ThemeProvider>
   </StrictMode>,
 );

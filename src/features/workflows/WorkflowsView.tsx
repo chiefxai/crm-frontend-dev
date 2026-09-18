@@ -31,6 +31,7 @@ import IconButton from '../../components/ui/IconButton';
 import ActionMenu from '../../components/ui/ActionMenu';
 import DataTable, { Column } from '../../components/ui/DataTable';
 import { apiFetch } from '../../lib/api';
+import { useToast } from '../../shared/toast/ToastContext';
 
 function uid(prefix: string) {
   return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
@@ -63,7 +64,29 @@ interface WorkflowsViewProps {
   onCloseFlow?: () => void;
 }
 
+// Turns the JS engine's raw JSON.parse error ("Unexpected token j in JSON
+// at position 42", "Unexpected end of JSON input") into something a
+// non-developer can act on. Falls back to the raw message if it doesn't
+// match a known shape, rather than hiding it.
+function humanizeJsonError(message: string, jsonStr: string): string {
+  const posMatch = message.match(/position (\d+)/);
+  if (posMatch) {
+    const pos = parseInt(posMatch[1], 10);
+    const line = jsonStr.slice(0, pos).split('\n').length;
+    const col = pos - jsonStr.lastIndexOf('\n', pos - 1);
+    if (/unexpected end of json input/i.test(message)) {
+      return `Invalid JSON: the text ends unexpectedly — check for a missing closing "}" or "]".`;
+    }
+    return `Invalid JSON near line ${line}, column ${col} — check for a missing or extra comma, quote, or bracket there.`;
+  }
+  if (/unexpected end of json input/i.test(message)) {
+    return `Invalid JSON: the text ends unexpectedly — check for a missing closing "}" or "]".`;
+  }
+  return `Invalid JSON: ${message}`;
+}
+
 export default function WorkflowsView({ flows, setFlows, openFlowId, onOpenFlow, onCloseFlow }: WorkflowsViewProps) {
+  const { showToast } = useToast();
   const [localEditingId, setLocalEditingId] = useState<string | null>(null);
   const editingId = onOpenFlow ? (openFlowId || null) : localEditingId;
   const setEditingId = (id: string | null) => {
@@ -181,7 +204,9 @@ export default function WorkflowsView({ flows, setFlows, openFlowId, onOpenFlow,
           edges: [],
         };
       } catch (e: any) {
-        setJsonError(e.message);
+        const readable = humanizeJsonError(e.message || 'Malformed JSON', jsonStr);
+        setJsonError(readable);
+        showToast(readable, 'error');
         return null;
       }
     };
@@ -206,7 +231,10 @@ export default function WorkflowsView({ flows, setFlows, openFlowId, onOpenFlow,
     // is saved.
     const handleSave = async () => {
       let flowsToSave = flows;
-      if (editorView === 'json') {
+      // Not just "editorView === 'json'" — jsonEditText can hold an
+      // unapplied edit even after switching to another view, and saving
+      // then must still validate it rather than silently discarding it.
+      if (editorView === 'json' || jsonEditText != null) {
         const updated = parseJsonEdits();
         if (!updated) return;
         flowsToSave = flows.map(f => (f.id === updated.id ? updated : f));
@@ -221,7 +249,7 @@ export default function WorkflowsView({ flows, setFlows, openFlowId, onOpenFlow,
         setTimeout(() => setSaveStatus('idle'), 1500);
       } catch {
         setSaveStatus('idle');
-        alert('Failed to save workflow.');
+        showToast('Failed to save workflow — check your connection and try again.', 'error');
       }
     };
 
