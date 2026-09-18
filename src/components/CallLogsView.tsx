@@ -294,17 +294,17 @@ export default function CallLogsView({ callLogs, costPerMinuteInr, leads = [] }:
                   <RefreshCw className="h-3.5 w-3.5 animate-spin" /> Checking for enquiries…
                 </div>
               ) : selectedEnquiries.length > 0 ? (
-                <div className="rounded-xl p-3 border bg-amber-50 border-amber-200 space-y-2">
+                <div className="rounded-xl p-3 border bg-amber-50 dark:bg-amber-500/10 border-amber-200 dark:border-amber-500/30 space-y-2">
                   {selectedEnquiries.map((eq) => (
-                    <div key={eq.id} className="flex items-start justify-between gap-3 bg-white/70 border border-amber-100 rounded-lg px-3 py-2">
+                    <div key={eq.id} className="flex items-start justify-between gap-3 bg-white/70 dark:bg-black/20 border border-amber-100 dark:border-amber-500/20 rounded-lg px-3 py-2">
                       <p className="text-xs flex-1 leading-relaxed" style={{ color: 'var(--text-primary)' }}>"{eq.queryText}"</p>
                       <span
                         className={`shrink-0 text-[9px] font-mono uppercase tracking-wider font-bold px-2 py-0.5 rounded-full ${
                           eq.status === 'new'
-                            ? 'bg-amber-200 text-amber-800'
+                            ? 'bg-amber-200 dark:bg-amber-500/20 text-amber-800 dark:text-amber-300'
                             : eq.status === 'contacted'
-                            ? 'bg-blue-200 text-blue-800'
-                            : 'bg-emerald-200 text-emerald-800'
+                            ? 'bg-blue-200 dark:bg-blue-500/20 text-blue-800 dark:text-blue-300'
+                            : 'bg-emerald-200 dark:bg-emerald-500/20 text-emerald-800 dark:text-emerald-300'
                         }`}
                       >
                         {eq.status}
