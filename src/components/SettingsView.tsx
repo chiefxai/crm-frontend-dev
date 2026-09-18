@@ -44,8 +44,13 @@ interface SettingsViewProps {
   costPerMinuteInr?: number;
   phoneCostPerMinute?: number;
   // Platform-set (super admin "Cost" page) AI-token cost and call-provider
-  // rate for this org's current billing period. Null when not yet priced.
-  aiTokenCost?: { providerLabel: string; ratePer1kTokens: number; taxPercent: number; baseCost: number; taxAmount: number; totalCost: number } | null;
+  // rate for this org's current billing period. aiTokenCost is the SUM of
+  // what was actually charged per session, locked in at finalize time —
+  // a later rate change never retroactively re-prices it. aiTokenCurrentRate
+  // is today's configured rate, shown separately for reference. Null when
+  // not yet priced.
+  aiTokenCost?: { baseCost: number; taxAmount: number; totalCost: number; pricedSessionCount: number; sessionCount: number } | null;
+  aiTokenCurrentRate?: { key: string; label: string; ratePer1kTokens: number; taxPercent: number } | null;
   aiTokenUsage?: { totalTokens: number; totalInputTokens: number; totalOutputTokens: number; callCount: number } | null;
   callProviderRate?: { key: string; label: string; rateUnit: 'minute' | 'hour'; rateAmount: number; taxPercent: number } | null;
   activeSubTab?: 'numbers' | 'team' | 'billing' | 'api';
@@ -107,6 +112,7 @@ export default function SettingsView({
   costPerMinuteInr = COST_PER_MINUTE_INR_FALLBACK,
   phoneCostPerMinute = 8,
   aiTokenCost = null,
+  aiTokenCurrentRate = null,
   aiTokenUsage = null,
   callProviderRate = null,
   activeSubTab: activeSubTabProp,
@@ -896,17 +902,22 @@ export default function SettingsView({
                     </div>
                     <div className="bg-slate-50 p-4 rounded-xl text-center">
                       <span className="text-[10px] text-slate-400 uppercase tracking-wider block">
-                        {aiTokenCost.providerLabel} Rate (₹{aiTokenCost.ratePer1kTokens}/1k tokens)
+                        {aiTokenCurrentRate ? `${aiTokenCurrentRate.label} Rate (₹${aiTokenCurrentRate.ratePer1kTokens}/1k tokens)` : 'Rate before tax'}
                       </span>
                       <strong className="text-md text-slate-800 font-mono">{formatInr(aiTokenCost.baseCost)}</strong>
                     </div>
                     <div className="bg-slate-50 p-4 rounded-xl text-center">
                       <span className="text-[10px] text-slate-400 uppercase tracking-wider block">
-                        Total {aiTokenCost.taxPercent ? `(incl. ${aiTokenCost.taxPercent}% tax)` : ''}
+                        Total {aiTokenCurrentRate?.taxPercent ? `(incl. tax)` : ''}
                       </span>
                       <strong className="text-md text-slate-800 font-mono">{formatInr(aiTokenCost.totalCost)}</strong>
                     </div>
                   </div>
+                  {aiTokenCost.pricedSessionCount < aiTokenCost.sessionCount && (
+                    <p className="text-[10px] text-amber-600 mt-3">
+                      {aiTokenCost.sessionCount - aiTokenCost.pricedSessionCount} of {aiTokenCost.sessionCount} sessions this period predate an AI rate being set on the platform Cost page, and aren't included above.
+                    </p>
+                  )}
                 </Widget>
               )}
 

@@ -194,7 +194,7 @@ export default function AgentStudioView() {
       speed: agent.speed,
       friendliness: agent.friendliness,
       language: agent.language || 'English',
-      industry: agent.industry ?? orgIndustry,
+      industry: orgIndustry, // always the org's current industry, never per-agent
       dialect: agent.dialect ?? '',
       businessContext: agent.businessContext ?? '',
       callType: agent.callType ?? 'INBOUND',
@@ -752,15 +752,12 @@ export default function AgentStudioView() {
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="block text-[10px] font-semibold text-slate-500 dark:text-[var(--text-muted)] mb-1.5">Industry</label>
-                <select
-                  value={form.industry ?? ''}
-                  onChange={e => setForm(f => ({ ...f, industry: e.target.value }))}
-                  className="w-full bg-slate-50 dark:bg-[var(--bg-subtle)] border border-slate-200 dark:border-[var(--border)] rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:border-transparent transition-all"
-                >
-                  {industries.length === 0
-                    ? <option value={form.industry ?? ''}>{form.industry || 'Loading…'}</option>
-                    : industries.map(i => <option key={i.key} value={i.key}>{i.label}</option>)}
-                </select>
+                {/* Not user-editable here — every agent in this org shares the
+                    org's own industry (set at signup / in Company Profile),
+                    same as the industry used elsewhere in the app. */}
+                <div className="w-full bg-slate-100 dark:bg-[var(--bg-subtle)] border border-slate-200 dark:border-[var(--border)] rounded-xl px-3 py-2 text-sm text-slate-500 dark:text-[var(--text-muted)]">
+                  {industries.find(i => i.key === orgIndustry)?.label || orgIndustry || 'Not set — see Company Profile'}
+                </div>
               </div>
               <div>
                 <label className="block text-[10px] font-semibold text-slate-500 dark:text-[var(--text-muted)] mb-1.5">Call Type</label>

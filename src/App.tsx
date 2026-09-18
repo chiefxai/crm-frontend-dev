@@ -360,7 +360,14 @@ export default function App() {
   // billingEngine.js's getBillingInfo). Null fields mean "not priced yet"
   // (no admin-set rate for that provider) rather than "free" — Billing &
   // Usage should only show a cost line once these are non-null.
-  const [aiTokenCost, setAiTokenCost] = useState<{ providerLabel: string; ratePer1kTokens: number; taxPercent: number; baseCost: number; taxAmount: number; totalCost: number } | null>(null);
+  // aiTokenCost is the SUM of what each session was actually charged,
+  // locked in at its own finalize time — never recomputed against today's
+  // rate, so a rate change never retroactively re-prices past usage.
+  // aiTokenCurrentRate is the rate as configured RIGHT NOW, shown
+  // separately for reference (may differ from what older sessions above
+  // were actually billed at, if the rate changed mid-period).
+  const [aiTokenCost, setAiTokenCost] = useState<{ baseCost: number; taxAmount: number; totalCost: number; pricedSessionCount: number; sessionCount: number } | null>(null);
+  const [aiTokenCurrentRate, setAiTokenCurrentRate] = useState<{ key: string; label: string; ratePer1kTokens: number; taxPercent: number } | null>(null);
   const [aiTokenUsage, setAiTokenUsage] = useState<{ totalTokens: number; totalInputTokens: number; totalOutputTokens: number; callCount: number } | null>(null);
   const [callProviderRate, setCallProviderRate] = useState<{ key: string; label: string; rateUnit: 'minute' | 'hour'; rateAmount: number; taxPercent: number } | null>(null);
   // Non-lending orgs have no `leads` table rows at all — their real
@@ -459,6 +466,7 @@ export default function App() {
       if (resBilling && typeof resBilling.costPerMinuteInr === 'number') setCostPerMinuteInr(resBilling.costPerMinuteInr);
       if (resBilling && typeof resBilling.phoneCostPerMinute === 'number') setPhoneCostPerMinute(resBilling.phoneCostPerMinute);
       if (resBilling && resBilling.aiTokenCost) setAiTokenCost(resBilling.aiTokenCost);
+      if (resBilling && resBilling.aiTokenCurrentRate) setAiTokenCurrentRate(resBilling.aiTokenCurrentRate);
       if (resBilling && resBilling.aiTokenUsage) setAiTokenUsage(resBilling.aiTokenUsage);
       if (resBilling && resBilling.callProvider) setCallProviderRate(resBilling.callProvider);
       if (resOrg && Object.keys(resOrg).length > 0) setOrgSettings({ ...EMPTY_ORG_SETTINGS, ...resOrg });
@@ -894,6 +902,7 @@ export default function App() {
             costPerMinuteInr={costPerMinuteInr}
             phoneCostPerMinute={phoneCostPerMinute}
             aiTokenCost={aiTokenCost}
+            aiTokenCurrentRate={aiTokenCurrentRate}
             aiTokenUsage={aiTokenUsage}
             callProviderRate={callProviderRate}
             activeSubTab={activeSubTab as 'numbers' | 'team' | 'billing' | 'api'}

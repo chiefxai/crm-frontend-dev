@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Loader2, Save, Plus, Trash2, Phone, Cpu } from 'lucide-react';
+import { Loader2, Save, Plus, Trash2, Phone, Cpu, Archive } from 'lucide-react';
 import { apiFetch } from '../lib/api';
 
 type CostProvider = {
@@ -14,6 +14,27 @@ type CostProvider = {
   // ai kind
   ratePer1kTokens?: number;
   updatedAt?: string;
+};
+
+// A permanent cost snapshot taken right before an org was deleted — see
+// backend platform/admin.js's deleteOrganization + db.archiveOrgCost.
+// The org itself, its call logs, and its accrued counters are gone; this
+// is the only place that org's final cost figures still exist.
+type CostArchiveEntry = {
+  id: string;
+  orgId: string;
+  orgName: string | null;
+  workspaceName: string | null;
+  industry: string | null;
+  deletedAt: string;
+  deletedByEmail: string | null;
+  aiMinutesUsed: number | null;
+  aiMinutesCostInr: number | null;
+  phoneCharges: number | null;
+  callProviderLabel: string | null;
+  aiTotalTokens: number | null;
+  aiTokenProviderLabel: string | null;
+  aiTokenTotalCostInr: number | null;
 };
 
 function emptyDraft(kind: 'call' | 'ai'): Omit<CostProvider, 'key'> & { key: string } {
@@ -31,6 +52,8 @@ export default function CostPage() {
   const [addingKind, setAddingKind] = useState<'call' | 'ai' | null>(null);
   const [draft, setDraft] = useState<ReturnType<typeof emptyDraft> | null>(null);
   const [error, setError] = useState('');
+  const [archive, setArchive] = useState<CostArchiveEntry[]>([]);
+  const [loadingArchive, setLoadingArchive] = useState(true);
 
   const load = () => {
     setLoading(true);
@@ -38,6 +61,12 @@ export default function CostPage() {
       .then((r) => r.json())
       .then((data) => setProviders(Array.isArray(data) ? data : []))
       .finally(() => setLoading(false));
+
+    setLoadingArchive(true);
+    apiFetch('/api/platform/cost-archive')
+      .then((r) => r.json())
+      .then((data) => setArchive(Array.isArray(data) ? data : []))
+      .finally(() => setLoadingArchive(false));
   };
 
   useEffect(load, []);
@@ -156,6 +185,61 @@ export default function CostPage() {
         onCreate={createProvider}
         creating={savingKey === '__new__'}
       />
+
+      <section className="bg-white border border-slate-200 rounded-2xl p-6">
+        <div className="flex items-center gap-2 mb-1">
+          <Archive className="h-4 w-4 text-amber-500" />
+          <h2 className="text-sm font-bold text-slate-800">Deleted organizations</h2>
+        </div>
+        <p className="text-xs text-slate-500 mb-4">
+          Final cost snapshot taken right before each org was deleted — the org, its call data, and its
+          live counters are gone, but the cost/billing record is kept permanently.
+        </p>
+        {loadingArchive ? (
+          <div className="flex items-center justify-center py-10 text-slate-400"><Loader2 className="h-4 w-4 animate-spin mr-2" /> Loading…</div>
+        ) : archive.length === 0 ? (
+          <div className="py-8 text-center text-slate-400 text-xs">No organizations have been deleted yet.</div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs">
+              <thead>
+                <tr className="text-left text-slate-400 uppercase tracking-wide text-[10px]">
+                  <th className="py-2 pr-4">Organization</th>
+                  <th className="py-2 pr-4">Deleted</th>
+                  <th className="py-2 pr-4">AI Minutes</th>
+                  <th className="py-2 pr-4">Call Cost</th>
+                  <th className="py-2 pr-4">Tokens</th>
+                  <th className="py-2 pr-4">Token Cost</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {archive.map((row) => (
+                  <tr key={row.id}>
+                    <td className="py-2.5 pr-4">
+                      <p className="font-semibold text-slate-700">{row.orgName || row.orgId}</p>
+                      <p className="text-[10px] text-slate-400">{row.industry || '—'}</p>
+                    </td>
+                    <td className="py-2.5 pr-4 text-slate-500">
+                      {new Date(row.deletedAt).toLocaleDateString()}
+                      {row.deletedByEmail && <p className="text-[10px] text-slate-400">{row.deletedByEmail}</p>}
+                    </td>
+                    <td className="py-2.5 pr-4 font-mono">{(row.aiMinutesUsed ?? 0).toFixed(2)}</td>
+                    <td className="py-2.5 pr-4 font-mono">
+                      ₹{(row.phoneCharges ?? 0).toFixed(2)}
+                      {row.callProviderLabel && <span className="text-[10px] text-slate-400 ml-1">({row.callProviderLabel})</span>}
+                    </td>
+                    <td className="py-2.5 pr-4 font-mono">{(row.aiTotalTokens ?? 0).toLocaleString()}</td>
+                    <td className="py-2.5 pr-4 font-mono">
+                      {row.aiTokenTotalCostInr != null ? `₹${row.aiTokenTotalCostInr.toFixed(2)}` : '—'}
+                      {row.aiTokenProviderLabel && <span className="text-[10px] text-slate-400 ml-1">({row.aiTokenProviderLabel})</span>}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </section>
     </div>
   );
 }

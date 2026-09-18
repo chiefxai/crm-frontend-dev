@@ -2,6 +2,13 @@ export interface Stats {
   totalOrganizations: number;
   totalUsers: number;
   totalCalls: number;
+  // Platform-wide cost, summed from each org's own accrued/locked-in
+  // figures (never recomputed against today's rate) — see the Cost page
+  // and platform/admin.js's getStats.
+  totalPhoneChargesInr: number;
+  totalAiTokenCostInr: number;
+  activeCostProviderCount: number;
+  archivedOrgCount: number;
 }
 
 export interface TimeSeries {
