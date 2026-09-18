@@ -2511,14 +2511,14 @@ Currently on question ${nextIndex} out of ${selectedTask.questions.length}. Next
                         placeholder="Full name"
                         value={wizardNewName}
                         onChange={e => setWizardNewName(e.target.value)}
-                        className="flex-1 border border-[var(--border)] rounded-xl px-3.5 py-2 text-xs text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none focus:border-blue-500"
+                        className="flex-1 border border-[var(--border)] bg-[var(--bg-surface)] rounded-xl px-3.5 py-2 text-xs text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none focus:border-blue-500"
                       />
                       <input
                         type="tel"
                         placeholder="Phone number"
                         value={wizardNewPhone}
                         onChange={e => setWizardNewPhone(e.target.value)}
-                        className="flex-1 border border-[var(--border)] rounded-xl px-3.5 py-2 text-xs text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none focus:border-blue-500"
+                        className="flex-1 border border-[var(--border)] bg-[var(--bg-surface)] rounded-xl px-3.5 py-2 text-xs text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none focus:border-blue-500"
                       />
                       <button
                         type="button"
