@@ -16,7 +16,7 @@ export default function AdminApp() {
   const [deniedEmail, setDeniedEmail] = useState('');
 
   useEffect(() => {
-    document.title = 'ChiefXAI | Platform Admin';
+    document.title = 'ChiefVoice | Platform Admin';
   }, []);
 
   useEffect(() => {

@@ -407,7 +407,7 @@ export default function Sidebar({
         {!collapsed && (
           <div className="ml-3 min-w-0">
             <h1 className="text-lg font-bold font-display tracking-tight leading-none truncate" style={{ color: 'var(--text-primary)' }}>
-              {organizationName || 'ChiefXAI'}
+              {organizationName || 'ChiefVoice'}
             </h1>
             <p className="text-[10px] text-slate-400 font-mono mt-1 uppercase tracking-widest">{tagline}</p>
           </div>

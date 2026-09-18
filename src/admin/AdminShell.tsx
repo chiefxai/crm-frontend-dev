@@ -28,7 +28,7 @@ export default function AdminShell({ email, onLogout }: { email: string; onLogou
             <Globe2 className="h-4 w-4 text-white" />
           </div>
           <div>
-            <div className="text-sm font-bold text-white leading-none">ChiefXAI</div>
+            <div className="text-sm font-bold text-white leading-none">ChiefVoice</div>
             <div className="text-[9px] text-amber-500 uppercase tracking-widest mt-0.5">Platform Admin</div>
           </div>
         </div>
