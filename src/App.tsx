@@ -370,6 +370,10 @@ export default function App() {
   const [aiTokenCurrentRate, setAiTokenCurrentRate] = useState<{ key: string; label: string; ratePer1kTokens: number; taxPercent: number } | null>(null);
   const [aiTokenUsage, setAiTokenUsage] = useState<{ totalTokens: number; totalInputTokens: number; totalOutputTokens: number; callCount: number } | null>(null);
   const [callProviderRate, setCallProviderRate] = useState<{ key: string; label: string; rateUnit: 'minute' | 'hour'; rateAmount: number; taxPercent: number } | null>(null);
+  // False when this org connected its own Vobiz account (Settings >
+  // Numbers) — the platform never paid for those calls, so phoneCharges
+  // is only an estimate for the org's own reference, never a bill.
+  const [phoneChargesBillable, setPhoneChargesBillable] = useState<boolean>(true);
   // Non-lending orgs have no `leads` table rows at all — their real
   // contacts live as Industry Objects records instead. When set, `leads`
   // is populated from this object's records (mapped via
@@ -465,6 +469,7 @@ export default function App() {
       if (Array.isArray(resTeam)) setTeamMembers(resTeam);
       if (resBilling && typeof resBilling.costPerMinuteInr === 'number') setCostPerMinuteInr(resBilling.costPerMinuteInr);
       if (resBilling && typeof resBilling.phoneCostPerMinute === 'number') setPhoneCostPerMinute(resBilling.phoneCostPerMinute);
+      if (resBilling && typeof resBilling.phoneChargesBillable === 'boolean') setPhoneChargesBillable(resBilling.phoneChargesBillable);
       if (resBilling && resBilling.aiTokenCost) setAiTokenCost(resBilling.aiTokenCost);
       if (resBilling && resBilling.aiTokenCurrentRate) setAiTokenCurrentRate(resBilling.aiTokenCurrentRate);
       if (resBilling && resBilling.aiTokenUsage) setAiTokenUsage(resBilling.aiTokenUsage);
@@ -901,6 +906,7 @@ export default function App() {
             setOrgSettings={setOrgSettings}
             costPerMinuteInr={costPerMinuteInr}
             phoneCostPerMinute={phoneCostPerMinute}
+            phoneChargesBillable={phoneChargesBillable}
             aiTokenCost={aiTokenCost}
             aiTokenCurrentRate={aiTokenCurrentRate}
             aiTokenUsage={aiTokenUsage}

@@ -7,6 +7,10 @@ export interface Stats {
   // and platform/admin.js's getStats.
   totalPhoneChargesInr: number;
   totalAiTokenCostInr: number;
+  // Orgs excluded from totalPhoneChargesInr because they connected their
+  // own call-provider account (e.g. their own Vobiz) — the platform
+  // never paid for those calls.
+  selfManagedCallOrgCount: number;
   activeCostProviderCount: number;
   archivedOrgCount: number;
 }

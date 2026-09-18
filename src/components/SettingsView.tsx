@@ -53,6 +53,10 @@ interface SettingsViewProps {
   aiTokenCurrentRate?: { key: string; label: string; ratePer1kTokens: number; taxPercent: number } | null;
   aiTokenUsage?: { totalTokens: number; totalInputTokens: number; totalOutputTokens: number; callCount: number } | null;
   callProviderRate?: { key: string; label: string; rateUnit: 'minute' | 'hour'; rateAmount: number; taxPercent: number } | null;
+  // False when this org connected its own Vobiz account (Settings >
+  // Numbers) — phoneCharges is then only an estimate for reference,
+  // never something owed to the platform. Defaults true (billable).
+  phoneChargesBillable?: boolean;
   activeSubTab?: 'numbers' | 'team' | 'billing' | 'api';
   setActiveSubTab?: (sub: string) => void;
   currentUserEmail?: string;
@@ -115,6 +119,7 @@ export default function SettingsView({
   aiTokenCurrentRate = null,
   aiTokenUsage = null,
   callProviderRate = null,
+  phoneChargesBillable = true,
   activeSubTab: activeSubTabProp,
   setActiveSubTab: setActiveSubTabProp,
   currentUserEmail,
@@ -885,12 +890,18 @@ export default function SettingsView({
                   <div className="bg-slate-50 p-4 rounded-xl text-center">
                     <span className="text-[10px] text-slate-400 uppercase tracking-wider block">
                       {callProviderRate
-                        ? `${callProviderRate.label} Charges (${currencySymbol()}${callProviderRate.rateAmount}/${callProviderRate.rateUnit}${callProviderRate.taxPercent ? ` +${callProviderRate.taxPercent}% tax` : ''})`
-                        : `Phone Charges (${currencySymbol()}${phoneCostPerMinute}/min)`}
+                        ? `${callProviderRate.label} ${phoneChargesBillable ? 'Charges' : '(Est.)'} (${currencySymbol()}${callProviderRate.rateAmount}/${callProviderRate.rateUnit}${callProviderRate.taxPercent ? ` +${callProviderRate.taxPercent}% tax` : ''})`
+                        : `Phone ${phoneChargesBillable ? 'Charges' : '(Est.)'} (${currencySymbol()}${phoneCostPerMinute}/min)`}
                     </span>
                     <strong className="text-md text-slate-800 font-mono">{formatCurrency(orgSettings.phoneCharges)}</strong>
                   </div>
                 </div>
+                {!phoneChargesBillable && (
+                  <p className="text-[10px] text-slate-400 mt-3">
+                    You're using your own {callProviderRate?.label || 'Vobiz'} account for calls, so this figure is an estimate for your own
+                    reference only — it isn't billed to you by the platform.
+                  </p>
+                )}
               </Widget>
 
               {aiTokenCost && (

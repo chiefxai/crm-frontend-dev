@@ -74,6 +74,11 @@ export default function OverviewPage() {
             <strong className="text-md text-slate-800 dark:text-[var(--text-primary)] font-mono">{stats.activeCostProviderCount}</strong>
           </div>
         </div>
+        {stats.selfManagedCallOrgCount > 0 && (
+          <p className="text-[10px] text-slate-400 dark:text-[var(--text-muted)] mt-3">
+            Excludes {stats.selfManagedCallOrgCount} org{stats.selfManagedCallOrgCount === 1 ? '' : 's'} using their own connected call-provider account — the platform doesn't pay for those calls.
+          </p>
+        )}
       </Widget>
 
       <Widget
