@@ -1,36 +1,71 @@
-import React, { useState } from 'react';
-import { Plus, Trash2, ChevronDown, ChevronUp, GitBranch, ArrowDown, MessageSquare, Save, Workflow } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { Plus, Trash2, ChevronDown, ChevronUp, GitBranch, ArrowDown, MessageSquare, Save, Workflow, Type, Hash, ToggleLeft, Calendar, Check } from 'lucide-react';
 import { WorkflowVariable, WorkflowBranch, VariableDataType } from '../types';
 
 function uid() {
   return `var-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
 }
 
-// ── Answer type chips ─────────────────────────────────────────────────────────
+// ── Answer type dropdown ──────────────────────────────────────────────────────
 
-const ANSWER_TYPES: { value: VariableDataType; label: string; icon: string }[] = [
-  { value: 'string',  label: 'Text',   icon: 'T' },
-  { value: 'number',  label: 'Number', icon: '#' },
-  { value: 'boolean', label: 'Yes/No', icon: '?' },
-  { value: 'date',    label: 'Date',   icon: 'D' },
+const ANSWER_TYPES: { value: VariableDataType; label: string; icon: React.ElementType }[] = [
+  { value: 'string',  label: 'Text',    icon: Type },
+  { value: 'number',  label: 'Number',  icon: Hash },
+  { value: 'boolean', label: 'Yes / No', icon: ToggleLeft },
+  { value: 'date',    label: 'Date',    icon: Calendar },
 ];
 
-function AnswerTypeChips({ value, onChange }: { value: VariableDataType; onChange: (v: VariableDataType) => void }) {
+function AnswerTypeDropdown({ value, onChange }: { value: VariableDataType; onChange: (v: VariableDataType) => void }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const onOutside = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener('mousedown', onOutside);
+    return () => document.removeEventListener('mousedown', onOutside);
+  }, [open]);
+
+  const current = ANSWER_TYPES.find(t => t.value === value) ?? ANSWER_TYPES[0];
+  const CurrentIcon = current.icon;
+
   return (
-    <div className="flex items-center gap-1.5 flex-wrap">
-      {ANSWER_TYPES.map(t => (
-        <button
-          key={t.value}
-          onClick={() => onChange(t.value)}
-          className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-semibold border transition-all ${
-            value === t.value
-              ? 'bg-violet-50 dark:bg-violet-500/15 text-violet-700 dark:text-violet-300 border-violet-200 dark:border-violet-500/40'
-              : 'border-[var(--border)] text-[var(--text-muted)] bg-[var(--bg-subtle)] hover:bg-[var(--bg-surface)]'
-          }`}
-        >
-          <span className="text-[10px]">{t.icon}</span> {t.label}
-        </button>
-      ))}
+    <div ref={ref} className="relative inline-block">
+      <button
+        type="button"
+        onClick={() => setOpen(o => !o)}
+        className="flex items-center gap-1.5 pl-2.5 pr-2 py-1.5 rounded-lg text-[11px] font-semibold border transition-all bg-violet-50 dark:bg-violet-500/15 text-violet-700 dark:text-violet-300 border-violet-200 dark:border-violet-500/40 hover:bg-violet-100 dark:hover:bg-violet-500/25"
+      >
+        <CurrentIcon className="h-3.5 w-3.5" />
+        {current.label}
+        <ChevronDown className={`h-3 w-3 transition-transform ${open ? 'rotate-180' : ''}`} />
+      </button>
+      {open && (
+        <div className="absolute z-50 mt-1.5 min-w-[150px] rounded-xl border shadow-xl overflow-hidden py-1 bg-[var(--bg-surface)] border-[var(--border)]">
+          {ANSWER_TYPES.map(t => {
+            const Icon = t.icon;
+            const selected = t.value === value;
+            return (
+              <button
+                key={t.value}
+                type="button"
+                onClick={() => { onChange(t.value); setOpen(false); }}
+                className={`w-full flex items-center gap-2 px-3 py-2 text-xs font-medium text-left transition-colors ${
+                  selected
+                    ? 'bg-violet-50 dark:bg-violet-500/10 text-violet-700 dark:text-violet-300'
+                    : 'text-[var(--text-primary)] hover:bg-[var(--bg-subtle)]'
+                }`}
+              >
+                <Icon className="h-3.5 w-3.5 shrink-0" />
+                <span className="flex-1">{t.label}</span>
+                {selected && <Check className="h-3.5 w-3.5 shrink-0" />}
+              </button>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }
@@ -72,7 +107,7 @@ function FollowUpCard({ variable: v, index, onChange, onDelete }: FollowUpCardPr
           value={v.name}
           onChange={e => update({ name: e.target.value })}
         />
-        <AnswerTypeChips value={v.dataType} onChange={t => update({ dataType: t })} />
+        <AnswerTypeDropdown value={v.dataType} onChange={t => update({ dataType: t })} />
       </div>
     </div>
   );
@@ -233,7 +268,7 @@ function QuestionCard({ variable: v, index, onChange, onDelete }: QuestionCardPr
             </div>
             <div className="flex items-center gap-1.5">
               <span className="text-[11px] text-[var(--text-muted)]">Type:</span>
-              <AnswerTypeChips value={v.dataType} onChange={t => update({ dataType: t })} />
+              <AnswerTypeDropdown value={v.dataType} onChange={t => update({ dataType: t })} />
             </div>
           </div>
         </div>
