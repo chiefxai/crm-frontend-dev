@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   GitBranch,
   Plus,
@@ -25,7 +25,6 @@ import WorkflowVariables from './components/WorkflowVariables';
 import PageShell from '../../components/ui/PageShell';
 import BreadcrumbTitle from '../../components/ui/BreadcrumbTitle';
 import Widget from '../../components/ui/Widget';
-import Modal from '../../components/ui/Modal';
 import IconButton from '../../components/ui/IconButton';
 import ActionMenu from '../../components/ui/ActionMenu';
 import DataTable, { Column } from '../../components/ui/DataTable';
@@ -98,18 +97,34 @@ export default function WorkflowsView({ flows, setFlows, openFlowId, onOpenFlow,
   const [editorView, setEditorView] = useState<'diagram' | 'variables' | 'json'>('diagram');
   const [jsonCopied, setJsonCopied] = useState(false);
   const [jsonEditText, setJsonEditText] = useState<string | null>(null);
-  const [newName, setNewName] = useState('');
-  const [creating, setCreating] = useState(false);
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved'>('idle');
+  const [renamingFlow, setRenamingFlow] = useState(false);
+  const [renameDraft, setRenameDraft] = useState('');
 
   const editingFlow = flows.find(f => f.id === editingId);
 
+  // Close any in-progress rename when switching to a different flow, so
+  // it doesn't linger open against the wrong flow.
+  useEffect(() => {
+    setRenamingFlow(false);
+  }, [editingId]);
+
+  // No name prompt — jumps straight into the new workflow as "Untitled-N"
+  // (next unused number, so re-creating after deleting one doesn't reuse
+  // a name), same as untitled documents elsewhere. Renaming happens
+  // inline via the title dropdown once the user is actually in the flow.
+  const nextUntitledName = () => {
+    let max = 0;
+    for (const f of flows) {
+      const m = /^Untitled-(\d+)$/i.exec(f.name.trim());
+      if (m) max = Math.max(max, parseInt(m[1], 10));
+    }
+    return `Untitled-${max + 1}`;
+  };
+
   const handleCreate = () => {
-    if (!newName.trim()) return;
-    const flow = createDefaultFlow(newName.trim());
+    const flow = createDefaultFlow(nextUntitledName());
     setFlows(prev => [...prev, flow]);
-    setNewName('');
-    setCreating(false);
     setEditingId(flow.id);
     setEditorView('variables'); // start on variables so user defines them first
   };
@@ -137,6 +152,21 @@ export default function WorkflowsView({ flows, setFlows, openFlowId, onOpenFlow,
 
   const handleFlowChange = (updated: QuestionFlow) => {
     setFlows(prev => prev.map(f => (f.id === updated.id ? updated : f)));
+  };
+
+  const startRenaming = () => {
+    if (!editingFlow) return;
+    setRenameDraft(editingFlow.name);
+    setRenamingFlow(true);
+  };
+
+  const commitRename = () => {
+    if (!editingFlow) return;
+    const trimmed = renameDraft.trim();
+    if (trimmed && trimmed !== editingFlow.name) {
+      handleFlowChange({ ...editingFlow, name: trimmed });
+    }
+    setRenamingFlow(false);
   };
 
   if (editingFlow) {
@@ -284,7 +314,36 @@ export default function WorkflowsView({ flows, setFlows, openFlowId, onOpenFlow,
 
     return (
       <PageShell
-        title={<BreadcrumbTitle group="Workflow Builder" page={editingFlow.name} />}
+        title={
+          renamingFlow ? (
+            <span className="inline-flex items-center gap-1.5">
+              <span className="font-medium text-sm text-slate-400 dark:text-[var(--text-muted)]">Workflow Builder</span>
+              <span className="font-normal text-slate-300 dark:text-[var(--text-muted)]">/</span>
+              <input
+                autoFocus
+                value={renameDraft}
+                onChange={(e) => setRenameDraft(e.target.value)}
+                onBlur={commitRename}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') commitRename();
+                  if (e.key === 'Escape') setRenamingFlow(false);
+                }}
+                onClick={(e) => e.stopPropagation()}
+                className="bg-transparent border-b border-blue-400 outline-none px-0.5 min-w-0"
+                style={{ font: 'inherit', color: 'inherit', width: `${Math.max(renameDraft.length, 6) + 1}ch` }}
+              />
+            </span>
+          ) : (
+            <button
+              type="button"
+              onClick={startRenaming}
+              className="text-left hover:opacity-70 transition-opacity cursor-text"
+              title="Click to rename"
+            >
+              <BreadcrumbTitle group="Workflow Builder" page={editingFlow.name} />
+            </button>
+          )
+        }
         subtitle={VIEW_SUBTITLE[editorView]}
         layout="fill"
         titleSuffix={switchFlowMenu}
@@ -432,7 +491,7 @@ export default function WorkflowsView({ flows, setFlows, openFlowId, onOpenFlow,
     <PageShell
       title="Workflow Builder"
       subtitle="Design question flows with conditional branching — skip, jump, or end based on answers."
-      action={<IconButton icon={Plus} label="New Workflow" onClick={() => setCreating(true)} />}
+      action={<IconButton icon={Plus} label="New Workflow" onClick={handleCreate} />}
       layout="fill"
     >
       <div className="flex-1 flex flex-col overflow-hidden px-8 pb-8 pt-6">
@@ -443,7 +502,7 @@ export default function WorkflowsView({ flows, setFlows, openFlowId, onOpenFlow,
             <p className="text-slate-500 text-sm font-medium">No workflows yet.</p>
             <p className="text-slate-400 text-xs mt-1">Create one to design your call question flow.</p>
             <button
-              onClick={() => setCreating(true)}
+              onClick={handleCreate}
               className="mt-4 px-4 py-2 bg-blue-600 text-white text-sm font-semibold rounded-xl hover:bg-blue-700"
             >
               Create your first workflow
@@ -461,27 +520,6 @@ export default function WorkflowsView({ flows, setFlows, openFlowId, onOpenFlow,
           />
         )}
       </Widget>
-
-      {/* New Workflow modal */}
-      {creating && (
-        <Modal open onClose={() => setCreating(false)} title="New Workflow" maxWidth="max-w-md">
-          <div>
-            <label className="block text-[10px] font-bold text-slate-400 uppercase mb-2">Workflow Name</label>
-            <input
-              autoFocus
-              className="w-full border border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 mb-4"
-              placeholder="e.g. Personal Loan Qualification Flow"
-              value={newName}
-              onChange={e => setNewName(e.target.value)}
-              onKeyDown={e => { if (e.key === 'Enter') handleCreate(); if (e.key === 'Escape') setCreating(false); }}
-            />
-            <div className="flex items-center justify-end gap-3">
-              <button onClick={() => setCreating(false)} className="text-sm text-slate-400 hover:text-slate-600 font-medium px-3 py-2 cursor-pointer">Cancel</button>
-              <button onClick={handleCreate} className="px-5 py-2 bg-blue-600 text-white text-sm font-semibold rounded-xl hover:bg-blue-700 cursor-pointer">Create</button>
-            </div>
-          </div>
-        </Modal>
-      )}
       </div>
     </PageShell>
   );
